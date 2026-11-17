@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <!-- Pagina statica senza script: solo stili del sito stesso -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <!-- Pagina statica: solo stili, immagini e lo script di ricerca del sito stesso -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <!-- Niente indicizzazione finché il tool non avrà un dominio proprio (ROADMAP, Tappa 10) -->
   <meta name="robots" content="noindex, nofollow">
@@ -13,6 +13,7 @@
   <title>Guida – PicSpeak</title>
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/guida.css">
+  <script src="js/guida.js" defer></script>
   <meta name="robots" content="noindex, nofollow">
   <link rel="stylesheet" href="css/anteprima.css">
 </head>
@@ -21,407 +22,800 @@
   <!--
     Guida all'uso per adulti (genitori, insegnanti, terapisti).
     Regola di progetto: va aggiornata a ogni nuova funzione, solo con istruzioni d'uso (niente informazioni sul codice).
+    Le immagini in guida/ sono schermate del tool con dati di prova, mai dati di persone reali.
   -->
   <header class="guide-top">
     <a class="back" href="./">‹ Torna a PicSpeak</a>
+    <a class="top-link" href="#indice">Indice</a>
   </header>
 
-  <main class="guide">
+  <main class="guide" id="inizio">
     <h1>Guida a PicSpeak</h1>
-    <p class="lead">PicSpeak è uno strumento gratuito di Comunicazione Aumentativa Alternativa: la persona tocca le immagini
-      per comporre una frase, e il dispositivo la legge ad alta voce. Questa guida è per gli adulti che la accompagnano:
-      genitori, insegnanti, logopedisti e terapisti.</p>
+    <p class="lead">PicSpeak aiuta a comunicare con le immagini: si toccano le tessere per comporre una frase e il
+      dispositivo la legge ad alta voce. Questa guida è per gli adulti che accompagnano la persona: genitori, insegnanti,
+      logopedisti e terapisti.</p>
 
-    <nav class="toc" aria-label="Indice">
-      <h2>Indice</h2>
-      <ol>
-        <li><a href="#inizio">Per iniziare</a></li>
-        <li><a href="#comunicare">Comunicare</a></li>
-        <li><a href="#tocco-frase">Pulsanti rapidi, tocco e frase</a></li>
-        <li><a href="#menu">Il menu dei tre puntini</a></li>
-        <li><a href="#pin">Impostazioni e PIN</a></li>
-        <li><a href="#tessere">Modificare le tessere</a></li>
-        <li><a href="#schede-pronte">Schede pronte, modelli, importa ed esporta, altre app</a></li>
-        <li><a href="#posizioni">Griglia fissa e posizioni bloccate</a></li>
-        <li><a href="#stampa">Stampare le schede o salvarle in PDF</a></li>
-        <li><a href="#previsione">Previsione della parola successiva</a></li>
-        <li><a href="#simboli">Cercare simboli e usare foto</a></li>
-        <li><a href="#aspetto">Aspetto della tabella</a></li>
-        <li><a href="#voce">Voce</a></li>
-        <li><a href="#internet">Internet e consumo dati</a></li>
-        <li><a href="#app">Installare come app e uso senza internet</a></li>
-        <li><a href="#guidato">Tenere il bambino dentro PicSpeak</a></li>
-        <li><a href="#dati">Dove restano i dati</a></li>
-        <li><a href="#domande">Domande frequenti</a></li>
-      </ol>
-    </nav>
+    <!-- Ricerca: compare solo se il browser esegue lo script; senza, restano indice e indice delle parole -->
+    <div class="search" id="guide-search" hidden>
+      <label for="guide-search-input">Cerca nella guida</label>
+      <input type="search" id="guide-search-input" placeholder="Es.: stampa, PIN, colori" autocomplete="off" spellcheck="false">
+      <p class="search-status" id="guide-search-status" aria-live="polite"></p>
+    </div>
 
-    <section id="inizio">
-      <h2>1. Per iniziare</h2>
-      <p>PicSpeak si apre dal browser, senza installare nulla e senza creare account. Funziona su tablet, telefono e computer
+    <div data-hide-on-search>
+      <section class="essentials" aria-labelledby="essenziali">
+        <h2 id="essenziali">Le tre cose da sapere</h2>
+        <ol class="cards">
+          <li><strong>Il bambino tocca le tessere</strong> e PicSpeak dice la parola. Non può cambiare né cancellare
+            niente. <a href="#comunicare">Comporre una frase</a></li>
+          <li><strong>L’adulto tiene premuti i tre puntini</strong> in alto a destra per 3 secondi: si apre il menu con
+            Impostazioni, Crediti e Guida. <a href="#menu">Aprire il menu</a></li>
+          <li><strong>Le impostazioni sono protette da un PIN</strong> che create voi la prima volta. Dopo 5 minuti senza
+            tocchi si richiudono da sole. <a href="#pin">Creare il PIN</a></li>
+        </ol>
+      </section>
+
+      <nav class="toc" id="indice" aria-labelledby="indice-titolo">
+        <h2 id="indice-titolo">Come fare per…</h2>
+        <div class="toc-groups">
+          <div>
+            <h3>Iniziare</h3>
+            <ul>
+              <li><a href="#schermo">Conoscere lo schermo</a></li>
+              <li><a href="#comunicare">Comporre e leggere una frase</a></li>
+              <li><a href="#menu">Aprire il menu dei tre puntini</a></li>
+              <li><a href="#pin">Creare il PIN e sbloccare le impostazioni</a></li>
+              <li><a href="#impostazioni">Trovare una voce nelle impostazioni</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Preparare le schede</h3>
+            <ul>
+              <li><a href="#schede-pronte">Partire da una scheda pronta</a></li>
+              <li><a href="#tessere">Aggiungere o cambiare una tessera</a></li>
+              <li><a href="#spostare">Spostare le tessere</a></li>
+              <li><a href="#simboli">Cercare un simbolo o usare una foto</a></li>
+              <li><a href="#colori">Colorare le parole per tipo</a></li>
+              <li><a href="#posizioni">Tenere le tessere sempre allo stesso posto</a></li>
+              <li><a href="#misura">Ingrandire o rimpicciolire le tessere</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Adattare PicSpeak alla persona</h3>
+            <ul>
+              <li><a href="#pulsanti-rapidi">Aggiungere «Ops», «Aiuto» e frasi rapide</a></li>
+              <li><a href="#tocco">Aiutare chi ha tremori o tocca per sbaglio</a></li>
+              <li><a href="#frase">Decidere come si comporta la frase</a></li>
+              <li><a href="#previsione">Suggerire la parola successiva</a></li>
+              <li><a href="#aspetto">Cambiare l’aspetto della tabella</a></li>
+              <li><a href="#voce">Scegliere la voce</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Condividere e stampare</h3>
+            <ul>
+              <li><a href="#modelli">Salvare, esportare e importare le schede</a></li>
+              <li><a href="#altre-app">Scambiare schede con altre app (.obf, .obz)</a></li>
+              <li><a href="#stampa">Stampare o salvare in PDF</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Dispositivo, sicurezza e dati</h3>
+            <ul>
+              <li><a href="#installare">Installare come app e usarla senza internet</a></li>
+              <li><a href="#accesso-guidato">Tenere il bambino dentro PicSpeak</a></li>
+              <li><a href="#dati">Sapere dove restano i dati</a></li>
+              <li><a href="#crediti">Trovare crediti e licenze</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Aiuto</h3>
+            <ul>
+              <li><a href="#problemi">Se qualcosa non va</a></li>
+              <li><a href="#parole">Indice delle parole dalla A alla Z</a></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <p class="legend-note"><span class="dot">1</span> I numeri arancioni nelle immagini corrispondono ai numeri
+        dell’elenco sotto ciascuna immagine. Alcune immagini vengono da un tablet, altre da un telefono: le voci sono
+        le stesse, a volte disposte una sotto l’altra.</p>
+    </div>
+
+    <!-- ===================== INIZIARE ===================== -->
+    <h2 class="chapter" data-hide-on-search>Iniziare</h2>
+
+    <section id="schermo" data-search>
+      <h3>Conoscere lo schermo</h3>
+      <p>PicSpeak si apre dal browser, senza installare nulla e senza account. Funziona su tablet, telefono e computer
         (Safari, Chrome, Edge, Firefox).</p>
-      <p>Lo schermo ha tre parti:</p>
-      <ul>
-        <li><strong>Striscia frase</strong> (in alto, o in basso se l’avete scelto): raccoglie le immagini toccate.</li>
-        <li><strong>Barra del percorso</strong>: mostra dove ci si trova (<em>Home › Cibo</em>). A destra ci sono i
-          <strong>tre puntini</strong>, riservati all’adulto.</li>
-        <li><strong>Tabella</strong>: le tessere con immagine e parola.</li>
-      </ul>
-      <p class="tip">Il bambino vede solo la tabella e la frase: nessun pulsante gli permette di modificare o cancellare le tessere.</p>
+      <figure class="shot">
+        <img src="guida/schermo.webp" width="1200" height="900" alt="Schermo principale di PicSpeak: in alto la frase «io voglio mangiare» con i pulsanti per leggerla e cancellarla, sotto il pulsante Home e i tre puntini, poi la tabella delle tessere." loading="lazy">
+      </figure>
+      <ol class="legend">
+        <li><strong>Striscia frase</strong>: raccoglie le tessere toccate. Si può spostare in basso (vedi
+          <a href="#aspetto">Aspetto</a>).</li>
+        <li><strong>Pulsanti della frase</strong>: altoparlante (legge tutta la frase), freccia con la × (toglie l’ultima
+          parola), × (cancella tutto).</li>
+        <li><strong>Percorso</strong>: dice in quale pagina siete; <strong>Home</strong> riporta alla pagina principale.</li>
+        <li><strong>Tre puntini</strong>: solo per l’adulto, si tengono premuti per aprire il menu.</li>
+        <li><strong>Tabella</strong>: le tessere con immagine e parola. Le tessere grigie sono <strong>cartelle</strong>
+          e aprono un’altra pagina.</li>
+      </ol>
+      <p class="tip">Il bambino vede solo la tabella e la frase: nessun pulsante gli permette di modificare o cancellare le
+        tessere.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="comunicare">
-      <h2>2. Comunicare</h2>
-      <ol>
-        <li>Toccando una tessera, PicSpeak pronuncia la parola e la aggiunge alla frase.</li>
-        <li>Una tessera <strong>cartella</strong> (per esempio «Cibo») apre un’altra pagina di tessere. Per tornare indietro
-          si tocca <strong>Home</strong> nella barra del percorso.</li>
-        <li>Nella striscia frase:
-          <ul>
-            <li><strong>Altoparlante</strong>: legge tutta la frase.</li>
-            <li><strong>Freccia con la ×</strong>: toglie l’ultima immagine.</li>
-            <li><strong>×</strong>: cancella tutta la frase.</li>
-            <li>Toccando un’immagine della frase, PicSpeak ripete solo quella parola (non la cancella).</li>
-          </ul>
-        </li>
+    <section id="comunicare" data-search>
+      <h3>Comporre e leggere una frase</h3>
+      <ol class="steps">
+        <li>Toccate una tessera: PicSpeak dice la parola e la aggiunge alla frase.</li>
+        <li>Toccate una <strong>cartella</strong> (per esempio «Cibo») per aprire la sua pagina; <strong>Home</strong> nel
+          percorso riporta indietro.</li>
+        <li>Toccate l’<strong>altoparlante</strong> per sentire tutta la frase.</li>
+        <li>Per correggere toccate la <strong>freccia con la ×</strong> (toglie l’ultima parola) oppure la
+          <strong>×</strong> (cancella tutta la frase).</li>
       </ol>
-      <p>Due gesti facoltativi, da attivare in Impostazioni → Aspetto:</p>
+      <p>Toccando una parola già nella frase, PicSpeak la ripete senza toglierla.</p>
+      <p>Due gesti facoltativi, da attivare in <span class="where"><span>Impostazioni</span><span>Aspetto</span><span>Disposizione e tocco</span></span>:</p>
       <ul>
         <li><strong>Spingi via la frase</strong>: un colpo deciso del dito sulla striscia la cancella.</li>
         <li><strong>Scuoti per ricominciare</strong>: due scosse decise del tablet o del telefono riportano alla Home e
-          cancellano la frase.</li>
+          cancellano la frase. Su iPad e iPhone il browser chiede il permesso di usare i sensori.</li>
       </ul>
+      <p>Si possono anche far leggere le parole solo alla fine, cancellare la frase da sola o tornare alla Home dopo ogni
+        parola: vedi <a href="#frase">Decidere come si comporta la frase</a>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="tocco-frase">
-      <h2>3. Pulsanti rapidi, tocco e frase</h2>
-      <p>Tutto si sceglie in Impostazioni → <strong>Tocco e frase</strong>. All’inizio è tutto spento: PicSpeak funziona come
-        sempre finché non attivate qualcosa.</p>
-      <h3>Pulsanti rapidi</h3>
-      <p>Compaiono in una riga accanto al percorso «Home» (sui telefoni sotto il percorso) e restano visibili in ogni
-        scheda. Parlano subito e non entrano nella frase.</p>
+    <section id="menu" data-search>
+      <h3>Aprire il menu dei tre puntini</h3>
+      <ol class="steps">
+        <li>Appoggiate il dito sui <strong>tre puntini</strong> in alto a destra e <strong>teneteli premuti per 3
+          secondi</strong>. In cima allo schermo compare una barra blu che si riempie e la scritta «Continua a tenere
+          premuto…».</li>
+        <li>Quando la barra è piena si apre il menu. Un tocco veloce non fa nulla: così il bambino non lo apre per
+          sbaglio.</li>
+        <li>Scegliete una voce, oppure <strong>Chiudi</strong> (o il tasto Esc) per tornare alla tabella.</li>
+      </ol>
+      <figure class="shot">
+        <img src="guida/tre-puntini.webp" width="1200" height="234" alt="Mentre si tengono premuti i tre puntini, in alto compare una barra blu che si riempie e la scritta «Continua a tenere premuto…»." loading="lazy">
+        <figcaption><span class="dot">1</span> I tre puntini, da tenere premuti. In alto la barra blu che si riempie.</figcaption>
+      </figure>
+      <figure class="shot shot-dialog">
+        <img src="guida/menu.webp" width="880" height="854" alt="Il menu con tre voci: Impostazioni (serve il PIN), Crediti, Guida, e il pulsante Chiudi." loading="lazy">
+      </figure>
       <ul>
-        <li><strong>Ops</strong>: dice «Ops, ho sbagliato» e toglie l’ultima parola dalla frase. Dà al bambino un modo
-          semplice per correggersi da solo.</li>
-        <li><strong>Aiuto</strong> (rosso, a destra): dice ad alta voce «Ho bisogno di aiuto!». Con il <strong>suono di
-          allarme</strong> attivo, prima della frase suonano tre note forti per farsi sentire anche da lontano. Alzate il
-          volume del dispositivo.</li>
-        <li><strong>Frasi rapide</strong>: fino a 6 frasi brevi da dire al volo (proposte: «Aspetta», «Basta», «Bagno»,
-          «Non lo so»). Si cambiano scrivendo nei campi, si tolgono con <strong>Togli</strong> e si aggiungono con
-          <strong>Aggiungi</strong>. Se non entrano tutte, la riga scorre di lato.</li>
+        <li><strong>Impostazioni</strong>: chiede il PIN e permette di modificare tutto (vedi sotto).</li>
+        <li><strong>Crediti</strong>: autori dei simboli, licenze e privacy. Non serve il PIN.</li>
+        <li><strong>Guida</strong>: apre questa pagina. Non serve il PIN.</li>
       </ul>
-      <h3>Tocco: per chi ha tremori o tocca per sbaglio</h3>
+      <p class="tip">La guida si apre anche da <span class="where"><span>Impostazioni</span><span>Generale</span><span>Apri la guida</span></span>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="pin" data-search>
+      <h3>Creare il PIN e sbloccare le impostazioni</h3>
+      <h4>La prima volta</h4>
+      <ol class="steps">
+        <li>Aprite il menu e scegliete <strong>Impostazioni</strong>.</li>
+        <li>Scrivete un PIN da 4 a 6 cifre, ripetetelo e toccate <strong>Conferma</strong>.</li>
+        <li>PicSpeak mostra un <strong>codice di recupero</strong>: annotatelo o fotografatelo e conservatelo in un posto
+          sicuro. Serve se dimenticate il PIN e non verrà mostrato di nuovo.</li>
+        <li>Toccate <strong>Ho annotato il codice</strong>: le impostazioni sono sbloccate.</li>
+      </ol>
+      <figure class="shot shot-dialog">
+        <img src="guida/pin.webp" width="880" height="842" alt="Finestra «Crea il PIN delle impostazioni» con i campi PIN e Ripeti il PIN e i pulsanti Annulla e Conferma." loading="lazy">
+      </figure>
+      <h4>Le volte successive</h4>
+      <p>Menu → <strong>Impostazioni</strong> → scrivete il PIN → <strong>Conferma</strong>.</p>
+      <h4>Con le impostazioni sbloccate</h4>
+      <p>In alto compare una barra scura e ogni tessera ha una matita: toccandola si apre la sua modifica.</p>
+      <figure class="shot">
+        <img src="guida/barra-adulto.webp" width="1200" height="539" alt="Con le impostazioni sbloccate, in alto c’è una barra scura con i pulsanti meno, 100%, più, Impostazioni e Torna alla comunicazione; le tessere hanno una piccola matita." loading="lazy">
+      </figure>
+      <ol class="legend">
+        <li><strong>− 100% +</strong>: misura delle tessere (vedi <a href="#misura">Ingrandire o rimpicciolire</a>).</li>
+        <li><strong>Impostazioni</strong>: apre tutte le categorie.</li>
+        <li><strong>Torna alla comunicazione</strong> (sul telefono <strong>Fine</strong>): richiude tutto e torna alla
+          modalità del bambino.</li>
+        <li>Toccando una tessera si apre la sua <strong>modifica</strong> (vedi <a href="#tessere">Aggiungere o cambiare una
+          tessera</a>).</li>
+      </ol>
+      <figure class="shot shot-phone">
+        <img src="guida/telefono-sbloccato.webp" width="780" height="1688" alt="Le impostazioni sbloccate su un telefono: in alto i pulsanti meno, 100%, più, l’ingranaggio delle Impostazioni e Fine." loading="lazy">
+        <figcaption>Sul telefono: <span class="dot">1</span> misura, <span class="dot">2</span> ingranaggio delle
+          Impostazioni, <span class="dot">3</span> Fine.</figcaption>
+      </figure>
+      <p class="tip">Dopo 5 minuti senza tocchi PicSpeak torna da solo alla modalità di comunicazione.</p>
+      <h4>Cambiare il PIN</h4>
+      <p><span class="where"><span>Impostazioni</span><span>Sicurezza</span><span>Cambia PIN</span></span>: serve il PIN attuale.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="impostazioni" data-search>
+      <h3>Trovare una voce nelle impostazioni</h3>
+      <p>Le impostazioni sono divise in categorie, elencate a sinistra (sul telefono una sotto l’altra: toccatene una
+        per aprirla e <strong>Indietro</strong> per tornare all’elenco).</p>
+      <figure class="shot">
+        <img src="guida/impostazioni.webp" width="1200" height="900" alt="La pagina Impostazioni: a sinistra l’elenco delle categorie, a destra il contenuto della categoria Generale; in alto il pulsante Indietro." loading="lazy">
+      </figure>
+      <ol class="legend">
+        <li>Le <strong>categorie</strong>.</li>
+        <li><strong>Indietro</strong>: torna alla tabella (con le impostazioni ancora sbloccate).</li>
+      </ol>
+      <table class="map">
+        <caption>Cosa trovate in ogni categoria</caption>
+        <tbody>
+          <tr><th scope="row">Generale</th><td>lingua, ricerca online dei simboli, installare come app, guida, crediti</td></tr>
+          <tr><th scope="row">Aspetto</th><td>stili pronti, colori, sfondo, simboli, testo, celle, posizione della frase, gesti</td></tr>
+          <tr><th scope="row">Tocco e frase</th><td>pulsanti «Ops» e «Aiuto», frasi rapide, tempo di pressione, tocchi ripetuti, comportamento della frase</td></tr>
+          <tr><th scope="row">Schede</th><td>schede pronte, i miei modelli, importa ed esporta, altre app, stampa, disposizione e posizioni, colori per tipo di parola</td></tr>
+          <tr><th scope="row">Previsione</th><td>suggerimenti della parola successiva e abitudini d’uso</td></tr>
+          <tr><th scope="row">Simboli</th><td>ARASAAC, Mulberry, OpenMoji, foto personali</td></tr>
+          <tr><th scope="row">Voce</th><td>voce, velocità, tono, come avere una voce più naturale</td></tr>
+          <tr><th scope="row">Sicurezza</th><td>cambiare il PIN, accesso guidato</td></tr>
+          <tr><th scope="row">In arrivo</th><td>le funzioni previste nelle prossime versioni</td></tr>
+        </tbody>
+      </table>
+      <figure class="shot shot-phone">
+        <img src="guida/telefono-impostazioni.webp" width="780" height="1688" alt="Sul telefono le categorie delle impostazioni sono un elenco: Generale, Aspetto, Tocco e frase, Schede, Previsione, Simboli, Voce, Sicurezza, In arrivo." loading="lazy">
+        <figcaption>Sul telefono le categorie sono un elenco.</figcaption>
+      </figure>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <!-- ===================== PREPARARE LE SCHEDE ===================== -->
+    <h2 class="chapter" data-hide-on-search>Preparare le schede</h2>
+
+    <section id="schede-pronte" data-search>
+      <h3>Partire da una scheda pronta</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>Schede pronte</span></span></p>
+      <p>Sono punti di partenza costruiti secondo le indicazioni degli esperti di Comunicazione Aumentativa: poche parole
+        <strong>di base</strong> (io, voglio, ancora, basta, aiuto, sì, no, dove?…) che servono in ogni situazione,
+        sempre <strong>nello stesso posto</strong> perché la mano impari dove andare, <strong>colorate per tipo</strong>
+        di parola, e <strong>cartelle</strong> per tutto il resto (cibo, giochi, persone, luoghi, corpo, vestiti,
+        scuola…).</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/schede-pronte.webp" width="764" height="1530" alt="Le schede pronte nelle impostazioni: ogni scheda ha un’anteprima, il nome, una descrizione e i pulsanti Usa ed Esporta." loading="lazy">
+      </figure>
+      <table class="map">
+        <caption>Quale scegliere</caption>
+        <tbody>
+          <tr><th scope="row">Primi passi · 9 tessere</th><td>una pagina 3×3 con le prime richieste. Per iniziare, anche dai 3 anni.</td></tr>
+          <tr><th scope="row">Primi passi · 16 tessere e 4 cartelle</th><td>pagina 4×4 con Cibo, Giochi, Persone e Come mi sento.</td></tr>
+          <tr><th scope="row">Parole di base · 36 tessere e 7 cartelle</th><td>griglia 6×6, per tablet o telefono in orizzontale.</td></tr>
+          <tr><th scope="row">Parole di base · 60 tessere e 12 cartelle</th><td>griglia 10×6 per tablet e PC, con le domande.</td></tr>
+        </tbody>
+      </table>
+      <ol class="steps">
+        <li>Toccate <strong>Usa</strong> sotto la scheda scelta.</li>
+        <li>Scegliete <strong>Diventano le schede del bambino</strong> (sostituiscono quelle attuali) oppure
+          <strong>Aggiungi come cartella nella Home</strong> (le schede attuali restano e se ne aggiunge una cartella).</li>
+        <li>PicSpeak scarica una sola volta i pittogrammi (serve internet, circa 10 KB per immagine). Da quel momento
+          funziona anche senza connessione.</li>
+      </ol>
+      <figure class="shot shot-dialog">
+        <img src="guida/usa-scheda.webp" width="880" height="840" alt="Finestra «Usare Primi passi 16 tessere e 4 cartelle?» con le scelte Diventano le schede del bambino e Aggiungi come cartella nella Home." loading="lazy">
+      </figure>
+      <p>Ogni tessera di una scheda pronta si può poi cambiare, nascondere o togliere come tutte le altre.</p>
+      <p class="tip"><strong>Sostituito per sbaglio?</strong> Nella stessa pagina, sezione <strong>Recupero</strong>,
+        c’è <strong>Ripristina le schede di prima</strong>. Se mancava internet le tessere mostrano solo la parola: appena
+        siete collegati toccate <strong>Scarica … pittogrammi</strong> nella sezione Recupero. Con la ricerca online su
+        <em>Solo Wi-Fi</em>, se PicSpeak non capisce che rete state usando non scarica nulla: i pittogrammi li scaricate
+        voi da Recupero quando siete in Wi-Fi.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="tessere" data-search>
+      <h3>Aggiungere o cambiare una tessera</h3>
+      <ol class="steps">
+        <li><a href="#pin">Sbloccate le impostazioni</a>.</li>
+        <li>Toccate la tessera da cambiare, oppure la tessera <strong>+</strong> in fondo alla pagina per crearne una
+          nuova (scegliendo <strong>Tessera</strong> o <strong>Cartella</strong>). Si apre la finestra di modifica.</li>
+        <li>Scrivete la <strong>Parola</strong> e scegliete l’<strong>Immagine</strong> (<em>Cerca simbolo</em> oppure
+          <em>Foto o immagine dal dispositivo</em>).</li>
+        <li>Toccate <strong>Salva</strong>.</li>
+      </ol>
+      <div class="split">
+        <figure class="shot shot-tall">
+          <img src="guida/modifica-tessera.webp" width="784" height="2656" alt="La finestra Modifica tessera con i campi Parola, Parola pronunciata, Tipo di parola, Colore, Immagine, Nascosta, Posizione bloccata, i pulsanti Prima, Dopo, Elimina, Annulla e Salva." loading="lazy">
+        </figure>
+        <dl class="fields">
+          <dt>Parola</dt><dd>il testo sotto l’immagine.</dd>
+          <dt>Parola pronunciata</dt><dd>facoltativa: se la voce deve dire qualcosa di diverso da quello scritto.</dd>
+          <dt>Tipo di parola</dt><dd>dà il colore (vedi <a href="#colori">Colorare le parole per tipo</a>). Viene proposto da
+            solo mentre scrivete o scegliete un simbolo ARASAAC.</dd>
+          <dt>Colore</dt><dd>«A» usa il colore del tipo di parola; si può sceglierne un altro.</dd>
+          <dt>Immagine</dt><dd><em>Cerca simbolo</em>, <em>Foto o immagine dal dispositivo</em>, oppure <em>Togli
+            immagine</em> per lasciare solo la parola.</dd>
+          <dt>Nascosta</dt><dd>toglie la tessera dalla vista senza cancellarla.</dd>
+          <dt>Posizione bloccata</dt><dd>la tessera non si può spostare.</dd>
+          <dt>← Prima / Dopo →</dt><dd>sposta la tessera di un posto (non compaiono se la posizione è bloccata).</dd>
+          <dt>Elimina</dt><dd>cancella la tessera (chiede conferma).</dd>
+        </dl>
+      </div>
+      <p>Per una <strong>cartella</strong> (una tessera che apre un’altra pagina): toccate <strong>+</strong>, in cima alla
+        finestra scegliete <strong>Cartella</strong> invece di <strong>Tessera</strong>, scrivete il nome e salvate. Poi
+        apritela e aggiungete le sue tessere con <strong>+</strong>.</p>
+      <p class="tip">Con le impostazioni sbloccate, toccare un’immagine nella striscia frase la toglie dalla frase.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="spostare" data-search>
+      <h3>Spostare le tessere</h3>
+      <ol class="steps">
+        <li><a href="#pin">Sbloccate le impostazioni</a>.</li>
+        <li>Tenete premuta una tessera per mezzo secondo: si «stacca» e segue il dito (o il mouse).</li>
+        <li>Trascinatela dove volete: le altre si spostano per farle posto.</li>
+        <li>Lasciatela: il nuovo ordine si salva da solo.</li>
+      </ol>
+      <p>Un tocco breve, invece, apre la modifica. In alternativa usate <strong>← Prima</strong> e <strong>Dopo →</strong>
+        nella modifica della tessera.</p>
+      <p class="tip">Le tessere con la posizione bloccata non si spostano: togliete prima il blocco (vedi
+        <a href="#posizioni">Tenere le tessere sempre allo stesso posto</a>).</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="simboli" data-search>
+      <h3>Cercare un simbolo o usare una foto</h3>
+      <ol class="steps">
+        <li>Nella modifica della tessera toccate <strong>Cerca simbolo</strong>.</li>
+        <li>Scrivete una parola semplice, meglio al singolare («mela», «bere»), e toccate <strong>Cerca</strong>.</li>
+        <li>Prima compaiono i simboli <strong>già sul dispositivo</strong> (subito, anche senza internet), poi quelli di
+          ARASAAC e delle altre raccolte attive.</li>
+        <li>Toccate l’immagine scelta: viene salvata sul dispositivo e funzionerà anche offline.</li>
+      </ol>
+      <figure class="shot shot-narrow">
+        <img src="guida/cerca-simbolo.webp" width="860" height="570" alt="La finestra Cerca simbolo con la parola «mela» e il risultato già sul dispositivo." loading="lazy">
+      </figure>
+      <p>Per una <strong>foto</strong> (persone, oggetti e luoghi reali della persona) toccate invece <strong>Foto o
+        immagine dal dispositivo</strong>.</p>
+      <h4>Scegliere le raccolte di simboli</h4>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Simboli</span></span></p>
+      <figure class="shot shot-narrow">
+        <img src="guida/fonti-simboli.webp" width="764" height="1430" alt="Le fonti dei simboli: ARASAAC, Mulberry, OpenMoji e Foto personali, ognuna con i pulsanti Attiva e Spenta." loading="lazy">
+      </figure>
       <ul>
-        <li><strong>La tessera si sceglie</strong> «al rilascio» (quando si alza il dito: si può ancora scivolare via se si è
-          sbagliato) oppure «al tocco» (appena si appoggia il dito: più veloce).</li>
-        <li><strong>Tenere premuto</strong>: per scegliere bisogna tenere il dito sulla tessera per 0,3 – 1,5 secondi. Mentre
-          si tiene premuto la tessera si riempie di azzurro dal basso; alzando il dito prima non succede nulla. Piccoli
-          movimenti del dito sono tollerati.</li>
-        <li><strong>Ignora i tocchi ripetuti</strong>: dopo una scelta, per mezzo secondo fino a 2 secondi gli altri tocchi
-          non contano. Evita le parole doppie quando il dito rimbalza.</li>
+        <li><strong>ARASAAC</strong>: pittogrammi colorati, lo standard della CAA in Italia. Consigliato come base.</li>
+        <li><strong>Mulberry</strong>: disegni puliti, adatti anche agli adulti (circa 3,8 MB, da scaricare una volta).</li>
+        <li><strong>OpenMoji</strong>: emoji a linea, ottime per emozioni, cibo e oggetti (circa 3,1 MB, una volta).</li>
+        <li><strong>Foto personali</strong>: le più efficaci per chi riconosce meglio il reale.</li>
+      </ul>
+      <p class="tip">Se un simbolo non si trova provate un sinonimo o una parola più semplice. Si può anche salvare la
+        tessera con la sola parola, o con una foto.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="colori" data-search>
+      <h3>Colorare le parole per tipo</h3>
+      <p>Ogni tessera prende il colore del suo tipo di parola (chiave di Fitzgerald modificata): aiuta a costruire la
+        frase e a ritrovare le tessere.</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/colori-parole.webp" width="764" height="1118" alt="Legenda dei colori: Persone giallo, Azioni verde, Cose arancio, Descrizioni blu, Sociali rosa, Negazioni rosso, Domande viola, Collegamento bianco, Cartelle grigio scuro." loading="lazy">
+        <figcaption>La legenda è in <span class="where"><span>Impostazioni</span><span>Schede</span><span>Colori per tipo di parola</span></span>.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Aprite la modifica della tessera.</li>
+        <li>In <strong>Tipo di parola</strong> scegliete Persone, Azioni, Cose, Descrizioni, Sociali, Negazioni, Domande o
+          Collegamento.</li>
+        <li>Lasciate il <strong>Colore</strong> su «A» per usare il colore del tipo, oppure sceglietene un altro.</li>
+        <li>Toccate <strong>Salva</strong>.</li>
+      </ol>
+      <p class="tip">Per le parole note il tipo viene proposto da solo. Per togliere i colori a tutte le tessere scegliete
+        la modalità colori «Neutro» in <span class="where"><span>Impostazioni</span><span>Aspetto</span></span>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="posizioni" data-search>
+      <h3>Tenere le tessere sempre allo stesso posto</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>Disposizione e posizioni</span></span></p>
+      <p>Quando una parola sta sempre nello stesso punto, con il tempo la mano ci va da sola, come sulla tastiera.</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/disposizione.webp" width="764" height="980" alt="La sezione Disposizione e posizioni con la scelta Automatica o Griglia fissa per la pagina aperta e l’interruttore Blocca la posizione di tutte le tessere." loading="lazy">
+      </figure>
+      <ol class="steps">
+        <li>Aprite la pagina da sistemare (per esempio una cartella), poi le impostazioni.</li>
+        <li>In <strong>Disposizione di questa pagina</strong> scegliete:
+          <ul>
+            <li><strong>Automatica</strong>: le tessere si adattano allo schermo (poche tessere = tessere grandi);</li>
+            <li><strong>Griglia fissa</strong>: ogni tessera resta nella sua riga e colonna e scegliete quante colonne.
+              Se nascondete o eliminate una tessera il suo posto resta vuoto e le altre non si spostano.</li>
+          </ul>
+        </li>
+        <li>Se volete, attivate <strong>Blocca la posizione di tutte le tessere</strong>: nessuno potrà spostarle per
+          errore. Una sola tessera si blocca dalla sua modifica («Posizione bloccata»).</li>
+      </ol>
+      <p class="tip">Su uno schermo troppo stretto (per esempio un telefono in verticale con una griglia di 6 o 10 colonne)
+        le tessere restano nello stesso ordine ma si adattano allo schermo: per una griglia grande usate sempre lo stesso
+        tablet, nello stesso verso. Con la griglia fissa i pulsanti − e + non cambiano la misura. Nelle schede pronte le
+        tessere della Home sono già bloccate.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="misura" data-search>
+      <h3>Ingrandire o rimpicciolire le tessere</h3>
+      <ol class="steps">
+        <li><a href="#pin">Sbloccate le impostazioni</a>.</li>
+        <li>Nella barra scura in alto toccate <strong>−</strong> o <strong>+</strong>: le tessere cambiano a passi del 10%.</li>
+        <li>Mentre regolate, la pagina si mostra esattamente come la vedrà il bambino (la barra dice «Anteprima»). Il primo
+          tocco fuori da − e + torna alla modifica.</li>
+      </ol>
+      <p>Toccando la percentuale si torna alla misura automatica (100%, che riempie lo schermo). Le tessere non diventano
+        mai più piccole di un dito.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <!-- ===================== ADATTARE ===================== -->
+    <h2 class="chapter" data-hide-on-search>Adattare PicSpeak alla persona</h2>
+
+    <section id="pulsanti-rapidi" data-search>
+      <h3>Aggiungere «Ops», «Aiuto» e frasi rapide</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Tocco e frase</span><span>Pulsanti rapidi</span></span></p>
+      <p>Sono pulsanti sempre visibili, in ogni pagina, accanto al percorso «Home» (sul telefono in una riga sotto).
+        Parlano subito e non entrano nella frase. All’inizio sono spenti.</p>
+      <figure class="shot">
+        <img src="guida/pulsanti-rapidi.webp" width="1200" height="223" alt="Accanto al pulsante Home compaiono i pulsanti Ops, le frasi rapide Aspetta, Basta, Bagno, Non lo so e il pulsante rosso Aiuto." loading="lazy">
+      </figure>
+      <ol class="legend">
+        <li><strong>Ops</strong>: dice «Ops, ho sbagliato» e toglie l’ultima parola dalla frase. Un modo semplice per
+          correggersi da soli.</li>
+        <li><strong>Frasi rapide</strong>: fino a 6 frasi brevi da dire al volo.</li>
+        <li><strong>Aiuto</strong> (rosso): dice «Ho bisogno di aiuto!». Con il <strong>suono di allarme</strong> prima
+          suonano tre note forti, per farsi sentire da lontano. Alzate il volume del dispositivo.</li>
+      </ol>
+      <ol class="steps">
+        <li>Mettete su <strong>Sì</strong> i pulsanti che volete: Pulsante «Ops», Pulsante «Aiuto» (ed eventualmente Suono
+          di allarme), Frasi rapide.</li>
+        <li>Per le frasi rapide: cambiate il testo scrivendo nei campi, toccate <strong>Togli</strong> per toglierne una,
+          scrivete nell’ultimo campo e toccate <strong>Aggiungi</strong> per aggiungerne una.</li>
+        <li>Tornate alla comunicazione: i pulsanti sono nella riga del percorso. Se non entrano tutti, la riga scorre di lato.</li>
+      </ol>
+      <figure class="shot shot-narrow">
+        <img src="guida/impostazioni-pulsanti-rapidi.webp" width="764" height="1966" alt="La sezione Pulsanti rapidi: interruttori per Ops, Aiuto, Suono di allarme e Frasi rapide, poi l’elenco delle frasi con i pulsanti Togli e il campo per aggiungerne una nuova." loading="lazy">
+      </figure>
+      <figure class="shot shot-phone">
+        <img src="guida/telefono.webp" width="780" height="1688" alt="Su un telefono i pulsanti rapidi Ops, Aspetta, Basta e Aiuto stanno in una riga sotto il pulsante Home." loading="lazy">
+        <figcaption>Sul telefono: <span class="dot">1</span> tre puntini, <span class="dot">2</span> riga dei pulsanti rapidi.</figcaption>
+      </figure>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="tocco" data-search>
+      <h3>Aiutare chi ha tremori o tocca per sbaglio</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Tocco e frase</span><span>Tocco</span></span></p>
+      <figure class="shot shot-narrow">
+        <img src="guida/impostazioni-tocco.webp" width="764" height="1210" alt="La sezione Tocco con le scelte La tessera si sceglie (al rilascio o al tocco), Tenere premuto (da 0,3 a 1,5 secondi) e Ignora i tocchi ripetuti (da 0,5 a 2 secondi)." loading="lazy">
+      </figure>
+      <ul>
+        <li><strong>La tessera si sceglie</strong> «al rilascio» (quando si alza il dito: si può ancora scivolare via se si
+          è sbagliato) oppure «al tocco» (appena si appoggia il dito: più veloce).</li>
+        <li><strong>Tenere premuto</strong> (0,3 – 1,5 secondi): per scegliere bisogna tenere il dito sulla tessera; intanto
+          la tessera si riempie di azzurro dal basso. Alzando il dito prima non succede nulla. Piccoli movimenti del dito
+          sono tollerati.</li>
+        <li><strong>Ignora i tocchi ripetuti</strong> (0,5 – 2 secondi): dopo una scelta gli altri tocchi non contano.
+          Evita le parole doppie quando il dito rimbalza.</li>
       </ul>
       <p class="tip">Queste regole valgono solo mentre il bambino comunica: con le impostazioni sbloccate le tessere si
         aprono con un tocco normale.</p>
-      <h3>Frase</h3>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="frase" data-search>
+      <h3>Decidere come si comporta la frase</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Tocco e frase</span><span>Frase</span></span></p>
       <ul>
         <li><strong>Pronuncia</strong>: «Ogni parola» (si sente subito ogni tessera) oppure «Solo la frase» (le tessere si
-          aggiungono in silenzio e si sentono solo toccando l’altoparlante). Utile per chi costruisce frasi lunghe.</li>
+          aggiungono in silenzio e si sentono toccando l’altoparlante). Utile per chi costruisce frasi lunghe.</li>
         <li><strong>Cancella dopo la lettura</strong>: quando la voce ha finito di leggere la frase, la striscia si svuota da
-          sola, pronta per la frase successiva.</li>
-        <li><strong>Torna alla Home</strong>: dopo una parola presa in una cartella (per esempio «mela» in «Cibo») si torna da
-          soli alla pagina principale. Riduce i passaggi quando si alternano parole fondamentali e cartelle.</li>
+          sola.</li>
+        <li><strong>Torna alla Home</strong>: dopo una parola presa in una cartella (per esempio «mela» in «Cibo») si torna
+          da soli alla pagina principale.</li>
       </ul>
+      <p>La posizione della striscia (in alto o in basso) e dei suoi pulsanti (a destra o a sinistra, per chi usa la mano
+        sinistra) si sceglie in <span class="where"><span>Impostazioni</span><span>Aspetto</span><span>Disposizione e tocco</span></span>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="menu">
-      <h2>4. Il menu dei tre puntini</h2>
-      <p>Tenete premuti i <strong>tre puntini</strong> in alto a destra per <strong>3 secondi</strong>: in cima allo schermo
-        compare una barra che si riempie. Un tocco veloce non fa nulla, così il bambino non apre il menu per sbaglio.</p>
-      <p>Al termine si apre una finestra con tre voci:</p>
-      <ul>
-        <li><strong>Impostazioni</strong>: chiede il PIN e sblocca la modifica (vedi sotto).</li>
-        <li><strong>Crediti</strong>: autori dei simboli, licenze e informazioni sulla privacy. Non serve il PIN.</li>
-        <li><strong>Guida</strong>: apre questa pagina. Non serve il PIN.</li>
-      </ul>
-      <p>«Chiudi» o il tasto Esc tornano alla tabella senza cambiare nulla.</p>
-    </section>
-
-    <section id="pin">
-      <h2>5. Impostazioni e PIN</h2>
-      <h3>La prima volta</h3>
-      <ol>
-        <li>Dal menu scegliete <strong>Impostazioni</strong>.</li>
-        <li>Create un PIN da 4 a 6 cifre e ripetetelo.</li>
-        <li>PicSpeak mostra un <strong>codice di recupero</strong>: annotatelo o stampatelo e conservatelo in un posto sicuro.
-          Serve se dimenticate il PIN e non viene mostrato di nuovo.</li>
+    <section id="previsione" data-search>
+      <h3>Suggerire la parola successiva</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Previsione</span></span></p>
+      <p>PicSpeak impara quali parole il bambino mette una dopo l’altra (per esempio «io → voglio → mangiare») e può
+        <strong>evidenziare con un bordo blu</strong> le tessere che probabilmente userà subito dopo, oppure la cartella
+        che le contiene. Le tessere non si spostano e non cambiano misura.</p>
+      <figure class="shot">
+        <img src="guida/previsione.webp" width="1200" height="900" alt="Dopo le parole «io voglio» la tessera Mangiare ha un bordo blu: è il suggerimento della parola successiva." loading="lazy">
+        <figcaption>Dopo «io voglio» la tessera <strong>Mangiare</strong> è evidenziata con il bordo blu.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Mettete <strong>Mostra i suggerimenti</strong> su <strong>Sì</strong> (all’inizio è spento).</li>
+        <li>In <strong>Tessere evidenziate</strong> scegliete quante (da 1 a 3).</li>
+        <li>Lasciate acceso <strong>Registra le abitudini</strong> (lo è fin dall’inizio): i suggerimenti compaiono dopo che
+          una sequenza è stata usata almeno un paio di volte di recente.</li>
       </ol>
-      <h3>Con le impostazioni sbloccate</h3>
-      <p>In alto compare una barra scura con:</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/impostazioni-previsione.webp" width="764" height="1018" alt="La sezione Suggerimenti con l’interruttore Mostra i suggerimenti, la scelta da 1 a 3 tessere evidenziate e un esempio di tessera con il bordo blu." loading="lazy">
+      </figure>
       <ul>
-        <li><strong>− 100% +</strong>: rimpicciolisce o ingrandisce le tessere, a passi del 10% (100% è la misura
-          automatica, che riempie lo schermo). Mentre si regola, la pagina si mostra esattamente come la vedrà il bambino
-          (la barra scura dice «Anteprima»); il primo tocco fuori da − e + torna alla modifica. Toccando la percentuale si
-          torna alla misura automatica. Le tessere non diventano mai più piccole di un dito.</li>
-        <li><strong>Impostazioni</strong>: apre le categorie Generale, Aspetto, Schede, Previsione, Simboli, Voce,
-          Sicurezza.</li>
-        <li><strong>Torna alla comunicazione</strong> (sul telefono «Fine»): richiude tutto.</li>
+        <li>Si registrano solo le tessere toccate in comunicazione, mai durante la modifica.</li>
+        <li>Le abitudini recenti contano di più; quelle vecchie si affievoliscono da sole in qualche settimana (per esempio,
+          finita la vacanza al mare). Conta anche l’ora del giorno.</li>
+        <li>Nella stessa pagina vedete quante parole sono state registrate e potete <strong>cancellare le abitudini
+          registrate</strong>.</li>
       </ul>
-      <p class="tip">Dopo 5 minuti senza tocchi PicSpeak torna da solo alla modalità di comunicazione.</p>
-      <h3>Cambiare il PIN</h3>
-      <p>Impostazioni → Sicurezza → <strong>Cambia PIN</strong>: serve il PIN attuale.</p>
+      <p class="tip">Tutto viene calcolato su questo dispositivo, anche senza internet: nessun dato viene inviato.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="tessere">
-      <h2>6. Modificare le tessere</h2>
-      <p>Con le impostazioni sbloccate, toccare una tessera non la pronuncia ma apre la sua <strong>modifica</strong>.
-        In fondo a ogni pagina c’è la tessera <strong>Aggiungi</strong> per crearne una nuova.</p>
-      <ul>
-        <li><strong>Tessera o Cartella</strong>: la cartella apre una nuova pagina di tessere.</li>
-        <li><strong>Parola</strong>: il testo scritto sotto l’immagine.</li>
-        <li><strong>Parola pronunciata</strong> (facoltativa): se la voce deve dire qualcosa di diverso da quello scritto.</li>
-        <li><strong>Tipo di parola</strong>: dà il colore secondo la chiave di Fitzgerald (giallo persone, verde azioni,
-          arancio cose, blu descrizioni, rosa parole sociali, rosso negazioni, viola domande, bianco parole di
-          collegamento come «e», «con», «di»). Per una tessera nuova il tipo viene proposto da solo mentre scrivete la
-          parola o quando scegliete un simbolo ARASAAC; potete sempre cambiarlo.</li>
-        <li><strong>Colore</strong>: «A» lascia il colore automatico del tipo di parola; si può sceglierne un altro.</li>
-        <li><strong>Immagine</strong>: <em>Cerca simbolo</em>, oppure una foto o immagine dal dispositivo.</li>
-        <li><strong>Nascosta</strong>: toglie la tessera dalla vista senza cancellarla.</li>
-        <li><strong>Posizione bloccata</strong>: la tessera non si può spostare (vedi «Griglia fissa e posizioni
-          bloccate»).</li>
-        <li><strong>Prima / Dopo</strong>: sposta la tessera nella pagina (non compaiono se la posizione è bloccata).</li>
-        <li><strong>Elimina</strong>: cancella la tessera (chiede conferma).</li>
-      </ul>
-      <p>Premete <strong>Salva</strong> per confermare.</p>
-      <h3>Spostare le tessere trascinandole</h3>
-      <p>Con le impostazioni sbloccate, tenete premuta una tessera per mezzo secondo: si «stacca» e segue il dito (o il
-        mouse), mentre le altre si spostano per farle posto. Lasciatela dove volete: il nuovo ordine si salva da solo.
-        Un tocco breve, invece, apre la modifica della tessera.</p>
-      <p class="tip">Con le impostazioni sbloccate, toccare un’immagine nella striscia frase la toglie dalla frase.</p>
-    </section>
-
-    <section id="schede-pronte">
-      <h2>7. Schede pronte, modelli, importa ed esporta, altre app</h2>
-      <p>In Impostazioni → <strong>Schede</strong> trovate insiemi di schede già pronti, costruiti secondo le indicazioni
-        degli esperti di Comunicazione Aumentativa:</p>
-      <ul>
-        <li>poche parole <strong>di base</strong> (io, voglio, ancora, basta, aiuto, sì, no, dove?…) che servono in ogni
-          situazione e da sole coprono gran parte di quello che diciamo ogni giorno;</li>
-        <li>parole <strong>colorate per tipo</strong> (persone, azioni, descrizioni, domande…), così è più facile costruire
-          una frase e ritrovare le tessere;</li>
-        <li>parole di base <strong>sempre nello stesso posto</strong>, perché la mano impari dove andare;</li>
-        <li><strong>cartelle</strong> per tutto il resto: cibo, giochi, persone, luoghi, corpo, vestiti, scuola…</li>
-      </ul>
-      <p>Le schede pronte sono quattro, da scegliere secondo il bambino:</p>
-      <ul>
-        <li><strong>Primi passi · 9 tessere</strong>: una sola pagina 3×3 con le prime richieste;</li>
-        <li><strong>Primi passi · 16 tessere e 4 cartelle</strong>: pagina 4×4 con Cibo, Giochi, Persone e Come mi sento;</li>
-        <li><strong>Parole di base · 36 tessere e 7 cartelle</strong>: griglia 6×6, adatta a tablet e telefono in orizzontale;</li>
-        <li><strong>Parole di base · 60 tessere e 12 cartelle</strong>: griglia 10×6 per tablet e PC, con le domande.</li>
-      </ul>
-      <h3>Usare una scheda pronta</h3>
-      <ol>
-        <li>Toccate <strong>Usa</strong> sulla scheda scelta.</li>
-        <li>Scegliete <strong>Diventano le schede del bambino</strong> (sostituiscono quelle attuali) oppure
-          <strong>Aggiungi come cartella nella Home</strong> (le schede attuali restano e si aggiunge una cartella).</li>
-        <li>PicSpeak scarica una sola volta i pittogrammi (serve internet, circa 10 KB per immagine). Da quel momento
-          funziona anche offline. Se la ricerca online è impostata su <em>Solo Wi-Fi</em> e PicSpeak non riesce a capire
-          che tipo di rete state usando, non scarica nulla: i pittogrammi li scaricate voi da <strong>Recupero</strong>
-          quando siete sicuri di essere in Wi-Fi.</li>
+    <section id="aspetto" data-search>
+      <h3>Cambiare l’aspetto della tabella</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Aspetto</span></span></p>
+      <ol class="steps">
+        <li>In <strong>Stili pronti</strong> toccate lo stile più vicino a quello che cercate.</li>
+        <li>Se serve, cambiate i dettagli più sotto: ogni scelta si vede subito.</li>
       </ol>
-      <p class="tip">Se avete sostituito le schede per sbaglio, nella sezione <strong>Recupero</strong> c’è
-        <strong>Ripristina le schede di prima</strong>. Se mancava internet, le tessere mostrano solo la parola: appena
-        siete collegati toccate <strong>Scarica … pittogrammi</strong> nella stessa sezione.</p>
-      <p>Ogni tessera di una scheda pronta si può poi cambiare, nascondere o togliere come tutte le altre.</p>
-      <h3>I miei modelli</h3>
+      <figure class="shot shot-narrow">
+        <img src="guida/stili-pronti.webp" width="764" height="1784" alt="Gli stili pronti: Scheda, Scheda grande, Fogli, Colore pieno, Pulito, Essenziale, Alto contrasto, Bianco e nero, Notte, Solo parole." loading="lazy">
+      </figure>
       <ul>
-        <li><strong>Salva le schede attuali come modello</strong>: tiene una copia delle schede del bambino su questo
-          dispositivo, da riusare (per esempio per un altro bambino o per ricominciare).</li>
+        <li><strong>Modalità colori</strong> (Scheda, Fogli, Colore pieno, Bordo colorato, Neutro) e <strong>colore di
+          sfondo</strong>.</li>
+        <li><strong>Simboli</strong>: a colori, in bianco e nero o con più contrasto; immagine e parola, solo immagine o
+          solo parola; parola sopra o sotto.</li>
+        <li><strong>Testo</strong>: MAIUSCOLO, minuscolo o come scritto; dimensione; carattere ad alta leggibilità.</li>
+        <li><strong>Celle</strong>: spazio, bordi, angoli, trasparenza.</li>
+        <li><strong>Disposizione e tocco</strong>: striscia frase in alto o in basso, pulsanti a destra o a sinistra, nome
+          della pagina, evidenziazione al tocco, gesti «Scuoti per ricominciare» e «Spingi via la frase».</li>
+      </ul>
+      <p class="tip">Pensate alla persona: chi si distrae con i colori sta meglio con «Bianco e nero» o «Essenziale»; chi
+        vede poco con «Alto contrasto»; la sera «Notte»; chi legge può passare a «Solo parole». L’aspetto può crescere
+        con la persona.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="voce" data-search>
+      <h3>Scegliere la voce</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Voce</span></span></p>
+      <ol class="steps">
+        <li>Scegliete la <strong>Voce</strong> dall’elenco («Automatica» prende la migliore disponibile).</li>
+        <li>Regolate <strong>Velocità</strong> e <strong>Tono</strong>.</li>
+        <li>Toccate <strong>▶ Prova la voce</strong>.</li>
+      </ol>
+      <p>PicSpeak usa le voci già presenti sul dispositivo. Se la voce sembra metallica, nella stessa pagina trovate i passi
+        per installare gratis una voce più naturale (iPad e iPhone, Mac, Android, Windows). Dopo averla installata,
+        chiudete e riaprite PicSpeak e sceglietela.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <!-- ===================== CONDIVIDERE ===================== -->
+    <h2 class="chapter" data-hide-on-search>Condividere e stampare</h2>
+
+    <section id="modelli" data-search>
+      <h3>Salvare, esportare e importare le schede</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>I miei modelli</span></span></p>
+      <figure class="shot shot-narrow">
+        <img src="guida/modelli.webp" width="764" height="722" alt="La sezione I miei modelli con i pulsanti Salva le schede attuali come modello, Esporta le schede attuali in un file e Importa un modello da file." loading="lazy">
+      </figure>
+      <ul>
+        <li><strong>Salva le schede attuali come modello</strong>: tiene una copia su questo dispositivo, da riusare (per
+          un altro bambino o per ricominciare). Fino a 20 modelli.</li>
         <li><strong>Esporta le schede attuali in un file</strong>: crea un file con tutte le schede, le immagini e le foto.
           Lo trovate tra i download (su iPad e iPhone nell’app File) e potete mandarlo a casa, a scuola o al terapista.
-          Anche ogni scheda pronta e ogni modello ha il suo pulsante <strong>Esporta</strong>.</li>
-        <li><strong>Importa un modello da file</strong>: apre un file esportato da PicSpeak. Potete salvarlo tra i vostri
-          modelli oppure usarlo subito. Si possono tenere fino a 20 modelli: per salvarne altri eliminate quelli che
-          non usate più.</li>
+          Anche ogni scheda pronta e ogni modello ha il suo <strong>Esporta</strong>.</li>
+        <li><strong>Importa un modello da file</strong>: apre un file esportato da PicSpeak; potete salvarlo tra i modelli
+          oppure usarlo subito.</li>
       </ul>
-      <p class="warn">Il file esportato contiene le foto personali: condividetelo solo con persone di fiducia. Non contiene
-        il PIN né le abitudini d’uso del bambino.</p>
-      <h3>Scambio con altre app (Open Board Format)</h3>
-      <p>L’Open Board Format è un formato aperto per le schede di comunicazione, usato da diverse app (per esempio
-        CoughDrop, Board Builder di Global Symbols, Asterics Grid). Con questa sezione PicSpeak non resta un’isola:</p>
+      <p class="warn">Il file contiene le foto personali: condividetelo solo con persone di fiducia. Non contiene il PIN né
+        le abitudini d’uso del bambino.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="altre-app" data-search>
+      <h3>Scambiare schede con altre app (.obf, .obz)</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>Scambio con altre app</span></span></p>
+      <p>L’Open Board Format è un formato aperto usato da diverse app di comunicazione (per esempio CoughDrop, Board
+        Builder di Global Symbols, Asterics Grid). Un file <strong>.obf</strong> contiene una scheda; un file
+        <strong>.obz</strong> un pacchetto con più schede collegate e le loro immagini.</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/open-board.webp" width="764" height="964" alt="La sezione Scambio con altre app con i pulsanti Importa un file .obf o .obz, Esporta tutte le schede (.obz) ed Esporta questa scheda (.obf)." loading="lazy">
+      </figure>
+      <h4>Importare</h4>
+      <ol class="steps">
+        <li>Toccate <strong>Importa un file .obf o .obz</strong> e scegliete il file.</li>
+        <li>PicSpeak dice quante schede e tessere contiene e se qualcosa non si è potuto portare.</li>
+        <li>Salvatelo tra i vostri modelli oppure usatelo subito.</li>
+      </ol>
       <ul>
-        <li><strong>Importa un file .obf o .obz</strong>: un file <strong>.obf</strong> contiene una scheda, un file
-          <strong>.obz</strong> un pacchetto con più schede collegate e le loro immagini. PicSpeak mostra quante schede e
-          tessere contiene e se qualcosa non si è potuto portare (vedi sotto); poi potete salvarlo tra i vostri modelli o
-          usarlo subito, come un modello.</li>
-        <li><strong>Esporta tutte le schede (.obz)</strong>: crea un pacchetto con tutte le schede del bambino, le
-          immagini e i collegamenti tra cartelle, da aprire in un’altra app o in un altro PicSpeak.</li>
-        <li><strong>Esporta questa scheda (.obf)</strong>: solo la scheda aperta in quel momento, con le sue immagini.</li>
+        <li>Posizioni, colori, parole e frasi pronunciate restano come nell’altra app; il tipo di parola viene proposto
+          da solo.</li>
+        <li>Le tessere-comando dell’altra app (cancella, leggi, home…) non si importano: in PicSpeak ci sono già.</li>
+        <li>Le schede con più di 12 colonne vengono ridisposte su 12 colonne.</li>
+        <li>Le immagini indicate solo con un indirizzo internet non vengono scaricate (tranne i pittogrammi ARASAAC): quelle
+          tessere mostrano la parola e potete scegliere voi un simbolo.</li>
+        <li>Autore e licenza di ogni immagine compaiono nei Crediti. Se un’immagine non dichiara una licenza, PicSpeak ve lo
+          dice: controllate di poterla usare prima di condividere le schede.</li>
       </ul>
-      <p>Cosa succede all’importazione:</p>
+      <h4>Esportare</h4>
       <ul>
-        <li>Le tessere restano nella stessa posizione e con lo stesso colore scelto nell’altra app; parole e frasi
-          pronunciate restano uguali. Il tipo di parola (colore Fitzgerald) viene proposto in automatico e si può cambiare.</li>
-        <li>Le tessere che nell’altra app erano comandi (cancella, leggi la frase, torna alla home…) non si importano: in
-          PicSpeak questi comandi sono già nella barra della frase.</li>
-        <li>Le schede con più di 12 colonne vengono ridisposte in ordine su 12 colonne.</li>
-        <li>Le immagini indicate solo con un indirizzo internet non vengono scaricate (tranne i pittogrammi ARASAAC, che si
-          scaricano come per le schede pronte): quelle tessere mostrano la parola e potete scegliere voi un simbolo.</li>
-        <li>Autore e licenza di ogni immagine vengono conservati e compaiono nei <strong>Crediti</strong>. Se un’immagine non
-          dichiara una licenza, PicSpeak ve lo dice: controllate di poterla usare prima di condividere le schede.</li>
+        <li><strong>Esporta tutte le schede (.obz)</strong>: tutte le schede del bambino, con immagini e cartelle.</li>
+        <li><strong>Esporta questa scheda (.obf)</strong>: solo la scheda aperta.</li>
       </ul>
-      <p>All’esportazione ogni immagine porta con sé autore e licenza. Le informazioni che esistono solo in PicSpeak (tipo di
-        parola, tessere bloccate, griglia fissa) viaggiano nel file e tornano uguali se lo riaprite in PicSpeak.</p>
+      <p>Ogni immagine porta con sé autore e licenza. Tipo di parola, tessere bloccate e griglia fissa tornano uguali se
+        riaprite il file in PicSpeak.</p>
       <p class="warn">I pittogrammi ARASAAC hanno licenza CC BY-NC-SA: i file si possono condividere ma non usare per scopi
-        commerciali. I file contengono anche le foto personali: condivideteli solo con persone di fiducia.</p>
+        commerciali. Contengono anche le foto personali: condivideteli solo con persone di fiducia.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="posizioni">
-      <h2>8. Griglia fissa e posizioni bloccate</h2>
-      <p>Quando una parola sta sempre nello stesso punto, con il tempo la mano ci va da sola, come sulla tastiera. Per
-        questo in Impostazioni → Schede → <strong>Disposizione e posizioni</strong> potete scegliere, per la pagina che
-        avete aperto:</p>
-      <ul>
-        <li><strong>Automatica</strong>: le tessere si adattano allo schermo (poche tessere = tessere grandi);</li>
-        <li><strong>Griglia fissa</strong>: ogni tessera resta nella sua riga e colonna e scegliete voi quante colonne
-          usare. Se nascondete o eliminate una tessera, il suo posto resta vuoto e le altre non si spostano.</li>
-      </ul>
-      <p class="tip">Su uno schermo troppo stretto per tessere comode (per esempio un telefono in verticale con una griglia
-        di 6 o 10 colonne) la griglia fissa mostra le tessere nello stesso ordine, adattate allo schermo. Per una griglia
-        grande conviene usare sempre lo stesso tablet, sempre nello stesso verso. Con la griglia fissa i pulsanti − e +
-        delle tessere non cambiano la misura.</p>
-      <p><strong>Blocca la posizione di tutte le tessere</strong> impedisce di spostarle per errore trascinandole. Si può
-        bloccare anche una sola tessera dalla sua modifica («Posizione bloccata»). Nelle schede pronte le tessere della
-        Home sono già bloccate: per spostarne una, togliete prima il blocco.</p>
-    </section>
-
-    <section id="stampa">
-      <h2>9. Stampare le schede o salvarle in PDF</h2>
-      <p>Una tabella di carta è utile quando il tablet è scarico, al mare, in piscina o a scuola. In Impostazioni →
-        <strong>Schede</strong> → <strong>Stampa</strong>:</p>
-      <ol>
+    <section id="stampa" data-search>
+      <h3>Stampare o salvare in PDF</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>Stampa</span></span></p>
+      <p>Una tabella di carta è utile quando il tablet è scarico, al mare, in piscina o a scuola.</p>
+      <figure class="shot shot-narrow">
+        <img src="guida/stampa.webp" width="764" height="1080" alt="La sezione Stampa con le scelte Questa scheda o Tutte le schede, la misura delle tessere (Adatta, 3, 4 o 5 cm) e il pulsante Stampa o salva in PDF." loading="lazy">
+      </figure>
+      <ol class="steps">
         <li>Scegliete <strong>Questa scheda</strong> (quella aperta) oppure <strong>Tutte le schede</strong> (una per
           foglio, a partire dalla Home).</li>
         <li>Scegliete la <strong>misura delle tessere</strong>: «Adatta» riempie il foglio; 3, 4 o 5 cm danno tessere di
-          misura precisa, utili anche per ritagliare uno scudo (keyguard). Se la scheda non entra nel foglio, le tessere
-          si rimpiccioliscono quanto basta.</li>
-        <li>Toccate <strong>Stampa o salva in PDF</strong>: si apre la finestra di stampa del browser. Per il PDF scegliete
-          «Salva come PDF» come stampante; su iPad e iPhone toccate il pulsante di condivisione nell’anteprima e salvate
-          nell’app File.</li>
+          misura precisa, utili anche per ritagliare uno scudo (keyguard).</li>
+        <li>Toccate <strong>Stampa o salva in PDF</strong>: si apre la finestra di stampa del browser.</li>
+        <li>Per il PDF scegliete «Salva come PDF» come stampante; su iPad e iPhone toccate il pulsante di condivisione
+          nell’anteprima e salvate nell’app File.</li>
       </ol>
-      <p>Le tessere mantengono posizione e colori, senza le tessere nascoste. In fondo a ogni foglio è scritto il credito
+      <p>Le tessere mantengono posizione e colori; quelle nascoste non si stampano. In fondo a ogni foglio c’è il credito
         dei pittogrammi, come chiede la licenza.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="previsione">
-      <h2>10. Previsione della parola successiva</h2>
-      <p>PicSpeak impara quali parole il bambino mette una dopo l’altra (per esempio «io → voglio → mangiare») e può
-        <strong>evidenziare</strong> con un bordo blu le tessere che probabilmente userà subito dopo, oppure la cartella
-        che le contiene. Le tessere non si spostano e non cambiano misura: restano dove la mano le cerca.</p>
-      <ul>
-        <li>Impostazioni → <strong>Previsione</strong> → <strong>Mostra i suggerimenti</strong>: all’inizio è spento.
-          Scegliete anche quante tessere evidenziare (da 1 a 3).</li>
-        <li><strong>Registra le abitudini</strong>: è acceso fin dall’inizio, così quando accenderete i suggerimenti
-          saranno già utili. Si registrano solo le tessere toccate in comunicazione, mai durante la modifica.</li>
-        <li>Le abitudini recenti contano di più; quelle vecchie si affievoliscono da sole in qualche settimana (per
-          esempio, finita la vacanza al mare). Conta anche l’ora del giorno.</li>
-        <li>Nella stessa pagina vedete quante parole sono state registrate e le sequenze più frequenti, e potete
-          <strong>cancellare</strong> tutto.</li>
-      </ul>
-      <p class="tip">Tutto viene calcolato su questo dispositivo, anche senza internet: nessun dato viene inviato.</p>
-    </section>
+    <!-- ===================== DISPOSITIVO, SICUREZZA, DATI ===================== -->
+    <h2 class="chapter" data-hide-on-search>Dispositivo, sicurezza e dati</h2>
 
-    <section id="simboli">
-      <h2>11. Cercare simboli e usare foto</h2>
-      <ol>
-        <li>Nella modifica della tessera toccate <strong>Cerca simbolo</strong>.</li>
-        <li>Scrivete una parola semplice, possibilmente al singolare («mela», «bere»), e premete <strong>Cerca</strong>.</li>
-        <li>I risultati sono divisi per fonte: prima quelli <strong>già sul dispositivo</strong> (subito, anche senza
-          internet), poi ARASAAC e gli altri set attivi.</li>
-        <li>Toccate l’immagine scelta: viene salvata sul dispositivo e da quel momento funziona anche offline.</li>
+    <section id="installare" data-search>
+      <h3>Installare come app e usarla senza internet</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Generale</span><span>Installa PicSpeak come app</span></span></p>
+      <ol class="steps">
+        <li>Seguite le istruzioni mostrate per il vostro dispositivo. Se il pulsante non compare, aprite il menu del
+          browser (⋮ o …) e scegliete «Installa PicSpeak», «Aggiungi alla schermata Home» oppure «Salva e condividi →
+          Installa pagina come app».</li>
+        <li>L’icona compare nella schermata Home: PicSpeak si apre a schermo intero e funziona anche senza connessione.</li>
       </ol>
-      <p>Le fonti si scelgono in Impostazioni → <strong>Simboli</strong>:</p>
-      <ul>
-        <li><strong>ARASAAC</strong>: pittogrammi colorati, lo standard della CAA in Italia. Consigliato come base.</li>
-        <li><strong>Mulberry</strong>: disegni puliti, adatti anche agli adulti.</li>
-        <li><strong>OpenMoji</strong>: emoji a linea, ottime per emozioni, cibo e oggetti.</li>
-        <li><strong>Foto personali</strong>: persone, oggetti e luoghi reali della persona.</li>
-      </ul>
-      <p>Mulberry e OpenMoji sono pacchetti di pochi MB: si scaricano una volta sola quando li attivate.</p>
-      <p class="tip">Se un simbolo non si trova, provate un sinonimo o una parola più semplice. Si può anche salvare la
-        tessera con la sola parola, o con una foto.</p>
-    </section>
-
-    <section id="aspetto">
-      <h2>12. Aspetto della tabella</h2>
-      <p>In Impostazioni → <strong>Aspetto</strong>:</p>
-      <ul>
-        <li><strong>Stili pronti</strong>: dieci punti di partenza (Scheda, Scheda grande, Fogli, Colore pieno, Pulito,
-          Essenziale, Alto contrasto, Bianco e nero, Notte, Solo parole). Dopo averne scelto uno, ogni dettaglio si può cambiare.</li>
-        <li><strong>Modalità colori</strong> e <strong>colore di sfondo</strong> della pagina.</li>
-        <li><strong>Simboli</strong>: a colori o in bianco e nero, immagine e parola oppure solo una delle due.</li>
-        <li><strong>Testo</strong>: dimensione, carattere ad alta leggibilità, MAIUSCOLO o minuscolo.</li>
-        <li><strong>Celle</strong>: spazio, bordi, angoli, trasparenza.</li>
-        <li><strong>Disposizione e tocco</strong>: striscia frase in alto o in basso, pulsanti a destra o a sinistra
-          (per chi usa la mano sinistra), evidenziazione al tocco, gesti.</li>
-      </ul>
-      <p class="tip">Pensate alla persona: chi si distrae con i colori sta meglio con «Bianco e nero» o «Essenziale»; chi vede
-        poco con «Alto contrasto»; chi legge può passare a «Solo parole». L’aspetto può crescere con la persona.</p>
-    </section>
-
-    <section id="voce">
-      <h2>13. Voce</h2>
-      <p>PicSpeak usa le voci già presenti sul dispositivo. In Impostazioni → <strong>Voce</strong> potete scegliere la voce,
-        la velocità e il tono, e provarla.</p>
-      <p>Se la voce sembra metallica, nella stessa pagina trovate le istruzioni per installare gratis una voce più naturale
-        (iPad e iPhone, Mac, Android, Windows).</p>
-    </section>
-
-    <section id="internet">
-      <h2>14. Internet e consumo dati</h2>
+      <h4>Internet e consumo dati</h4>
       <p>PicSpeak funziona sempre senza internet con i simboli già salvati. Internet serve solo per cercare simboli nuovi e
-        per gli aggiornamenti.</p>
-      <p>In Impostazioni → Generale → <strong>Ricerca online di nuovi simboli</strong>: <em>Attiva</em>, <em>Solo Wi-Fi</em>
-        oppure <em>Disattivata</em>.</p>
+        per gli aggiornamenti (pochi KB). In <span class="where"><span>Impostazioni</span><span>Generale</span><span>Ricerca online di nuovi simboli</span></span>
+        scegliete <em>Attiva</em>, <em>Solo Wi-Fi</em> oppure <em>Disattivata</em>. Con «Solo Wi-Fi», su iPad, iPhone e
+        PC PicSpeak chiede conferma prima di usare internet.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="app">
-      <h2>15. Installare come app e uso senza internet</h2>
-      <p>In Impostazioni → Generale → <strong>Installa PicSpeak come app</strong> trovate le istruzioni per il vostro
-        dispositivo. L’icona compare nella schermata Home, PicSpeak si apre a schermo intero e funziona anche senza
-        connessione.</p>
+    <section id="accesso-guidato" data-search>
+      <h3>Tenere il bambino dentro PicSpeak</h3>
+      <p>Tablet e telefoni hanno una funzione che impedisce di uscire dall’app senza un codice. Va attivata una volta nelle
+        impostazioni del dispositivo; i passi sono anche in <span class="where"><span>Impostazioni</span><span>Sicurezza</span></span>.</p>
+      <h4>iPad e iPhone: Accesso guidato</h4>
+      <ol class="steps">
+        <li>Aprite Impostazioni → Accessibilità → <strong>Accesso guidato</strong> e attivatelo.</li>
+        <li>In «Impostazioni codice» scegliete un codice (può essere diverso dal PIN di PicSpeak).</li>
+        <li>Aprite PicSpeak e premete tre volte il tasto laterale (o il tasto Home), poi toccate «Avvia».</li>
+        <li>Per uscire premete di nuovo tre volte e inserite il codice.</li>
+      </ol>
+      <h4>Android: Blocco app</h4>
+      <ol class="steps">
+        <li>Aprite Impostazioni → Sicurezza (o «Sicurezza e privacy») → Altre impostazioni → «Blocco app» o «Fissa app» e
+          attivatelo.</li>
+        <li>Aprite PicSpeak, poi la schermata delle app recenti.</li>
+        <li>Toccate l’icona di PicSpeak in alto e scegliete «Fissa» o «Blocca».</li>
+      </ol>
+      <p class="tip">I nomi dei menu cambiano un po’ tra le diverse marche.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="guidato">
-      <h2>16. Tenere il bambino dentro PicSpeak</h2>
-      <p>Tablet e telefoni hanno una funzione che impedisce di uscire dall’app senza un codice: su iPad e iPhone si chiama
-        <strong>Accesso guidato</strong>, su Android <strong>Blocco app</strong> o «Fissa app». Va attivata una volta nelle
-        impostazioni del dispositivo: i passi sono in Impostazioni → <strong>Sicurezza</strong> di PicSpeak.</p>
+    <section id="dati" data-search>
+      <h3>Sapere dove restano i dati</h3>
+      <p>Tessere, foto e impostazioni restano <strong>solo su questo dispositivo</strong>, nel browser. Non ci sono account e
+        nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.</p>
+      <p class="warn">Cancellare i dati di navigazione del browser per questo sito cancella anche le tessere personalizzate.
+        Per avere una copia usate <strong>Esporta le schede attuali in un file</strong> (vedi
+        <a href="#modelli">Salvare, esportare e importare</a>). Il backup completo, con impostazioni e abitudini d’uso, è
+        in arrivo.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="dati">
-      <h2>17. Dove restano i dati</h2>
-      <p>Tessere, foto e impostazioni restano <strong>solo su questo dispositivo</strong>, nel browser. Non ci sono account
-        e nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.</p>
-      <p class="warn">Attenzione: cancellare i dati di navigazione del browser per questo sito cancella anche le tessere
-        personalizzate. Per avere una copia delle schede usate <strong>Esporta le schede attuali in un file</strong>
-        (Impostazioni → Schede); il backup completo, con impostazioni e abitudini d’uso, è in arrivo.</p>
+    <section id="crediti" data-search>
+      <h3>Trovare crediti e licenze</h3>
+      <p>Dal menu dei tre puntini scegliete <strong>Crediti</strong> (non serve il PIN); gli stessi testi sono in
+        <span class="where"><span>Impostazioni</span><span>Generale</span><span>Crediti e licenze</span></span>. Trovate
+        gli autori dei simboli usati, le licenze e le informazioni sulla privacy.</p>
+      <p>Se usate i pittogrammi ARASAAC anche fuori da PicSpeak (per esempio stampati), riportate questa frase:</p>
+      <blockquote>Autore dei pittogrammi: Sergio Palao. Origine: ARASAAC (http://www.arasaac.org). Licenza: CC (BY-NC-SA).
+        Proprietario: Governo di Aragona (Spagna).</blockquote>
+      <p>PicSpeak è gratuito e non commerciale; il suo codice ha licenza GNU GPL-3.0.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
-    <section id="domande">
-      <h2>18. Domande frequenti</h2>
-      <h3>Ho dimenticato il PIN.</h3>
-      <p>Nella finestra del PIN toccate <strong>PIN dimenticato?</strong> e inserite il codice di recupero.</p>
-      <h3>Il bambino ha aperto il menu.</h3>
-      <p>Senza il PIN può solo leggere i crediti o questa guida; «Chiudi» o «Torna a PicSpeak» riportano alla tabella.
-        Nulla viene modificato.</p>
-      <h3>Le tessere sono troppo piccole o troppo grandi.</h3>
-      <p>Sbloccate le impostazioni e usate <strong>−</strong> e <strong>+</strong> nella barra in alto: si possono
-        rimpicciolire sotto il 100% o ingrandire, e si vede subito il risultato finale.</p>
-      <h3>Chi ha fatto i simboli?</h3>
-      <p>Lo trovate nei <strong>Crediti</strong> dal menu dei tre puntini, con la formula indicata da ARASAAC:
-        «Autore dei pittogrammi: Sergio Palao. Origine: ARASAAC (http://www.arasaac.org). Licenza: CC (BY-NC-SA).
-        Proprietario: Governo di Aragona (Spagna)». Se usate i pittogrammi anche fuori da PicSpeak (per esempio
-        stampati), riportate la stessa frase.</p>
+    <!-- ===================== AIUTO ===================== -->
+    <h2 class="chapter" data-hide-on-search>Aiuto</h2>
+
+    <section id="problemi" data-search>
+      <h3>Se qualcosa non va</h3>
+      <dl class="faq">
+        <dt>Ho dimenticato il PIN.</dt>
+        <dd>Nella finestra del PIN toccate <strong>PIN dimenticato?</strong> e scrivete il codice di recupero.</dd>
+        <dt>Il bambino ha aperto il menu.</dt>
+        <dd>Senza il PIN può solo leggere i crediti o questa guida; «Chiudi» o «Torna a PicSpeak» riportano alla tabella.
+          Nulla viene modificato.</dd>
+        <dt>Il menu non si apre.</dt>
+        <dd>Tenete il dito fermo sui tre puntini per 3 secondi interi, finché la barra blu in alto è piena.</dd>
+        <dt>Le tessere sono troppo piccole o troppo grandi.</dt>
+        <dd>Usate − e + nella barra in alto con le impostazioni sbloccate (vedi <a href="#misura">Ingrandire o
+          rimpicciolire</a>). Con la griglia fissa la misura dipende dal numero di colonne.</dd>
+        <dt>Una tessera mostra solo la parola.</dt>
+        <dd>Il pittogramma non è stato scaricato: collegatevi a internet e usate <strong>Scarica … pittogrammi</strong> in
+          <span class="where"><span>Impostazioni</span><span>Schede</span><span>Recupero</span></span>, oppure scegliete
+          un simbolo dalla modifica della tessera.</dd>
+        <dt>Non si sente la voce.</dt>
+        <dd>Controllate il volume e l’interruttore silenzioso del dispositivo, poi provate la voce in
+          <span class="where"><span>Impostazioni</span><span>Voce</span></span>. Con «Solo la frase» le parole si sentono
+          solo toccando l’altoparlante.</dd>
+        <dt>Una tessera non risponde al tocco.</dt>
+        <dd>Forse è attivo «Tenere premuto» o «Ignora i tocchi ripetuti» (vedi <a href="#tocco">Tocco</a>).</dd>
+        <dt>Non riesco a spostare una tessera.</dt>
+        <dd>È bloccata: togliete «Posizione bloccata» dalla sua modifica, oppure «Blocca la posizione di tutte le tessere»
+          (vedi <a href="#posizioni">Posizioni</a>).</dd>
+        <dt>Ho sostituito le schede per sbaglio.</dt>
+        <dd><span class="where"><span>Impostazioni</span><span>Schede</span><span>Recupero</span><span>Ripristina le schede di prima</span></span>.</dd>
+      </dl>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="parole" class="az" data-hide-on-search>
+      <h3>Indice delle parole dalla A alla Z</h3>
+      <ul class="az-list">
+        <li><a href="#previsione">Abitudini d’uso</a></li>
+        <li><a href="#accesso-guidato">Accesso guidato</a></li>
+        <li><a href="#pulsanti-rapidi">Aiuto (pulsante)</a></li>
+        <li><a href="#aspetto">Alto contrasto</a></li>
+        <li><a href="#simboli">ARASAAC</a></li>
+        <li><a href="#aspetto">Bianco e nero</a></li>
+        <li><a href="#posizioni">Blocco delle posizioni</a></li>
+        <li><a href="#tessere">Cartella</a></li>
+        <li><a href="#simboli">Cerca simbolo</a></li>
+        <li><a href="#pin">Codice di recupero</a></li>
+        <li><a href="#colori">Colori per tipo di parola</a></li>
+        <li><a href="#crediti">Crediti</a></li>
+        <li><a href="#dati">Dati e privacy</a></li>
+        <li><a href="#modelli">Esporta</a></li>
+        <li><a href="#colori">Fitzgerald</a></li>
+        <li><a href="#simboli">Foto personali</a></li>
+        <li><a href="#pulsanti-rapidi">Frasi rapide</a></li>
+        <li><a href="#comunicare">Gesti</a></li>
+        <li><a href="#posizioni">Griglia fissa</a></li>
+        <li><a href="#modelli">Importa</a></li>
+        <li><a href="#installare">Installare come app</a></li>
+        <li><a href="#installare">Internet</a></li>
+        <li><a href="#misura">Misura delle tessere</a></li>
+        <li><a href="#modelli">Modelli</a></li>
+        <li><a href="#simboli">Mulberry, OpenMoji</a></li>
+        <li><a href="#tessere">Nascondere una tessera</a></li>
+        <li><a href="#altre-app">.obf / .obz</a></li>
+        <li><a href="#altre-app">Open Board Format</a></li>
+        <li><a href="#pulsanti-rapidi">Ops</a></li>
+        <li><a href="#stampa">PDF</a></li>
+        <li><a href="#pin">PIN</a></li>
+        <li><a href="#previsione">Previsione</a></li>
+        <li><a href="#frase">Pronuncia</a></li>
+        <li><a href="#schede-pronte">Recupero</a></li>
+        <li><a href="#schede-pronte">Schede pronte</a></li>
+        <li><a href="#spostare">Spostare le tessere</a></li>
+        <li><a href="#stampa">Stampa</a></li>
+        <li><a href="#aspetto">Stili pronti</a></li>
+        <li><a href="#tocco">Tenere premuto</a></li>
+        <li><a href="#tocco">Tremori</a></li>
+        <li><a href="#voce">Voce</a></li>
+      </ul>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
     <p class="back-bottom"><a class="back" href="./">‹ Torna a PicSpeak</a></p>

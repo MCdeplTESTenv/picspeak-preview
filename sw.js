@@ -3,7 +3,7 @@
  * Strategia "prima la rete": online si riceve sempre l'ultima versione,
  * offline si usa la copia salvata. Cambiare CACHE_VERSION quando si aggiungono file.
  */
-const CACHE_VERSION = 'picspeak-v20';
+const CACHE_VERSION = 'picspeak-v21';
 // Pacchetti di simboli scaricati dall'adulto (Mulberry, OpenMoji): cache separate, mai cancellate dagli aggiornamenti
 const PACK_CACHE_PREFIX = 'picspeak-pack-';
 
@@ -16,6 +16,33 @@ const APP_FILES = [
   // Guida all'uso per gli adulti (aperta dal menu dei tre puntini)
   'guida.html',
   'css/guida.css',
+  'js/guida.js',
+  // Immagini della guida (schermate con dati di prova)
+  'guida/barra-adulto.webp',
+  'guida/cerca-simbolo.webp',
+  'guida/colori-parole.webp',
+  'guida/disposizione.webp',
+  'guida/fonti-simboli.webp',
+  'guida/impostazioni-previsione.webp',
+  'guida/impostazioni-pulsanti-rapidi.webp',
+  'guida/impostazioni-tocco.webp',
+  'guida/impostazioni.webp',
+  'guida/menu.webp',
+  'guida/modelli.webp',
+  'guida/modifica-tessera.webp',
+  'guida/open-board.webp',
+  'guida/pin.webp',
+  'guida/previsione.webp',
+  'guida/pulsanti-rapidi.webp',
+  'guida/schede-pronte.webp',
+  'guida/schermo.webp',
+  'guida/stampa.webp',
+  'guida/stili-pronti.webp',
+  'guida/telefono-impostazioni.webp',
+  'guida/telefono-sbloccato.webp',
+  'guida/telefono.webp',
+  'guida/tre-puntini.webp',
+  'guida/usa-scheda.webp',
   'js/i18n.js',
   'js/storage.js',
   'js/security.js',
