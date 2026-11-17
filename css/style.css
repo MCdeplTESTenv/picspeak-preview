@@ -1649,3 +1649,128 @@ body > .adult-bar { order: 0; }
 .settings-section > :is(.tpl-list, .type-legend, .habits-top, .suggest-sample, .tpl-status):last-child { margin-bottom: 16px; }
 .settings-section > .dlg-btn-danger:last-child { margin: 12px 16px 16px; }
 .settings-section > .tpl-page-name + .setting-row { margin-top: 8px; }
+
+/* =====================================================================
+ * Pulsanti rapidi: «Ops», «Aiuto» e frasi rapide (Impostazioni → Tocco e frase)
+ * ===================================================================== */
+/* La riga sta nella barra di navigazione, tra il percorso e i tre puntini (non toglie spazio alle tessere);
+   su schermi stretti va a capo, in una riga tutta sua */
+.quick-bar {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap);
+  min-width: 0;
+}
+.page-nav:has(.quick-bar:not([hidden])) .crumbs { flex: none; max-width: 40%; }
+@media (max-width: 640px) {
+  .page-nav { flex-wrap: wrap; }
+  .page-nav .quick-bar { order: 3; flex-basis: 100%; }
+  .page-nav:has(.quick-bar:not([hidden])) .crumbs { flex: 1; max-width: none; }
+}
+.quick-phrases {
+  flex: 1;
+  display: flex;
+  gap: var(--gap);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.quick-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: var(--min-cell);
+  min-height: var(--min-cell);
+  padding: 0 clamp(12px, 2vw, 20px);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: clamp(16px, 2.2vw, 20px);
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text);
+}
+.quick-oops { border-color: #e0ac00; background: #fff6d6; }
+.quick-help { border-color: #b3261e; background: #b3261e; color: #ffffff; }
+.quick-phrases:empty, .quick-phrases[hidden] { display: none; }
+.quick-phrases.has-more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+.quick-btn.is-pressed { background: var(--pressed); }
+.quick-help.is-pressed { background: #8c1d17; }
+[data-corners="square"] .quick-btn { border-radius: 3px !important; }
+[data-color-mode="full"] .quick-btn:not(.quick-help) { border: 0; background: #1f2430; color: #ffffff; }
+[data-color-mode="full"] .quick-oops { background: #f5c518 !important; color: #1a1d24 !important; }
+[data-color-mode="card"] .quick-btn:not(.quick-help):not(.quick-oops) { background: #ffffff; border: 3px solid #e3e5e8; }
+[data-color-mode="sheet"] .quick-btn:not(.quick-help) { background: rgba(255, 255, 255, 0.85); border: 0; box-shadow: 0 2px 6px rgba(0, 60, 60, 0.15); }
+@media (max-width: 520px) {
+  .quick-btn { padding: 0 12px; font-size: 16px; }
+  .quick-btn .icon { width: 22px; height: 22px; }
+}
+/* Telefono in orizzontale: lo spazio in altezza è poco, si mostrano solo le icone di Ops e Aiuto */
+@media (max-height: 480px) and (orientation: landscape) {
+  .quick-oops span, .quick-help span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}
+
+/* Tempo di pressione: la tessera si riempie dal basso mentre si tiene premuto (senza animazione se ridotta) */
+.symbol-cell.is-holding { position: relative; }
+.symbol-cell.is-holding::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--focus) 22%, transparent);
+  transform-origin: bottom;
+  animation: hold-fill var(--hold-ms, 600ms) linear forwards;
+  pointer-events: none;
+}
+@keyframes hold-fill { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .symbol-cell.is-holding::after { animation: none; transform: none; background: transparent; box-shadow: inset 0 0 0 5px var(--focus); }
+}
+
+/* Editor delle frasi rapide */
+.phrase-editor { display: flex; flex-direction: column; gap: 8px; width: calc(100% - 32px); padding: 12px 0 16px; border-top: 1px solid #eceef1; }
+.phrase-editor > small { font-size: 13px; color: #6b717b; }
+.phrase-row { display: flex; gap: 8px; align-items: center; }
+.phrase-row .name-input { flex: 1 1 auto; min-width: 0; min-height: 44px; font-size: 16px; }
+.phrase-row .dlg-btn { flex: none; min-height: 44px; }
+
+/* Pulsante di stampa e note nelle sezioni delle schede */
+.settings-section > .dlg-btn:last-child { margin-bottom: 16px; align-self: flex-start; }
+.settings-section > .tpl-tools + .settings-help { margin-bottom: 16px; }
+
+/* =====================================================================
+ * Stampa delle schede: sullo schermo l'area è vuota; in stampa si vede solo lei
+ * ===================================================================== */
+.print-area { display: none; }
+@page { margin: 12mm; }
+@page landscape-sheet { size: landscape; }
+@media print {
+  html, body { height: auto; background: #ffffff !important; }
+  body.is-printing { display: block; padding: 0; }
+  body.is-printing > :not(.print-area) { display: none !important; }
+  body.is-printing .print-area { display: block; }
+  .print-sheet { break-after: page; page-break-after: always; color: #1d1d1f; font-family: Verdana, Tahoma, "DejaVu Sans", sans-serif; }
+  .print-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .print-sheet.is-landscape { page: landscape-sheet; }
+  .print-title { margin: 0 0 0.4cm; font-size: 16pt; }
+  .print-grid { display: grid; break-inside: avoid; }
+  .print-tile {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1cm;
+    padding: 0.15cm; overflow: hidden; break-inside: avoid;
+    background: var(--tint, #ffffff); border: 0.08cm solid var(--cat, #999999); border-radius: 0.25cm;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .print-tile.type-folder { background: #e7e9ef; border-width: 0.12cm; }
+  .print-image { flex: 1 1 auto; min-height: 0; max-width: 100%; max-height: calc(var(--print-side) * 0.68); object-fit: contain; }
+  .print-label {
+    font-size: calc(var(--print-side) * 0.13); font-weight: 700; line-height: 1.1; text-align: center;
+    overflow-wrap: anywhere; max-width: 100%;
+  }
+  [data-label-case="upper"] .print-label { text-transform: uppercase; }
+  [data-label-case="lower"] .print-label { text-transform: lowercase; }
+  .print-credits { margin: 0.3cm 0 0; font-size: 7pt; color: #444444; }
+}

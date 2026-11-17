@@ -462,6 +462,7 @@
     removePack,
     resizeToBlob,
     checkImage,
+    headerSize,
     downloadImage,
   };
 })();

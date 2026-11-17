@@ -23,6 +23,22 @@
     preview: false,
     // La pagina corrente usa la griglia fissa (calcolato da layoutGrid in base allo schermo)
     fixed: false,
+    // Ultima selezione di una tessera (per ignorare i tocchi ripetuti)
+    lastSelectAt: 0,
+  };
+
+  /*
+   * Opzioni di comunicazione (Impostazioni → Tocco e frase), applicate solo in modalità comunicazione:
+   * - activation: 'release' = la tessera si sceglie quando si alza il dito (comportamento classico),
+   *   'press' = appena la si tocca;
+   * - holdMs: per scegliere bisogna tenere il dito sulla tessera per questo tempo (0 = no);
+   * - repeatMs: dopo una scelta, i tocchi per questo tempo vengono ignorati (0 = no);
+   * - speakWords: 'each' = ogni parola si pronuncia quando si sceglie, 'sentence' = solo leggendo la frase;
+   * - clearAfter: la frase si svuota dopo averla letta;
+   * - autoHome: dopo una parola presa in una cartella si torna alla Home.
+   */
+  const options = {
+    activation: 'release', holdMs: 0, repeatMs: 0, speakWords: 'each', clearAfter: false, autoHome: false,
   };
 
   const el = {
@@ -407,25 +423,45 @@
     el.grid.scrollTop = 0;
   }
 
+  // Con «al tocco» o con il tempo di pressione la scelta avviene nei gestori del puntatore, non nel clic
+  function pointerSelection() {
+    return state.mode === 'child' && (options.activation === 'press' || options.holdMs > 0);
+  }
+
   function onCellTap(event) {
     const cell = event.target.closest('.symbol-cell');
     if (!cell) return;
-    flash(cell);
     // Impostazioni sbloccate: il tocco apre la modifica della tessera (o ne aggiunge una)
     if (state.mode === 'adult' && window.PicSpeak.editor) {
+      flash(cell);
       if (cell.dataset.action === 'add') window.PicSpeak.editor.add(state.pageId);
       else window.PicSpeak.editor.edit(state.pageId, cell.dataset.id);
       return;
     }
+    // Clic generato da dito o mouse già gestito dai gestori del puntatore (la tastiera passa sempre di qui)
+    if (pointerSelection() && event.detail !== 0) return;
+    selectCell(cell);
+  }
+
+  // Scelta di una tessera in comunicazione
+  function selectCell(cell) {
+    const now = Date.now();
+    // Tocchi ripetuti troppo vicini: ignorati (utile con tremori)
+    if (options.repeatMs && now - state.lastSelectAt < options.repeatMs) return;
     const page = data.page(state.pageId);
     const item = page && page.cells.find((c) => c.id === cell.dataset.id);
     if (!item || item.kind === 'empty') return;
+    state.lastSelectAt = now;
+    flash(cell);
+    const speakNow = options.speakWords !== 'sentence';
     if (item.kind === 'folder') {
-      say(speechOf(item));
+      if (speakNow) say(speechOf(item));
       goToPage(item.targetPageId);
       return;
     }
-    say(speechOf(item));
+    if (speakNow) say(speechOf(item));
+    // Ritorno automatico alla Home dopo una parola presa in una cartella
+    if (options.autoHome && state.pageId !== data.homePageId) setTimeout(() => goToPage(data.homePageId), 250);
     if (state.sentence.length < MAX_SENTENCE_LENGTH) {
       const entry = {
         cellId: item.id, label: item.label, speak: item.speak, kind: item.kind,
@@ -483,6 +519,7 @@
     applyStaticLabels();
     renderGrid();
     renderSentence();
+    if (window.PicSpeak.communication) window.PicSpeak.communication.refresh();
   }
 
   // "Scuoti per tornare alla Home" (opzione in Impostazioni → Aspetto → Disposizione e tocco).
@@ -561,8 +598,93 @@
     }, 160);
   }
 
+  /*
+   * Selezione al tocco e tempo di pressione (solo in comunicazione). Con il tempo di pressione la tessera
+   * si riempie piano piano dal basso e si sceglie quando il tempo è passato; alzando il dito prima, o
+   * spostandolo fuori dalla tessera, non succede nulla.
+   */
+  function bindPointerSelection() {
+    let hold = null; // { cell, timer, id, x, y }
+    const MOVE_TOLERANCE = 24; // px: i piccoli movimenti (tremori) non annullano la pressione
+
+    function cancelHold() {
+      if (!hold) return;
+      clearTimeout(hold.timer);
+      hold.cell.classList.remove('is-holding');
+      hold.cell.style.removeProperty('--hold-ms');
+      hold = null;
+    }
+
+    el.grid.addEventListener('pointerdown', (event) => {
+      if (!pointerSelection() || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      const cell = event.target.closest('.symbol-cell');
+      if (!cell || cell.classList.contains('is-empty-cell')) return;
+      cancelHold();
+      if (options.holdMs > 0) {
+        cell.style.setProperty('--hold-ms', `${options.holdMs}ms`);
+        cell.classList.add('is-holding');
+        hold = {
+          cell,
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          timer: setTimeout(() => {
+            const target = hold && hold.cell;
+            cancelHold();
+            if (target) selectCell(target);
+          }, options.holdMs),
+        };
+        return;
+      }
+      selectCell(cell);
+    });
+    el.grid.addEventListener('pointermove', (event) => {
+      if (!hold || event.pointerId !== hold.id) return;
+      const moved = Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > MOVE_TOLERANCE;
+      const under = document.elementFromPoint(event.clientX, event.clientY);
+      if (moved && !(under && hold.cell.contains(under))) cancelHold();
+    });
+    ['pointerup', 'pointercancel'].forEach((name) => {
+      el.grid.addEventListener(name, (event) => { if (hold && event.pointerId === hold.id) cancelHold(); });
+    });
+    // Tenendo premuto, il telefono non deve aprire il menu del testo o dell'immagine
+    el.grid.addEventListener('contextmenu', (event) => { if (pointerSelection()) event.preventDefault(); });
+  }
+
+  // Legge la frase; con l'opzione «cancella dopo la lettura» la frase si svuota quando la voce finisce
+  function speakSentence() {
+    const text = sentenceText();
+    if (!text) return;
+    if (!options.clearAfter) { say(text); return; }
+    const snapshot = state.sentence;
+    const clear = () => {
+      // Solo se nel frattempo non si è cominciata un'altra frase
+      if (state.sentence === snapshot) { state.sentence = []; renderSentence(); }
+    };
+    if (!speech.speak(text, i18n.speechLocale, { onEnd: clear })) setTimeout(clear, 1500);
+  }
+
+  // Pulsante «Ops»: toglie l'ultima parola e lo dice ad alta voce
+  function oops() {
+    if (state.sentence.length) {
+      state.sentence = state.sentence.slice(0, -1);
+      renderSentence();
+    }
+  }
+
+  function setOptions(next) {
+    if (!next || typeof next !== 'object') return;
+    if (['release', 'press'].includes(next.activation)) options.activation = next.activation;
+    if ([0, 300, 600, 1000, 1500].includes(next.holdMs)) options.holdMs = next.holdMs;
+    if ([0, 500, 1000, 2000].includes(next.repeatMs)) options.repeatMs = next.repeatMs;
+    if (['each', 'sentence'].includes(next.speakWords)) options.speakWords = next.speakWords;
+    if (typeof next.clearAfter === 'boolean') options.clearAfter = next.clearAfter;
+    if (typeof next.autoHome === 'boolean') options.autoHome = next.autoHome;
+  }
+
   function bindEvents() {
     el.grid.addEventListener('click', onCellTap);
+    bindPointerSelection();
     el.strip.addEventListener('click', (event) => {
       if (swallowClick) return;
       onChipTap(event);
@@ -570,7 +692,7 @@
     bindSwipeToClear();
     el.speak.addEventListener('click', () => {
       flash(el.speak);
-      say(sentenceText());
+      speakSentence();
     });
     el.backspace.addEventListener('click', () => {
       state.sentence.pop();
@@ -615,6 +737,11 @@
     currentZoom,
     setPreview,
     applySuggestions,
+    setOptions,
+    getOptions: () => ({ ...options }),
+    oops,
+    say,
+    flash,
     get fixedLayout() { return Boolean(state.fixed); },
     get preview() { return state.preview; },
     get mode() { return state.mode; },

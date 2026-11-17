@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  const { i18n, storage, data, app, templates, predict, settingsUi: ui } = window.PicSpeak;
+  const { i18n, storage, data, app, templates, predict, obf, settingsUi: ui } = window.PicSpeak;
   const t = i18n.t;
 
   const LOCK_KEY = 'lockPositions';
@@ -26,7 +26,8 @@
   }
 
   function errorText(error) {
-    const code = error instanceof templates.TemplateError ? error.message : 'generic';
+    let code = error instanceof templates.TemplateError ? error.message : 'generic';
+    if (error instanceof window.PicSpeak.zip.ZipError) code = 'obfZip';
     return t(`tplError_${code}`) === `tplError_${code}` ? t('tplError_generic') : t(`tplError_${code}`);
   }
 
@@ -297,6 +298,89 @@
     wrap.append(cards);
   }
 
+  // ---------- Scambio con altre app (Open Board Format) ----------
+
+  // Avvisi sull'importazione: ciò che non si è potuto portare in PicSpeak
+  function obfReportText(report) {
+    const notes = [];
+    if (report.skippedActions) notes.push(format('obfNoteActions', { n: report.skippedActions }));
+    if (report.externalImages) notes.push(format('obfNoteExternal', { n: report.externalImages }));
+    if (report.badImages) notes.push(format('obfNoteBadImages', { n: report.badImages }));
+    if (report.brokenLinks) notes.push(format('obfNoteLinks', { n: report.brokenLinks }));
+    if (report.reflowed) notes.push(format('obfNoteReflow', { n: report.reflowed }));
+    if (report.noLicense) notes.push(format('obfNoteLicense', { n: report.noLicense }));
+    return notes.join(' ');
+  }
+
+  function importObf() {
+    const input = el('input');
+    input.type = 'file';
+    input.accept = '.obf,.obz,application/json,application/zip';
+    input.addEventListener('change', () => runSafely(async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      busy = { text: t('obfReading') };
+      notice = null;
+      ui.render();
+      const { template, report } = await obf.readFile(file);
+      busy = null;
+      ui.render();
+      const name = templates.localized(template.name);
+      const help = `${format('tplUseHelp', templates.summary(template))} ${obfReportText(report)}`.trim();
+      const choice = await choose(format('obfImportTitle', { name }), help, [
+        { value: 'save', label: t('tplImportSave'), help: t('tplImportSaveHelp'), primary: true },
+        { value: 'use', label: t('tplImportUse'), help: t('tplImportUseHelp') },
+      ]);
+      if (choice === 'save' || choice === 'use') {
+        await templates.saveUserTemplate(template);
+        notice = { text: format('tplSaved', { name }) };
+        ui.render();
+      }
+      if (choice === 'use') await useTemplate(template);
+    }));
+    input.click();
+  }
+
+  async function exportObfFile(kind) {
+    const page = data.page(app.pageId) || data.page(data.homePageId);
+    let name = page ? page.title : '';
+    if (kind === 'obz') {
+      name = await askName(t('obfExportAll'), t('obfExportNameHelp'), '');
+      if (!name) return;
+    } else {
+      const ok = await choose(format('obfExportPageTitle', { page: name }), t('obfLicenseNote'), [
+        { value: 'yes', label: t('obfExportPageGo'), primary: true },
+      ]);
+      if (ok !== 'yes') return;
+    }
+    busy = { text: t('tplWorking') };
+    notice = null;
+    ui.render();
+    let last = 0;
+    const onProgress = (done, total) => {
+      if (Date.now() - last < 300 && done < total) return;
+      last = Date.now();
+      busy = { text: format('obfPreparing', { done, total }) };
+      ui.render();
+    };
+    if (kind === 'obz') await obf.exportObz(name, { onProgress });
+    else await obf.exportObf(page.id, { onProgress });
+    busy = null;
+    notice = { text: t('tplExported') };
+    ui.render();
+  }
+
+  function renderObfSection() {
+    const wrap = ui.section('secObfTitle', 'secObfHelp');
+    const tools = el('div', 'tpl-tools');
+    const imp = ui.button(t('obfImport'), importObf, true);
+    const all = ui.button(t('obfExportAll'), () => runSafely(() => exportObfFile('obz')));
+    const one = ui.button(t('obfExportPage'), () => runSafely(() => exportObfFile('obf')));
+    [imp, all, one].forEach((b) => { b.disabled = Boolean(busy); });
+    tools.append(imp, all, one);
+    wrap.append(tools, el('p', 'settings-help', t('obfLicenseNote')));
+  }
+
   function renderLayoutSection() {
     const page = data.page(app.pageId) || data.page(data.homePageId);
     if (!page) return;
@@ -463,8 +547,9 @@
     icon: '<rect x="3.5" y="6.5" width="13" height="13" rx="2"/><path d="M7.5 3.5h11a2 2 0 0 1 2 2v11"/><path d="M7 11h6M7 15h4"/>',
     titleKey: 'catBoards',
     introKey: 'catBoardsIntro',
-    render: [renderStatus, renderBuiltInSection, renderMyTemplatesSection, renderLayoutSection, renderPreviousSection,
-      renderLegendSection],
+    render: [renderStatus, renderBuiltInSection, renderMyTemplatesSection, renderObfSection,
+      () => { if (window.PicSpeak.print) window.PicSpeak.print.renderPrintSection(); },
+      renderLayoutSection, renderPreviousSection, renderLegendSection],
   }, 'appearance');
 
   ui.addCategory({

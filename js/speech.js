@@ -69,7 +69,8 @@
     return pool.slice().sort((a, b) => score(b, locale) - score(a, locale))[0] || null;
   }
 
-  function speak(text, locale) {
+  // options.onEnd: chiamata quando la lettura finisce (o viene interrotta)
+  function speak(text, locale, options = {}) {
     if (!synth || !text) return false;
     // Interrompe la frase precedente: il tocco più recente ha la priorità
     synth.cancel();
@@ -79,6 +80,13 @@
     if (voice) utterance.voice = voice;
     utterance.rate = prefs.rate;
     utterance.pitch = prefs.pitch;
+    utterance.volume = 1;
+    if (typeof options.onEnd === 'function') {
+      let called = false;
+      const end = () => { if (!called) { called = true; options.onEnd(); } };
+      utterance.addEventListener('end', end);
+      utterance.addEventListener('error', end);
+    }
     synth.speak(utterance);
     return true;
   }

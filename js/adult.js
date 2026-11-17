@@ -843,6 +843,23 @@
       add(`${t('creditsOpenmoji')} `, creditLink('https://openmoji.org', 'openmoji.org'), ` – ${t('creditsLicense')} `,
         creditLink('https://creativecommons.org/licenses/by-sa/4.0/deed.it', 'CC BY-SA 4.0'), `. ${t('creditsChanged')}`);
     }
+    // Immagini arrivate da schede di altre app (Open Board Format): autore e licenza dichiarati nel file
+    const others = new Map();
+    data.allImages().forEach((image) => {
+      if (image.source !== 'other' || !(image.author || image.license)) return;
+      const key = `${image.author || ''}|${image.license || ''}|${image.licenseUrl || ''}`;
+      if (!others.has(key)) others.set(key, image);
+    });
+    if (others.size) {
+      const inner = document.createElement('ul');
+      [...others.values()].forEach((image) => {
+        const li = document.createElement('li');
+        li.append([image.author, image.license].filter(Boolean).join(' – '));
+        if (image.licenseUrl) li.append(' ', creditLink(image.licenseUrl, image.licenseUrl.replace(/^https:\/\//, '')));
+        inner.append(li);
+      });
+      add(t('creditsOther'), inner);
+    }
     if (used.has('photo')) add(t('creditsPhotos'));
     add(t('creditsPrivacy'));
     add(`${t('creditsCode')} `, creditLink('https://github.com/MCdeplTESTenv/picspeak', 'github.com/MCdeplTESTenv/picspeak'));

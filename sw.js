@@ -3,7 +3,7 @@
  * Strategia "prima la rete": online si riceve sempre l'ultima versione,
  * offline si usa la copia salvata. Cambiare CACHE_VERSION quando si aggiungono file.
  */
-const CACHE_VERSION = 'picspeak-v19';
+const CACHE_VERSION = 'picspeak-v20';
 // Pacchetti di simboli scaricati dall'adulto (Mulberry, OpenMoji): cache separate, mai cancellate dagli aggiornamenti
 const PACK_CACHE_PREFIX = 'picspeak-pack-';
 
@@ -33,6 +33,10 @@ const APP_FILES = [
   'js/predict.js',
   'js/templates.js',
   'js/settings-boards.js',
+  'js/zip.js',
+  'js/obf.js',
+  'js/communication.js',
+  'js/print.js',
   // Schede pronte (i pittogrammi si scaricano una sola volta quando si usa un modello)
   'templates/index.json',
   'templates/primi-passi-9.json',

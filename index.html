@@ -5,6 +5,8 @@
   <!-- Sicurezza: solo script e stili del sito stesso; rete solo verso i servizi di simboli previsti (vedi docs/SICUREZZA.md) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://static.arasaac.org; connect-src 'self' https://api.arasaac.org https://static.arasaac.org https://api.mymemory.translated.net; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; manifest-src 'self'; worker-src 'self'">
   <meta name="referrer" content="no-referrer">
+  <!-- Niente indicizzazione finché il tool non avrà un dominio proprio (ROADMAP, Tappa 10) -->
+  <meta name="robots" content="noindex, nofollow">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
   <meta name="color-scheme" content="light">
@@ -66,12 +68,25 @@
       <span class="crumb-sep"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
       <span class="crumb crumb-current" id="page-title"></span>
     </h1>
+    <!-- Pulsanti rapidi (facoltativi): «Ops», «Aiuto» e frasi sempre raggiungibili, lette senza entrare nella frase -->
+    <div class="quick-bar" id="quick-bar" hidden>
+      <button type="button" class="quick-btn quick-oops" id="btn-oops" hidden>
+        <svg class="icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-i18n="quickOops"></span>
+      </button>
+      <div class="quick-phrases" id="quick-phrases"></div>
+      <button type="button" class="quick-btn quick-help" id="btn-help" hidden>
+        <svg class="icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.3" r=".6" fill="currentColor"/></svg><span data-i18n="quickHelp"></span>
+      </button>
+    </div>
     <!-- Tre puntini: tenere premuto 3 secondi apre il menu (Impostazioni con PIN, Crediti, Guida) -->
     <button type="button" class="lock-btn" id="btn-lock" data-i18n-label="lockHint">
       <span class="lock-icon"><svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg></span>
       <span class="lock-progress" aria-hidden="true"></span>
     </button>
   </nav>
+
+  <!-- Area usata solo per la stampa delle schede (vuota sullo schermo) -->
+  <div class="print-area" id="print-area" aria-hidden="true"></div>
 
   <!-- Avanzamento della pressione sui tre puntini: in cima allo schermo, mai sotto il dito -->
   <div class="hold-indicator" id="hold-indicator" hidden>
@@ -110,9 +125,13 @@
   <script src="js/lexicon.js"></script>
   <script src="js/predict.js"></script>
   <script src="js/templates.js"></script>
+  <script src="js/zip.js"></script>
+  <script src="js/obf.js"></script>
   <script src="js/app.js"></script>
   <script src="js/adult.js"></script>
   <script src="js/settings-boards.js"></script>
+  <script src="js/communication.js"></script>
+  <script src="js/print.js"></script>
   <script src="js/symbol-search.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/reorder.js"></script>
