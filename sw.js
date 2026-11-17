@@ -8,6 +8,7 @@ const CACHE_VERSION = 'picspeak-v19';
 const PACK_CACHE_PREFIX = 'picspeak-pack-';
 
 const APP_FILES = [
+  'css/anteprima.css',
   './',
   'index.html',
   'manifest.webmanifest',
