@@ -21,8 +21,10 @@
     return node;
   }
 
+  // Una sola sostituzione con una funzione: un nome preso da un file importato (es. «$&» o «{missing}»)
+  // resta testo semplice e non viene a sua volta interpretato
   function format(key, values) {
-    return Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, String(v)), t(key));
+    return t(key).replace(/\{(\w+)\}/g, (match, k) => (Object.prototype.hasOwnProperty.call(values, k) ? String(values[k]) : match));
   }
 
   function errorText(error) {

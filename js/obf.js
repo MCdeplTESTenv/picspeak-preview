@@ -139,7 +139,8 @@
       if (bytes.length > MAX_SVG_BYTES) { reject(new Error('too-big')); return; }
       const url = URL.createObjectURL(new Blob([bytes], { type: 'image/svg+xml' }));
       const img = new Image();
-      const done = () => URL.revokeObjectURL(url);
+      let timer = null;
+      const done = () => { clearTimeout(timer); URL.revokeObjectURL(url); };
       img.onload = () => {
         try {
           const w = img.naturalWidth || 256;
@@ -157,7 +158,14 @@
       };
       img.onerror = () => { done(); reject(new Error('svg')); };
       // Un SVG molto pesante da disegnare non deve bloccare l'importazione
-      setTimeout(() => { img.onload = null; img.onerror = null; done(); reject(new Error('svg-timeout')); }, SVG_TIMEOUT_MS);
+      // (allo scadere si interrompe anche il caricamento, così il browser smette di lavorarci)
+      timer = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        img.removeAttribute('src');
+        done();
+        reject(new Error('svg-timeout'));
+      }, SVG_TIMEOUT_MS);
       img.src = url;
     });
   }
