@@ -25,8 +25,15 @@
     Le immagini in guida/ sono schermate del tool con dati di prova, mai dati di persone reali.
   -->
   <header class="guide-top">
-    <a class="back" href="./">‹ Torna a PicSpeak</a>
-    <a class="top-link" href="#indice">Indice</a>
+    <a class="back" href="./">‹&nbsp;<span class="long">Torna a&nbsp;</span>PicSpeak</a>
+    <div class="top-actions">
+      <a class="top-link" href="#indice">Indice</a>
+      <!-- Stampa: compare solo se il browser esegue lo script (prepara tutte le immagini e apre la stampa) -->
+      <button type="button" class="top-link print-btn" id="guide-print" hidden>
+        <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>
+        <span>Stampa</span>
+      </button>
+    </div>
   </header>
 
   <main class="guide" id="inizio">
@@ -111,6 +118,7 @@
           <div>
             <h3>Aiuto</h3>
             <ul>
+              <li><a href="#stampa-guida">Stampare questa guida</a></li>
               <li><a href="#problemi">Se qualcosa non va</a></li>
               <li><a href="#parole">Indice delle parole dalla A alla Z</a></li>
             </ul>
@@ -738,6 +746,21 @@
     <!-- ===================== AIUTO ===================== -->
     <h2 class="chapter" data-hide-on-search>Aiuto</h2>
 
+    <section id="stampa-guida" data-search>
+      <h3>Stampare questa guida</h3>
+      <p>La guida si può tenere su carta, per esempio nel quaderno della logopedia o da lasciare a scuola.</p>
+      <ol class="steps">
+        <li>Toccate <strong>Stampa</strong> in alto a destra in questa pagina. La guida si prepara per fogli
+          <strong>A4</strong>, con tutte le immagini e il numero di pagina in fondo.</li>
+        <li>Nella finestra di stampa scegliete la stampante, oppure «Salva come PDF» per avere un file. Su iPad e iPhone
+          toccate il pulsante di condivisione nell’anteprima e salvate nell’app File.</li>
+        <li>Se la stampante propone un altro formato (per esempio «Letter»), scegliete <strong>A4</strong>.</li>
+      </ol>
+      <p class="tip">Per stampare solo una parte, indicate le pagine nella finestra di stampa. Con il computer si può usare
+        anche la scorciatoia Ctrl+P (su Mac ⌘+P): il risultato è lo stesso.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
     <section id="problemi" data-search>
       <h3>Se qualcosa non va</h3>
       <dl class="faq">
@@ -809,7 +832,8 @@
         <li><a href="#schede-pronte">Recupero</a></li>
         <li><a href="#schede-pronte">Schede pronte</a></li>
         <li><a href="#spostare">Spostare le tessere</a></li>
-        <li><a href="#stampa">Stampa</a></li>
+        <li><a href="#stampa-guida">Stampa della guida</a></li>
+        <li><a href="#stampa">Stampa delle schede</a></li>
         <li><a href="#aspetto">Stili pronti</a></li>
         <li><a href="#tocco">Tenere premuto</a></li>
         <li><a href="#tocco">Tremori</a></li>
