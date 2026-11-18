@@ -30,8 +30,8 @@
   const MAX_ROWS = 200;
   const USER_TEMPLATES_KEY = 'userTemplates';
   const ARASAAC_STATIC = 'https://static.arasaac.org/pictograms';
-  const SOURCES = ['arasaac', 'mulberry', 'openmoji', 'photo', 'other'];
-  const ID_PREFIX = { arasaac: 'img_ar_', mulberry: 'img_mb_', openmoji: 'img_om_' };
+  const SOURCES = ['arasaac', 'mulberry', 'openmoji', 'twemoji', 'photo', 'other'];
+  const ID_PREFIX = { arasaac: 'img_ar_', mulberry: 'img_mb_', openmoji: 'img_om_', twemoji: 'img_tw_' };
   const KINDS = ['symbol', 'folder', 'empty'];
   const SAFE_KEY = /^[A-Za-z0-9_-]{1,80}$/;
   const SAFE_SOURCE_ID = /^[A-Za-z0-9_-]{1,80}$/;

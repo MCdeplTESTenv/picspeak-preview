@@ -44,6 +44,7 @@
       if (image.source === 'arasaac') lines.add(t('printCreditArasaac'));
       else if (image.source === 'mulberry') lines.add(t('printCreditMulberry'));
       else if (image.source === 'openmoji') lines.add(t('printCreditOpenmoji'));
+      else if (image.source === 'twemoji') lines.add(t('printCreditTwemoji'));
       else if (image.source === 'other' && (image.author || image.license)) {
         lines.add([image.author, image.license, image.licenseUrl && image.licenseUrl.replace(/^https:\/\//, '')]
           .filter(Boolean).join(' – '));

@@ -32,7 +32,7 @@
   const SVG_TIMEOUT_MS = 10000;
   const MAX_GRID = 60; // righe o colonne dichiarate
   const MAX_COLS = 12; // colonne di PicSpeak
-  const SOURCES = ['arasaac', 'mulberry', 'openmoji', 'photo', 'other'];
+  const SOURCES = ['arasaac', 'mulberry', 'openmoji', 'twemoji', 'photo', 'other'];
   const ARASAAC_URL = /^https:\/\/(?:static|api)\.arasaac\.org\/(?:api\/)?pictograms\/(\d{1,7})(?:[/?_.]|$)/;
   // Comandi della striscia frase che PicSpeak ha già nei suoi pulsanti: le tessere che fanno solo questo
   // non si importano (resterebbe una tessera che pronuncia «cancella» invece di cancellare)
@@ -197,6 +197,7 @@
     else if (hint.includes('arasaac') || hint.includes('sergio palao')) fields.source = 'arasaac';
     else if (hint.includes('mulberry')) fields.source = 'mulberry';
     else if (hint.includes('openmoji')) fields.source = 'openmoji';
+    else if (hint.includes('jdecked/twemoji')) fields.source = 'twemoji';
     else fields.source = 'other'; // senza licenza: fonte esterna sconosciuta (l'adulto riceve un avviso)
     if (fields.source === 'arasaac') {
       fields.author = fields.author || 'Sergio Palao';
@@ -511,6 +512,8 @@
       license.source_url = 'https://mulberrysymbols.org';
     } else if (image.source === 'openmoji') {
       license.source_url = 'https://openmoji.org';
+    } else if (image.source === 'twemoji') {
+      license.source_url = 'https://github.com/jdecked/twemoji';
     }
     return license;
   }

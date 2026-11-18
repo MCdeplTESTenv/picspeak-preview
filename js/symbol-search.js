@@ -3,7 +3,8 @@
  * Mostra subito i simboli sul dispositivo e nei pacchetti scaricati, poi quelli di ARASAAC se
  * l'interruttore "Ricerca online" lo consente (Attiva: sì; Solo Wi-Fi: sì sul Wi-Fi, altrimenti
  * chiede conferma dove il browser non sa il tipo di rete; Disattivata: mai).
- * Sicurezza: testi solo con textContent; le miniature online arrivano solo da static.arasaac.org (CSP).
+ * Sicurezza: testi solo con textContent; le miniature online arrivano solo da static.arasaac.org e, se l'adulto
+ * l'ha attivata, da Twemoji (cdn.jsdelivr.net), come previsto dalla CSP.
  */
 (function () {
   'use strict';
@@ -11,7 +12,7 @@
   const { i18n, symbols, network } = window.PicSpeak;
   const t = i18n.t;
 
-  const GROUP_ORDER = ['device', 'arasaac', 'mulberry', 'openmoji'];
+  const GROUP_ORDER = ['device', 'arasaac', 'mulberry', 'openmoji', 'twemoji'];
   const DEBOUNCE_MS = 600;
 
   const dialog = document.createElement('dialog');
@@ -131,8 +132,8 @@
       // (aprendo la finestra o mentre si scrive si cerca solo sul dispositivo: protegge nomi propri e parole a metà)
       function renderGroups(groups, term, explicit) {
         results.replaceChildren();
-        if (!explicit && arasaacOn && networkState() === 'allowed' && !groups.arasaac) {
-          groups = { ...groups, arasaac: { state: 'idle', items: [] } };
+        if (!explicit && networkState() === 'allowed') {
+          onlineOn.forEach((id) => { if (!groups[id]) groups = { ...groups, [id]: { state: 'idle', items: [] } }; });
         }
         let total = 0;
         let loading = false;
@@ -211,10 +212,14 @@
       });
       dialog.oncancel = (event) => { event.preventDefault(); finish(null); };
 
-      let arasaacOn = false;
+      // Fonti attive che cercano su internet (mostrano «premi Cerca» finché non si conferma la parola)
+      let onlineOn = [];
       dialog.replaceChildren(form);
       dialog.showModal();
-      symbols.activeSources().then((sources) => { arasaacOn = sources.arasaac; runSearch(false); });
+      symbols.activeSources().then((sources) => {
+        onlineOn = ['arasaac', ...symbols.ONLINE_IDS].filter((id) => sources[id]);
+        runSearch(false);
+      });
       if (!input.value) input.focus();
     });
   }

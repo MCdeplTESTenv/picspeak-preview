@@ -674,11 +674,16 @@
 
   // Fonti dei simboli: ognuna con stile e "quando sceglierla"; attivazione salvata in 'symbolSources'.
   // Mulberry e OpenMoji sono pacchetti: si scaricano una sola volta quando vengono attivati.
+  // Twemoji è una fonte online leggera (piccolo indice delle parole + un'immagine alla volta).
   const SYMBOL_SOURCES = [
     { id: 'arasaac', nameKey: 'srcArasaac', descKey: 'srcArasaacDesc' },
     { id: 'mulberry', nameKey: 'srcMulberry', descKey: 'srcMulberryDesc', pack: true, approxMb: '3,8' },
     { id: 'openmoji', nameKey: 'srcOpenmoji', descKey: 'srcOpenmojiDesc', pack: true, approxMb: '3,1' },
+    // Fonte online leggera: nessun pacchetto, si scarica solo il simbolo scelto
+    { id: 'twemoji', nameKey: 'srcTwemoji', descKey: 'srcTwemojiDesc', online: true },
     { id: 'photo', nameKey: 'srcPhoto', descKey: 'srcPhotoDesc' },
+    // Promemoria: fonte pronta ma non attivabile finché il repository di Mada non dichiara una licenza
+    { id: 'tawasol', nameKey: 'srcTawasol', descKey: 'srcTawasolPending', pending: true },
   ];
 
   // Scaricamenti in corso: id → { done, total }; errori dell'ultimo tentativo: id → messaggio
@@ -773,6 +778,15 @@
     const wrap = section('secSourcesTitle', 'secSourcesHelp');
     const [saved, status] = await Promise.all([symbols.activeSources(), symbols.packStatus()]);
     SYMBOL_SOURCES.forEach((src) => {
+      if (src.pending) {
+        const badge = document.createElement('span');
+        badge.className = 'setting-pending';
+        badge.textContent = t('srcPendingBadge');
+        const row = settingRow(src.nameKey, src.descKey, badge);
+        row.classList.add('is-pending');
+        wrap.append(row);
+        return;
+      }
       const active = saved[src.id];
       const helpKey = src.pack && !status[src.id] ? null : src.descKey;
       const row = settingRow(src.nameKey, helpKey, segmented([['on', 'valOn2'], ['off', 'valOff2']], active ? 'on' : 'off',
@@ -787,8 +801,17 @@
             packErrors.delete(src.id);
             await symbols.removePack(src.id);
           }
+          if (src.online && value === 'off') await symbols.removeSource(src.id);
+          // Indice delle parole (pochi KB) preparato subito se la rete lo consente, altrimenti alla prima ricerca
+          if (src.online && value === 'on' && !packNetworkProblem() && onlineSearchStatus() === 'allowed') {
+            symbols.loadSourceIndex(src.id, true).catch(() => {});
+          }
           renderSettings();
         }));
+      if (src.online) {
+        const help = row.querySelector('.setting-text small');
+        if (help) help.textContent = `${t(src.descKey)} ${t('srcOnlineLight')}`;
+      }
       if (src.pack && !status[src.id]) {
         // Descrizione con il peso del pacchetto, finché non è scaricato
         const help = document.createElement('small');
@@ -822,7 +845,7 @@
   // links=false: indirizzi scritti ma non toccabili (crediti aperti senza PIN: il bambino non esce dall'app)
   async function buildCreditsList(links = true) {
     const creditLink = links ? creditAnchor : creditText;
-    const status = await symbols.packStatus();
+    const [status, sources] = await Promise.all([symbols.packStatus(), symbols.activeSources()]);
     const used = new Set(data.allImages().map((image) => image.source));
     const ul = document.createElement('ul');
     ul.className = 'settings-list credits-list';
@@ -842,6 +865,11 @@
     if (used.has('openmoji') || status.openmoji) {
       add(`${t('creditsOpenmoji')} `, creditLink('https://openmoji.org', 'openmoji.org'), ` – ${t('creditsLicense')} `,
         creditLink('https://creativecommons.org/licenses/by-sa/4.0/deed.it', 'CC BY-SA 4.0'), `. ${t('creditsChanged')}`);
+    }
+    if (used.has('twemoji') || sources.twemoji) {
+      add(`${t('creditsTwemoji')} `, creditLink('https://github.com/jdecked/twemoji', 'github.com/jdecked/twemoji'),
+        ` – ${t('creditsTwemojiLicense')} `, creditLink('https://creativecommons.org/licenses/by/4.0/deed.it', 'CC BY 4.0'),
+        `. ${t('creditsChanged')}`);
     }
     // Immagini arrivate da schede di altre app (Open Board Format): autore e licenza dichiarati nel file
     const others = new Map();
