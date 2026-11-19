@@ -25,7 +25,7 @@
   const ARASAAC_API = 'https://api.arasaac.org/api/pictograms';
   const ARASAAC_STATIC = 'https://static.arasaac.org/pictograms';
   const MYMEMORY_API = 'https://api.mymemory.translated.net/get';
-  const PACK_CACHE_PREFIX = 'picspeak-pack-';
+  const PACK_CACHE_PREFIX = 'picspeak-anteprima-pack-';
   const PACK_IDS = ['mulberry', 'openmoji'];
   const ONLINE_IDS = ['twemoji'];
   // Versioni fissate: le immagini non cambiano sotto i piedi se la fonte pubblica novità
