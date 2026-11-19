@@ -1051,6 +1051,8 @@
     { titleKey: 'grpLayout', options: [
       { key: 'sentencePosition', labelKey: 'optSentencePosition',
         values: [['top', 'valTop'], ['bottom', 'valBottom']] },
+      { key: 'sentenceSize', labelKey: 'optSentenceSize', helpKey: 'optSentenceSizeHelp',
+        values: [['normal', 'valNormal'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
       { key: 'controlsSide', labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
         values: [['right', 'valRight'], ['left', 'valLeft']] },
       { key: 'pageTitle', labelKey: 'optPageTitle',
@@ -1105,12 +1107,16 @@
     return (document.documentElement.style.getPropertyValue('--page-bg') || '').trim().toLowerCase();
   }
 
+  // Scelte che gli stili pronti non cambiano (dipendono dalla persona, non dallo stile)
+  const KEPT_BY_PRESETS = ['sentenceSize'];
+
   // Uno stile è "attivo" se tutte le scelte coincidono con le sue
   function presetMatches(preset) {
     if ((document.documentElement.dataset.colorMode || DEFAULT_COLOR_MODE) !== preset.colorMode) return false;
     if (currentBackground() !== (preset.background || '').toLowerCase()) return false;
     if ((appearance.imageZoom || 100) !== (preset.appearance.imageZoom || 100)) return false;
     return APPEARANCE_OPTIONS.every((opt) => {
+      if (KEPT_BY_PRESETS.includes(opt.key)) return true;
       const def = opt.values[0][0];
       return (appearance[opt.key] || def) === (preset.appearance[opt.key] || def);
     });
@@ -1119,8 +1125,12 @@
   async function applyPreset(preset) {
     applyColorMode(preset.colorMode);
     applyPageBackground(preset.background);
-    // Lo zoom delle tessere dipende dallo schermo, non dallo stile: si conserva
-    appearance = appearance.tileZoom ? { ...preset.appearance, tileZoom: appearance.tileZoom } : { ...preset.appearance };
+    // Lo zoom delle tessere dipende dallo schermo, non dallo stile: si conserva.
+    // Si conservano anche le scelte legate alla vista della persona (altezza della frase).
+    const kept = {};
+    if (appearance.tileZoom) kept.tileZoom = appearance.tileZoom;
+    KEPT_BY_PRESETS.forEach((key) => { if (appearance[key]) kept[key] = appearance[key]; });
+    appearance = { ...preset.appearance, ...kept };
     applyAppearance();
     await storage.set('colorMode', preset.colorMode);
     await storage.set('pageBackground', preset.background);

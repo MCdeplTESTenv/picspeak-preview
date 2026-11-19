@@ -1987,3 +1987,21 @@ body > .adult-bar { order: 0; }
   color: var(--text-muted);
 }
 .os-guide[open] summary::after { transform: rotate(90deg); }
+
+/* Altezza della striscia frase (opzione di aspetto, per chi vede poco): la barra cresce, pittogrammi e parole
+ * della frase crescono con lei; la griglia si adatta da sola allo spazio che resta (misurato in app.js).
+ * Le regole stanno dopo quelle degli schermi bassi per prevalere su di esse. */
+[data-sentence-size="l"] { --bar-height: clamp(116px, 19vh, 160px); }
+[data-sentence-size="xl"] { --bar-height: clamp(148px, 25vh, 216px); }
+[data-sentence-size="l"] .sentence-chip .symbol-label { font-size: clamp(13px, calc(var(--chip-h) * 0.17), 20px); }
+[data-sentence-size="xl"] .sentence-chip .symbol-label { font-size: clamp(15px, calc(var(--chip-h) * 0.17), 26px); }
+/* Telefono in orizzontale: più alta, ma senza togliere troppo spazio alle tessere */
+@media (max-height: 500px) {
+  [data-sentence-size="l"] { --bar-height: 120px; }
+  [data-sentence-size="xl"] { --bar-height: 148px; }
+}
+/* Telefono in verticale: la striscia va a capo sopra i pulsanti e prende l'altezza scelta */
+@media (max-width: 520px) {
+  [data-sentence-size="l"] .sentence-strip { min-height: calc(var(--bar-height) - 2 * var(--gap)); }
+  [data-sentence-size="xl"] .sentence-strip { min-height: calc(var(--bar-height) - 2 * var(--gap)); }
+}
