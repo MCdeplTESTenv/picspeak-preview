@@ -16,6 +16,8 @@
     // 'child' = modalità utente (nessuna modifica possibile); 'adult' arriverà nella Tappa 2
     mode: 'child',
     pageId: null,
+    // Percorso fatto per arrivare alla pagina: [Home, cartella, …, pagina] (per il percorso e la freccia «su»)
+    trail: [],
     // Frase: copie delle tessere scelte (parola, voce, tipo, immagine), indipendenti dalla scheda
     sentence: [],
     ready: false,
@@ -50,6 +52,8 @@
     clear: document.getElementById('btn-clear'),
     home: document.getElementById('btn-home'),
     crumbs: document.getElementById('crumbs'),
+    trail: document.getElementById('crumb-trail'),
+    up: document.getElementById('btn-up'),
   };
 
   function labelOf(item) {
@@ -108,12 +112,7 @@
     const page = data.page(state.pageId) || data.page(data.homePageId);
     if (!page) return;
     state.pageId = page.id;
-    el.title.textContent = page.title;
-    // Nella Home il percorso mostra solo "HOME"; nelle altre pagine "HOME › pagina"
-    const isHome = state.pageId === data.homePageId;
-    el.crumbs.classList.toggle('is-home', isHome);
-    if (isHome) el.home.setAttribute('aria-current', 'page');
-    else el.home.removeAttribute('aria-current');
+    renderCrumbs(page);
 
     // In modalità impostazioni si vedono anche le tessere nascoste (attenuate) e la tessera "+",
     // tranne durante l'anteprima dello zoom, che mostra la pagina esattamente come la vede il bambino
@@ -132,8 +131,18 @@
       applyCustomColor(button, item);
       if (item.kind === 'folder') {
         button.setAttribute('aria-label', `${t('openPage')}: ${labelOf(item)}`);
+        // Pagina della cartella: serve per lasciarci dentro una tessera trascinata (reorder.js)
+        if (item.targetPageId) button.dataset.folder = item.targetPageId;
       }
       button.append(buildFace(item, 'size-cell'));
+      // In modifica la cartella si apre col tocco; la matita nell'angolo apre le sue impostazioni
+      if (editing && item.kind === 'folder') {
+        const pencil = document.createElement('span');
+        pencil.className = 'folder-edit';
+        pencil.dataset.action = 'edit-folder';
+        pencil.setAttribute('aria-hidden', 'true');
+        button.append(pencil);
+      }
       return button;
     });
     if (editing) {
@@ -157,6 +166,102 @@
     el.grid.dataset.count = String(cells.length);
     layoutGrid();
     applySuggestions();
+  }
+
+  // Breve avviso in basso (es. «Spostata in Cibo»), letto anche dai lettori di schermo
+  let noticeNode = null;
+  let noticeTimer = null;
+  function notice(text) {
+    if (!noticeNode) {
+      noticeNode = document.createElement('div');
+      noticeNode.className = 'app-notice';
+      noticeNode.setAttribute('role', 'status');
+      document.body.append(noticeNode);
+    }
+    noticeNode.textContent = text;
+    noticeNode.classList.add('is-visible');
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => noticeNode.classList.remove('is-visible'), 2200);
+  }
+
+  // ---------- Percorso e freccia «su» ----------
+
+  // Titolo mostrato per una pagina del percorso
+  function pageTitle(pageId) {
+    const p = data.page(pageId);
+    return p ? p.title : '';
+  }
+
+  function crumbSeparator() {
+    const sep = document.createElement('span');
+    sep.className = 'crumb-sep';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'icon');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'm9 6 6 6-6 6');
+    svg.append(path);
+    sep.append(svg);
+    return sep;
+  }
+
+  /*
+   * Percorso «HOME › cartella › … › pagina»: ogni cartella intermedia si tocca per tornarci;
+   * la freccia «su» porta alla cartella precedente. Nella Home si vede solo «HOME».
+   */
+  function renderCrumbs(page) {
+    // Il percorso deve finire con la pagina mostrata e cominciare dalla Home
+    if (state.trail[state.trail.length - 1] !== page.id || state.trail[0] !== data.homePageId) {
+      state.trail = data.pathTo(page.id) || [data.homePageId, page.id].filter((id, i, a) => a.indexOf(id) === i);
+    }
+    el.title.textContent = page.title;
+    const isHome = page.id === data.homePageId;
+    el.crumbs.classList.toggle('is-home', isHome);
+    if (isHome) el.home.setAttribute('aria-current', 'page');
+    else el.home.removeAttribute('aria-current');
+    el.home.dataset.dropPage = data.homePageId;
+    const middle = state.trail.slice(1, -1).map((pageId, index) => {
+      const crumb = document.createElement('button');
+      crumb.type = 'button';
+      crumb.className = 'crumb crumb-link';
+      crumb.dataset.trailIndex = String(index + 1);
+      crumb.dataset.dropPage = pageId;
+      crumb.textContent = pageTitle(pageId);
+      return [crumbSeparator(), crumb];
+    }).flat();
+    el.trail.replaceChildren(...middle);
+    el.up.hidden = isHome;
+    if (!isHome) el.up.dataset.dropPage = state.trail[state.trail.length - 2] || data.homePageId;
+  }
+
+  // Torna alla pagina in quella posizione del percorso
+  function goToTrail(index) {
+    const pageId = state.trail[index];
+    if (!pageId) return;
+    state.trail = state.trail.slice(0, index + 1);
+    goToPage(pageId);
+  }
+
+  function goUp() {
+    if (state.trail.length > 1) goToTrail(state.trail.length - 2);
+    else goToPage(data.homePageId);
+  }
+
+  // Apre una cartella dalla pagina attuale: il percorso si allunga di un passo
+  function openFolder(pageId) {
+    if (!data.page(pageId)) return;
+    const at = state.trail.indexOf(pageId);
+    // Cartella che riporta a una pagina già nel percorso (es. «torna a…»): il percorso si accorcia
+    state.trail = at >= 0 ? state.trail.slice(0, at + 1) : [...state.trail, pageId];
+    goToPage(pageId);
   }
 
   // ---------- Previsione: evidenzia (senza spostarle) le tessere probabili ----------
@@ -418,6 +523,9 @@
 
   function goToPage(pageId) {
     if (!data.page(pageId)) return;
+    // Pagina già nel percorso (Home, cartella superiore): si torna indietro fino a lì
+    const at = state.trail.indexOf(pageId);
+    if (at >= 0) state.trail = state.trail.slice(0, at + 1);
     state.pageId = pageId;
     renderGrid();
     el.grid.scrollTop = 0;
@@ -431,11 +539,21 @@
   function onCellTap(event) {
     const cell = event.target.closest('.symbol-cell');
     if (!cell) return;
-    // Impostazioni sbloccate: il tocco apre la modifica della tessera (o ne aggiunge una)
+    // Impostazioni sbloccate: il tocco apre la modifica della tessera (o ne aggiunge una);
+    // la cartella invece si apre, e le sue impostazioni sono sulla matita nell'angolo
     if (state.mode === 'adult' && window.PicSpeak.editor) {
       flash(cell);
-      if (cell.dataset.action === 'add') window.PicSpeak.editor.add(state.pageId);
-      else window.PicSpeak.editor.edit(state.pageId, cell.dataset.id);
+      if (cell.dataset.action === 'add') {
+        window.PicSpeak.editor.add(state.pageId);
+        return;
+      }
+      const page = data.page(state.pageId);
+      const item = page && page.cells.find((c) => c.id === cell.dataset.id);
+      if (item && item.kind === 'folder' && !event.target.closest('.folder-edit') && !state.preview) {
+        openFolder(item.targetPageId);
+        return;
+      }
+      window.PicSpeak.editor.edit(state.pageId, cell.dataset.id);
       return;
     }
     // Clic generato da dito o mouse già gestito dai gestori del puntatore (la tastiera passa sempre di qui)
@@ -455,8 +573,9 @@
     flash(cell);
     const speakNow = options.speakWords !== 'sentence';
     if (item.kind === 'folder') {
-      if (speakNow) say(speechOf(item));
-      goToPage(item.targetPageId);
+      // Cartella «silenziosa» (opzione nelle sue impostazioni): si apre senza leggerne il nome
+      if (speakNow && !item.silent) say(speechOf(item));
+      openFolder(item.targetPageId);
       return;
     }
     if (speakNow) say(speechOf(item));
@@ -703,6 +822,14 @@
       renderSentence();
     });
     el.home.addEventListener('click', () => goToPage(data.homePageId));
+    el.up.addEventListener('click', () => {
+      flash(el.up);
+      goUp();
+    });
+    el.trail.addEventListener('click', (event) => {
+      const crumb = event.target.closest('.crumb-link');
+      if (crumb) goToTrail(Number(crumb.dataset.trailIndex));
+    });
     bindShakeToHome();
     // Ricalcola la griglia quando cambia la dimensione o l'orientamento dello schermo
     let resizeTimer = null;
@@ -732,6 +859,9 @@
     layoutGrid,
     renderGrid,
     goToPage,
+    openFolder,
+    goUp,
+    notice,
     get pageId() { return state.pageId; },
     zoomRange,
     currentZoom,

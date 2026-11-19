@@ -318,6 +318,98 @@
     await savePage(p);
   }
 
+  // ---------- Cartelle: gerarchia e spostamento tra schede ----------
+
+  // Schede raggiungibili da una scheda attraverso le sue cartelle (compresa la scheda stessa)
+  function pagesUnder(pageId) {
+    const seen = new Set();
+    const queue = [pageId];
+    while (queue.length) {
+      const id = queue.shift();
+      const p = page(id);
+      if (!p || seen.has(id)) continue;
+      seen.add(id);
+      p.cells.forEach((c) => { if (c.kind === 'folder' && c.targetPageId) queue.push(c.targetPageId); });
+    }
+    return seen;
+  }
+
+  // Percorso più breve dalla Home a una scheda, attraverso le cartelle: [Home, …, scheda]
+  // (null se la scheda non è raggiungibile dalla Home)
+  function pathTo(pageId) {
+    const home = model.profile && model.profile.homePageId;
+    if (!home || !page(pageId)) return null;
+    const previous = new Map([[home, null]]);
+    const queue = [home];
+    while (queue.length) {
+      const id = queue.shift();
+      if (id === pageId) break;
+      const p = page(id);
+      if (!p) continue;
+      p.cells.forEach((c) => {
+        if (c.kind === 'folder' && c.targetPageId && page(c.targetPageId) && !previous.has(c.targetPageId)) {
+          previous.set(c.targetPageId, id);
+          queue.push(c.targetPageId);
+        }
+      });
+    }
+    if (!previous.has(pageId)) return null;
+    const path = [];
+    for (let id = pageId; id; id = previous.get(id)) path.unshift(id);
+    return path;
+  }
+
+  /*
+   * Albero delle schede a partire dalla Home, per scegliere dove spostare una tessera:
+   * [{ pageId, title, depth }] in ordine di lettura; ogni scheda compare una sola volta.
+   */
+  function pageTree() {
+    const home = model.profile && model.profile.homePageId;
+    const result = [];
+    const seen = new Set();
+    const visit = (pageId, title, depth) => {
+      const p = page(pageId);
+      if (!p || seen.has(pageId)) return;
+      seen.add(pageId);
+      result.push({ pageId, title, depth });
+      orderedCells(p, { includeHidden: true }).forEach((c) => {
+        if (c.kind === 'folder' && c.targetPageId) visit(c.targetPageId, c.label || (page(c.targetPageId) || {}).title || '', depth + 1);
+      });
+    };
+    if (home) visit(home, '', 0);
+    return result;
+  }
+
+  // Si può spostare la tessera in quella scheda? Una cartella non può finire dentro sé stessa
+  function canMoveCellTo(fromPageId, cellId, toPageId) {
+    const from = page(fromPageId);
+    const cell = from && from.cells.find((c) => c.id === cellId);
+    if (!cell || !page(toPageId) || toPageId === fromPageId) return false;
+    if (cell.kind === 'folder' && cell.targetPageId && pagesUnder(cell.targetPageId).has(toPageId)) return false;
+    return true;
+  }
+
+  // Sposta una tessera (o una cartella con tutto il suo contenuto) in un'altra scheda, in fondo
+  async function moveCellToPage(fromPageId, cellId, toPageId) {
+    if (!canMoveCellTo(fromPageId, cellId, toPageId)) return false;
+    const from = page(fromPageId);
+    const to = page(toPageId);
+    const cell = from.cells.find((c) => c.id === cellId);
+    from.cells = from.cells.filter((c) => c.id !== cellId);
+    if (isFixed(from)) updateRows(from);
+    else renumber(from);
+    // Nella nuova scheda va nella prima casella libera (griglia fissa) o in fondo; la posizione non è più bloccata
+    const cols = to.grid.cols || DEFAULT_COLS;
+    const slot = isFixed(to) ? firstFreeSlot(to) : { row: Math.floor(to.cells.length / cols), col: to.cells.length % cols };
+    Object.assign(cell, { row: slot.row, col: slot.col, locked: false });
+    to.cells.push(cell);
+    if (isFixed(to)) updateRows(to);
+    else renumber(to);
+    await savePage(from);
+    await savePage(to);
+    return true;
+  }
+
   // Disposizione della pagina: automatica (si adatta allo schermo) o fissa con un numero di colonne
   async function setPageLayout(pageId, { fixed, cols }) {
     const p = page(pageId);
@@ -422,6 +514,11 @@
     moveCell,
     reorderCells,
     setPageLayout,
+    pagesUnder,
+    pathTo,
+    pageTree,
+    canMoveCellTo,
+    moveCellToPage,
     profilePages,
     snapshotPages,
     previousPages,

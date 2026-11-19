@@ -180,6 +180,7 @@
           color: typeof c.color === 'string' && /^#[0-9a-f]{6}$/i.test(c.color) ? c.color.toLowerCase() : null,
           hidden: c.hidden === true,
           locked: c.locked === true,
+          silent: kind === 'folder' && c.silent === true,
           image: null,
           target: null,
         };
@@ -463,6 +464,7 @@
         targetPageId: c.target ? pageIds.get(c.target) : null,
         hidden: c.hidden,
         locked: c.locked,
+        silent: c.silent === true,
         audioId: null,
       })),
       updatedAt: new Date().toISOString(),
@@ -478,6 +480,8 @@
       await data.addCell(data.homePageId, {
         kind: 'folder', label: name.slice(0, 40), wordType: null, targetPageId: homeId,
         imageId: firstImage ? map.get(firstImage.image) : null,
+        // Il nome della scheda pronta (es. «Parole di base · 60 tessere…») non si legge: si cambia nella cartella
+        silent: true,
       });
     }
     return { missing, homeId };
@@ -548,6 +552,7 @@
           color: c.color,
           hidden: c.hidden,
           locked: c.locked,
+          silent: c.silent === true ? true : undefined,
           image: c.imageId ? imageKeys.get(c.imageId) || null : null,
           target: c.targetPageId ? pageKey(c.targetPageId) : undefined,
         })).map((c) => (c.kind === 'folder' && !pages.some((p2) => pageKey(p2.id) === c.target)

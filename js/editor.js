@@ -126,20 +126,36 @@
       imageId: cell ? cell.imageId : null,
       hidden: cell ? cell.hidden : false,
       locked: cell ? cell.locked : false,
+      silent: cell ? cell.silent === true : false,
+      placePageId: pageId,
       newImageBlob: null,
       pending: null, // simbolo scelto con "Cerca simbolo": { imageId, record, previewBlob }
     };
 
     const form = el('form', 'dialog-form editor-form');
     form.noValidate = true;
-    form.append(el('h2', null, isNew ? t('editorNewTitle') : t('editorTitle')));
+    form.append(el('h2', null, isNew ? t('editorNewTitle') : t(cell.kind === 'folder' ? 'editorFolderTitle' : 'editorTitle')));
+
+    // Cartella esistente: si può aprire anche da qui (per aggiungere tessere al suo interno)
+    if (!isNew && cell.kind === 'folder' && data.page(cell.targetPageId)) {
+      const openRow = el('div', 'editor-actions-row');
+      openRow.append(actionButton(`${t('editorOpenFolder')} →`, () => {
+        close();
+        app.openFolder(cell.targetPageId);
+      }, 'dlg-btn-primary editor-open-folder'));
+      form.append(openRow, el('small', 'editor-hint', t('editorFolderTapHint')));
+    }
 
     // Tipo di tessera (solo per una nuova): simbolo o cartella
     if (isNew) {
       form.append(segmentedChoice(
         [['symbol', t('editorKindSymbol')], ['folder', t('editorKindFolder')]],
         draft.kind,
-        (value) => { draft.kind = value; symbolOnly.forEach((n) => { n.hidden = value === 'folder'; }); },
+        (value) => {
+          draft.kind = value;
+          symbolOnly.forEach((n) => { n.hidden = value === 'folder'; });
+          rowSilent.hidden = value !== 'folder';
+        },
       ));
     }
 
@@ -286,7 +302,37 @@
     const rowLocked = el('div', 'editor-option');
     rowLocked.append(el('span', null, t('editorLocked')), lockedChoice);
     optionsField.append(rowHidden, rowLocked);
+    // Solo per le cartelle: leggere o no il nome quando si apre
+    const silentChoice = segmentedChoice([['yes', t('valYes')], ['no', t('valNo')]], draft.silent ? 'no' : 'yes',
+      (v) => { draft.silent = v === 'no'; });
+    const rowSilent = el('div', 'editor-option');
+    rowSilent.append(el('span', null, t('editorSpeakFolder')), silentChoice);
+    rowSilent.hidden = draft.kind !== 'folder';
+    optionsField.append(rowSilent);
     form.append(optionsField);
+
+    // Dove si trova (tessere esistenti): scegliendo un'altra cartella la tessera si sposta lì
+    if (!isNew) {
+      const placeField = el('div', 'editor-block');
+      const select = el('select', 'editor-place');
+      data.pageTree().forEach(({ pageId: id, title, depth }) => {
+        const option = el('option', null, `${'\u00a0\u00a0\u00a0'.repeat(depth)}${depth ? '› ' : ''}${depth ? title : t('editorPlaceHome')}`);
+        option.value = id;
+        option.disabled = id !== pageId && !data.canMoveCellTo(pageId, cell.id, id);
+        option.selected = id === pageId;
+        select.append(option);
+      });
+      // Pagina non raggiungibile dalla Home (caso raro): resta comunque scelta quella attuale
+      if (select.value !== pageId) {
+        const here = el('option', null, (data.page(pageId) || {}).title || '');
+        here.value = pageId;
+        select.prepend(here);
+        select.value = pageId;
+      }
+      select.addEventListener('change', () => { draft.placePageId = select.value; });
+      placeField.append(field(t('editorPlace'), select), el('small', 'editor-hint', t('editorPlaceHint')));
+      form.append(placeField);
+    }
 
     // Posizione ed eliminazione (solo per tessere esistenti)
     if (!isNew) {
@@ -360,7 +406,7 @@
       if (isNew && draft.kind === 'folder') {
         const { cell: folderCell } = await data.addFolder(pageId, label);
         await data.updateCell(pageId, folderCell.id, {
-          color: draft.color, imageId, hidden: draft.hidden, locked: draft.locked,
+          color: draft.color, imageId, hidden: draft.hidden, locked: draft.locked, silent: draft.silent,
         });
       } else if (isNew) {
         await data.addCell(pageId, {
@@ -370,7 +416,17 @@
       } else {
         const changes = { label, color: draft.color, imageId, hidden: draft.hidden, locked: draft.locked };
         if (cell.kind !== 'folder') Object.assign(changes, { speak, wordType: draft.wordType });
+        else changes.silent = draft.silent;
         await data.updateCell(pageId, cell.id, changes);
+        // Spostata in un'altra cartella
+        if (draft.placePageId && draft.placePageId !== pageId) {
+          const moved = await data.moveCellToPage(pageId, cell.id, draft.placePageId);
+          const target = data.page(draft.placePageId);
+          if (moved && target) {
+            const name = draft.placePageId === data.homePageId ? t('editorPlaceHome') : target.title;
+            app.notice(t('editorPlaceMoved').replace('{name}', () => name));
+          }
+        }
         if (cell.kind === 'folder' && cell.targetPageId) {
           const target = data.page(cell.targetPageId);
           if (target) target.title = label;

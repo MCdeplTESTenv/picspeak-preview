@@ -382,6 +382,7 @@
           color,
           hidden: button.hidden === true,
           locked: button.ext_picspeak_locked === true,
+          silent: kind === 'folder' && button.ext_picspeak_silent === true,
           image,
           target: target || undefined,
         });
@@ -632,6 +633,7 @@
         if (cell.kind === 'symbol' && cell.wordType) button.ext_picspeak_word_type = cell.wordType;
         if (cell.color) button.ext_picspeak_color = cell.color;
         if (cell.locked) button.ext_picspeak_locked = true;
+        if (cell.kind === 'folder' && cell.silent) button.ext_picspeak_silent = true;
         order[cell.row][cell.col] = id;
         buttons.push(button);
       }

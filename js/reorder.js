@@ -4,16 +4,20 @@
  * per mezzo secondo, la tessera "si stacca" e segue il dito (o il mouse); le altre si
  * spostano per farle posto. Al rilascio il nuovo ordine viene salvato sul dispositivo.
  * Un tocco breve continua ad aprire la modifica della tessera (editor.js).
+ * Lasciando la tessera al centro di una cartella la si mette dentro; lasciandola sulla freccia «su»
+ * o su una voce del percorso in alto (HOME › cartella) la si porta fuori, in quella pagina.
  */
 (function () {
   'use strict';
 
-  const { data, app } = window.PicSpeak;
+  const { data, app, i18n } = window.PicSpeak;
 
   const HOLD_MS = 500; // tempo di pressione per staccare la tessera
   const MOVE_TOLERANCE = 10; // px: oltre questo movimento prima del tempo è uno scorrimento, non una presa
   const EDGE = 56; // px dal bordo della griglia in cui la griglia scorre da sola
   const EDGE_SPEED = 10; // px per fotogramma
+  const FOLDER_CENTER = 0.2; // margine (frazione del lato) oltre il quale si è «al centro» di una cartella
+  const FOLDER_EDGE_MS = 450; // sul bordo di una cartella: attesa prima di scambiare le posizioni
 
   const grid = document.getElementById('symbol-grid');
 
@@ -94,11 +98,84 @@
     drag.ghost.style.top = `${drag.y - drag.offsetY}px`;
   }
 
+  // Destinazione «dentro una cartella» o «fuori, nel percorso»: evidenziata finché il dito è sopra
+  function setDropTarget(node, pageId) {
+    if (drag.drop && drag.drop.node === node) return;
+    clearDropTarget();
+    if (!node) return;
+    node.classList.add('is-drop-target');
+    drag.drop = { node, pageId };
+    // La copia sotto il dito si rimpicciolisce: così si vede dove andrà la tessera
+    drag.ghost.style.transformOrigin = `${drag.offsetX}px ${drag.offsetY}px`;
+    drag.ghost.classList.add('is-over-drop');
+  }
+
+  function clearDropTarget() {
+    if (!drag || !drag.drop) return;
+    drag.drop.node.classList.remove('is-drop-target');
+    drag.ghost.classList.remove('is-over-drop');
+    drag.drop = null;
+  }
+
+  function clearEdgeTimer() {
+    if (!drag || !drag.edge) return;
+    clearTimeout(drag.edge.timer);
+    drag.edge = null;
+  }
+
+  function canDropOn(pageId) {
+    return Boolean(pageId) && data.canMoveCellTo(app.pageId, drag.cell.dataset.id, pageId);
+  }
+
   // Sposta il segnaposto nella posizione della tessera sotto il dito
   function updatePlaceholder() {
     const under = document.elementFromPoint(drag.x, drag.y);
+    // Sul percorso in alto o sulla freccia «su»: la tessera andrà in quella pagina
+    const crumb = under && under.closest('[data-drop-page]');
+    if (crumb && !crumb.hidden && !grid.contains(crumb)) {
+      clearEdgeTimer();
+      if (canDropOn(crumb.dataset.dropPage) && crumb.getAttribute('aria-current') !== 'page') setDropTarget(crumb, crumb.dataset.dropPage);
+      else clearDropTarget();
+      return;
+    }
     const target = under && under.closest('.symbol-cell');
-    if (!target || !grid.contains(target) || target === drag.cell || target.classList.contains('reorder-ghost')) return;
+    if (!target || !grid.contains(target) || target === drag.cell || target.classList.contains('reorder-ghost')) {
+      clearDropTarget();
+      clearEdgeTimer();
+      return;
+    }
+    // Sopra una cartella: al centro la tessera va dentro; sul bordo, dopo una breve attesa, si scambiano i posti
+    if (target.dataset.folder && canDropOn(target.dataset.folder)) {
+      const r = target.getBoundingClientRect();
+      const fx = (drag.x - r.left) / r.width;
+      const fy = (drag.y - r.top) / r.height;
+      const inCenter = fx > FOLDER_CENTER && fx < 1 - FOLDER_CENTER && fy > FOLDER_CENTER && fy < 1 - FOLDER_CENTER;
+      if (inCenter) {
+        clearEdgeTimer();
+        setDropTarget(target, target.dataset.folder);
+        return;
+      }
+      clearDropTarget();
+      if (!drag.edge || drag.edge.target !== target) {
+        clearEdgeTimer();
+        drag.edge = {
+          target,
+          timer: setTimeout(() => {
+            if (!drag) return;
+            drag.edge = null;
+            placeBeside(target);
+          }, FOLDER_EDGE_MS),
+        };
+      }
+      return;
+    }
+    clearDropTarget();
+    clearEdgeTimer();
+    placeBeside(target);
+  }
+
+  function placeBeside(target) {
+    if (!drag || !target.isConnected) return;
     if (target.dataset.action === 'add') {
       // Sopra il "+": la tessera va in fondo
       if (target.previousElementSibling !== drag.cell) grid.insertBefore(drag.cell, target);
@@ -144,6 +221,9 @@
   async function finishDrag(save) {
     if (!drag) return;
     const { cell, ghost, frame } = drag;
+    const drop = drag.drop;
+    clearDropTarget();
+    clearEdgeTimer();
     drag = null;
     cancelAnimationFrame(frame);
     ghost.remove();
@@ -152,7 +232,18 @@
     // Il "click" che segue il rilascio non deve aprire la modifica della tessera
     setTimeout(() => { suppressClick = false; }, 400);
     const pageId = app.pageId;
-    if (save && pageId && isEditing()) {
+    if (save && pageId && isEditing() && drop) {
+      // Lasciata su una cartella o sul percorso: la tessera passa in quella pagina
+      const moved = await data.moveCellToPage(pageId, cell.dataset.id, drop.pageId);
+      if (moved) {
+        app.flash(drop.node);
+        const target = data.page(drop.pageId);
+        if (target) {
+          const name = drop.pageId === data.homePageId ? i18n.t('homeLabel') : target.title;
+          app.notice(i18n.t('dropMoved').replace('{name}', () => name));
+        }
+      }
+    } else if (save && pageId && isEditing()) {
       await data.reorderCells(pageId, movableCells().map((node) => node.dataset.id));
     }
     app.renderGrid();
