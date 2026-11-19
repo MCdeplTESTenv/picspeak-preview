@@ -1947,3 +1947,44 @@ body > .adult-bar { order: 0; }
   color: var(--text);
 }
 .symbol-cell.reorder-ghost.is-over-drop { transform: scale(0.4); opacity: 0.85; }
+
+/* App sempre aperta: istruzioni per sistema, richiudibili */
+.settings-section > .keep-open-status { font-size: 14px; margin-top: 4px; }
+.os-guide {
+  align-self: stretch;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.os-guide summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 64px;
+  padding: 0 16px;
+  font-weight: 700;
+  font-size: 17px;
+  cursor: pointer;
+}
+.os-guide[open] summary { border-bottom: 2px solid var(--border); }
+.os-guide-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--pressed);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.os-guide .settings-list { padding: 12px 16px 0 38px; }
+.os-guide .settings-help { padding: 8px 16px 14px; }
+.os-guide summary { list-style: none; }
+.os-guide summary::-webkit-details-marker { display: none; }
+.os-guide summary::after {
+  content: '›';
+  margin-left: auto;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.os-guide[open] summary::after { transform: rotate(90deg); }

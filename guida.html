@@ -111,7 +111,7 @@
             <h3>Dispositivo, sicurezza e dati</h3>
             <ul>
               <li><a href="#installare">Installare come app e usarla senza internet</a></li>
-              <li><a href="#accesso-guidato">Tenere il bambino dentro PicSpeak</a></li>
+              <li><a href="#accesso-guidato">Tenere PicSpeak sempre aperto e a schermo intero</a></li>
               <li><a href="#dati">Sapere dove restano i dati</a></li>
               <li><a href="#ripristino">Tornare alle impostazioni iniziali</a></li>
               <li><a href="#crediti">Trovare crediti e licenze</a></li>
@@ -272,7 +272,7 @@
           <tr><th scope="row">Previsione</th><td>suggerimenti della parola successiva e abitudini d’uso</td></tr>
           <tr><th scope="row">Simboli</th><td>ARASAAC, Mulberry, OpenMoji, Twemoji, foto personali</td></tr>
           <tr><th scope="row">Voce</th><td>voce, velocità, tono, come avere una voce più naturale</td></tr>
-          <tr><th scope="row">Sicurezza</th><td>cambiare il PIN, accesso guidato</td></tr>
+          <tr><th scope="row">Sicurezza</th><td>cambiare il PIN, schermo sempre acceso, schermo intero, blocco del dispositivo su PicSpeak (Accesso guidato, Fissa app)</td></tr>
           <tr><th scope="row">Backup e ripristino</th><td>tornare alle impostazioni iniziali, cancellare tutto; copia di sicurezza in arrivo</td></tr>
           <tr><th scope="row">In arrivo</th><td>le funzioni previste nelle prossime versioni</td></tr>
         </tbody>
@@ -793,24 +793,59 @@
     </section>
 
     <section id="accesso-guidato" data-search>
-      <h3>Tenere il bambino dentro PicSpeak</h3>
-      <p>Tablet e telefoni hanno una funzione che impedisce di uscire dall’app senza un codice. Va attivata una volta nelle
-        impostazioni del dispositivo; i passi sono anche in <span class="where"><span>Impostazioni</span><span>Sicurezza</span></span>.</p>
+      <h3>Tenere PicSpeak sempre aperto e a schermo intero</h3>
+      <p>Tutto si trova in <span class="where"><span>Impostazioni</span><span>Sicurezza</span><span>App sempre aperta, visibile e a schermo intero</span></span>.
+        Lì PicSpeak riconosce il dispositivo e mostra per prime, già aperte, le istruzioni giuste; quelle degli altri sistemi
+        si aprono toccandone il nome.</p>
+      <h4>Le due opzioni di PicSpeak</h4>
+      <ul>
+        <li><strong>Schermo sempre acceso</strong>: finché PicSpeak è aperto e in primo piano lo schermo non si spegne da solo.
+          Consuma più batteria, quindi conviene tenere il dispositivo in carica. Se il risparmio energetico lo impedisce, si
+          riattiva al tocco successivo.</li>
+        <li><strong>Schermo intero</strong>: nasconde le barre del browser e del sistema. Se si esce (tasto Esc o un gesto del
+          sistema), PicSpeak torna a schermo intero al tocco successivo; mentre le impostazioni sono aperte non lo forza.</li>
+      </ul>
+      <p class="tip">Alcuni browser non permettono una delle due opzioni (per esempio lo schermo intero su iPhone): in quel
+        caso sotto l’opzione compare una frase che lo spiega, e valgono le impostazioni del dispositivo descritte qui sotto.
+        Installare PicSpeak come app (vedi sopra) toglie già la barra degli indirizzi.</p>
       <h4>iPad e iPhone: Accesso guidato</h4>
+      <p>Impedisce di uscire da PicSpeak senza un codice.</p>
       <ol class="steps">
+        <li>Aggiungete PicSpeak alla schermata Home e apritelo da lì.</li>
         <li>Aprite Impostazioni → Accessibilità → <strong>Accesso guidato</strong> e attivatelo.</li>
         <li>In «Impostazioni codice» scegliete un codice (può essere diverso dal PIN di PicSpeak).</li>
-        <li>Aprite PicSpeak e premete tre volte il tasto laterale (o il tasto Home), poi toccate «Avvia».</li>
-        <li>Per uscire premete di nuovo tre volte e inserite il codice.</li>
+        <li>In «Blocco automatico schermo» scegliete «Mai», così lo schermo resta acceso durante l’Accesso guidato.</li>
+        <li>Aprite PicSpeak e premete tre volte il tasto laterale (iPhone), il tasto superiore (iPad) o il tasto Home.</li>
+        <li>In «Opzioni» potete disattivare i tasti del volume, poi toccate «Avvia».</li>
+        <li>Per uscire premete di nuovo tre volte, inserite il codice e toccate «Termina».</li>
       </ol>
-      <h4>Android: Blocco app</h4>
+      <h4>Android: Fissa app</h4>
       <ol class="steps">
-        <li>Aprite Impostazioni → Sicurezza (o «Sicurezza e privacy») → Altre impostazioni → «Blocco app» o «Fissa app» e
-          attivatelo.</li>
-        <li>Aprite PicSpeak, poi la schermata delle app recenti.</li>
-        <li>Toccate l’icona di PicSpeak in alto e scegliete «Fissa» o «Blocca».</li>
+        <li>Installate PicSpeak e apritelo dalla sua icona.</li>
+        <li>Aprite le Impostazioni di Android → Sicurezza (o «Sicurezza e privacy») → Avanzate o «Altre impostazioni» →
+          <strong>Fissa app</strong> e attivatela, insieme alla richiesta del PIN per sbloccare.</li>
+        <li>Aprite PicSpeak, poi la schermata delle app recenti: scorrete dal basso fino a metà schermo e tenete premuto,
+          oppure toccate il tasto ▢.</li>
+        <li>Toccate l’icona di PicSpeak in alto e scegliete «Fissa».</li>
+        <li>Per uscire scorrete verso l’alto e tenete premuto (con i tasti: Indietro e ▢ insieme), poi inserite il PIN del
+          telefono.</li>
       </ol>
-      <p class="tip">I nomi dei menu cambiano un po’ tra le diverse marche.</p>
+      <p class="tip">I nomi dei menu cambiano un po’ tra le marche: se non trovate la voce, scrivete «fissa» o «blocco app»
+        nella ricerca delle Impostazioni.</p>
+      <h4>Windows e Mac: app a schermo intero</h4>
+      <ol class="steps">
+        <li>Installate PicSpeak come app e apritelo dalla sua icona.</li>
+        <li>Attivate «Schermo intero» e «Schermo sempre acceso» in PicSpeak (su Windows anche il tasto F11 attiva lo schermo
+          intero; sul Mac il pulsante verde in alto a sinistra della finestra).</li>
+        <li>Perché lo schermo non si spenga mai: su Windows Impostazioni → Sistema → Alimentazione (o «Alimentazione e
+          batteria») e scegliete «Mai» per lo spegnimento dello schermo; sul Mac menu Apple → Impostazioni di Sistema →
+          Schermata di blocco e scegliete «Mai» nelle voci che spengono lo schermo quando è inattivo.</li>
+        <li>Per uscire dallo schermo intero premete Esc.</li>
+      </ol>
+      <p class="tip">Windows ha anche una modalità chiosco («Accesso assegnato», solo nelle edizioni Pro, Enterprise ed
+        Education), ma in quella modalità Microsoft Edge cancella i dati a ogni uscita e le schede del bambino andrebbero
+        perse: per questo con PicSpeak non la consigliamo. Il Mac non ha una funzione per bloccare una sola app: se serve un
+        blocco vero, la scelta più sicura è un iPad con Accesso guidato.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -835,7 +870,7 @@
           iniziali» e confermate.</li>
       </ol>
       <p>Tornano come alla prima apertura aspetto, colori, sfondo, misura delle tessere, voce, lingua, «Tocco e frase»,
-        previsione, stampa e fonti dei simboli. <strong>Restano come sono</strong> le schede, le immagini e le foto, le
+        previsione, stampa, fonti dei simboli, schermo sempre acceso e schermo intero. <strong>Restano come sono</strong> le schede, le immagini e le foto, le
         abitudini d’uso, i modelli salvati, la scelta sull’uso di internet e il PIN. PicSpeak si riavvia e torna alla modalità di
         comunicazione.</p>
       <h4>Cancellare tutto e ricominciare da zero</h4>
@@ -941,6 +976,7 @@
         <li><a href="#crediti">Crediti</a></li>
         <li><a href="#dati">Dati e privacy</a></li>
         <li><a href="#modelli">Esporta</a></li>
+        <li><a href="#accesso-guidato">Fissa app (Android)</a></li>
         <li><a href="#colori">Fitzgerald</a></li>
         <li><a href="#simboli">Foto personali</a></li>
         <li><a href="#pulsanti-rapidi">Frasi rapide</a></li>
@@ -952,6 +988,7 @@
         <li><a href="#installare">Internet</a></li>
         <li><a href="#pin">Lucchetto aperto</a></li>
         <li><a href="#misura">Misura delle tessere</a></li>
+        <li><a href="#accesso-guidato">Modalità chiosco</a></li>
         <li><a href="#modelli">Modelli</a></li>
         <li><a href="#simboli">Mulberry, OpenMoji, Twemoji</a></li>
         <li><a href="#tessere">Nascondere una tessera</a></li>
@@ -966,6 +1003,8 @@
         <li><a href="#schede-pronte">Recupero</a></li>
         <li><a href="#ripristino">Ripristino delle impostazioni</a></li>
         <li><a href="#schede-pronte">Schede pronte</a></li>
+        <li><a href="#accesso-guidato">Schermo intero</a></li>
+        <li><a href="#accesso-guidato">Schermo sempre acceso</a></li>
         <li><a href="#spostare">Spostare le tessere</a></li>
         <li><a href="#stampa-guida">Stampa della guida</a></li>
         <li><a href="#stampa">Stampa delle schede</a></li>

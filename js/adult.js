@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const { i18n, storage, security, install, app, speech, data, symbols } = window.PicSpeak;
+  const { i18n, storage, security, install, app, speech, data, symbols, kiosk } = window.PicSpeak;
   const t = i18n.t;
 
   const HOLD_MS = 3000;
@@ -550,12 +550,87 @@
     }
   }
 
+  // App sempre aperta: opzioni del browser (schermo acceso, schermo intero) e istruzioni per ogni sistema,
+  // con quelle del dispositivo in uso per prime e aperte, le altre richiudibili
+  const KEEP_OPEN_SYSTEMS = [
+    { os: 'ios', titleKey: 'keepOpenIosTitle', stepsKey: 'keepOpenIos', noteKey: 'keepOpenIosNote' },
+    { os: 'android', titleKey: 'keepOpenAndroidTitle', stepsKey: 'keepOpenAndroid', noteKey: 'keepOpenAndroidNote' },
+    { os: 'windows', titleKey: 'keepOpenWindowsTitle', stepsKey: 'keepOpenWindows', noteKey: 'keepOpenWindowsNote' },
+    { os: 'mac', titleKey: 'keepOpenMacTitle', stepsKey: 'keepOpenMac', noteKey: 'keepOpenMacNote' },
+  ];
+
+  // Testi di stato aggiornati sul posto quando cambia lo schermo intero o lo schermo acceso
+  const keepOpenStatus = { wake: null, full: null };
+
+  function updateKeepOpenStatus() {
+    if (keepOpenStatus.wake && keepOpenStatus.wake.isConnected) {
+      let key = 'keepScreenOnOff';
+      if (!kiosk.wakeLockSupported()) key = 'keepScreenOnUnsupported';
+      else if (kiosk.keepScreenOn()) key = kiosk.isScreenKeptOn() ? 'keepScreenOnActive' : 'keepScreenOnWaiting';
+      keepOpenStatus.wake.textContent = t(key);
+      keepOpenStatus.wake.hidden = !t(key);
+    }
+    if (keepOpenStatus.full && keepOpenStatus.full.isConnected) {
+      let key = 'autoFullscreenOff';
+      if (!kiosk.fullscreenSupported()) key = 'autoFullscreenUnsupported';
+      else if (kiosk.autoFullscreen()) key = kiosk.isFullscreen() ? 'autoFullscreenActive' : 'autoFullscreenWaiting';
+      keepOpenStatus.full.textContent = t(key);
+      keepOpenStatus.full.hidden = !t(key);
+    }
+  }
+  kiosk.onChange(updateKeepOpenStatus);
+
+  function statusLine() {
+    const node = document.createElement('p');
+    node.className = 'settings-help keep-open-status';
+    node.setAttribute('aria-live', 'polite');
+    return node;
+  }
+
   function renderGuidedSection() {
-    const wrap = section('secGuidedTitle', 'secGuidedHelp');
-    [['guidedIosTitle', 'guidedIos'], ['guidedAndroidTitle', 'guidedAndroid']].forEach(([titleKey, stepsKey]) => {
-      const sub = document.createElement('h4');
-      sub.textContent = t(titleKey);
-      wrap.append(sub, list(t(stepsKey), true));
+    const wrap = section('secKeepOpenTitle', 'secKeepOpenHelp');
+
+    // Opzioni che il browser consente
+    const yesNo = [['off', 'valNo'], ['on', 'valYes']];
+    const wakeRow = settingRow('optKeepScreenOn', 'optKeepScreenOnHelp', segmented(yesNo, kiosk.keepScreenOn() ? 'on' : 'off',
+      async (value) => { try { await kiosk.setKeepScreenOn(value === 'on'); } finally { renderSettings(); } }));
+    keepOpenStatus.wake = statusLine();
+    const fullRow = settingRow('optAutoFullscreen', 'optAutoFullscreenHelp', segmented(yesNo, kiosk.autoFullscreen() ? 'on' : 'off',
+      (value) => { kiosk.setAutoFullscreen(value === 'on'); renderSettings(); }));
+    keepOpenStatus.full = statusLine();
+    wrap.append(wakeRow, keepOpenStatus.wake, fullRow, keepOpenStatus.full);
+    updateKeepOpenStatus();
+
+    // Istruzioni dei sistemi: prima quello riconosciuto
+    const sub = document.createElement('h4');
+    sub.textContent = t('keepOpenStepsTitle');
+    const intro = document.createElement('p');
+    intro.className = 'settings-help';
+    intro.textContent = t('keepOpenStepsHelp');
+    wrap.append(sub, intro);
+
+    const current = kiosk.osFamily();
+    const ordered = KEEP_OPEN_SYSTEMS.filter((item) => item.os === current)
+      .concat(KEEP_OPEN_SYSTEMS.filter((item) => item.os !== current));
+    ordered.forEach((item) => {
+      const box = document.createElement('details');
+      box.className = 'os-guide';
+      box.open = item.os === current;
+      const summary = document.createElement('summary');
+      const title = document.createElement('span');
+      title.textContent = t(item.titleKey);
+      summary.append(title);
+      if (item.os === current) {
+        const badge = document.createElement('span');
+        badge.className = 'os-guide-badge';
+        badge.textContent = t('keepOpenThisDevice');
+        summary.append(badge);
+      }
+      const note = document.createElement('p');
+      note.className = 'settings-help';
+      note.textContent = t(item.noteKey);
+      box.append(summary, list(t(item.stepsKey), true), note);
+      wrap.append(box);
     });
   }
 
@@ -1414,6 +1489,8 @@
   function closeSettings() {
     el.settings.hidden = true;
     document.body.classList.remove('settings-open');
+    // Chiusura con un tocco: se richiesto, si torna subito a schermo intero
+    if (kiosk.autoFullscreen()) kiosk.enterFullscreen();
   }
 
   // ---------- Avvio ----------

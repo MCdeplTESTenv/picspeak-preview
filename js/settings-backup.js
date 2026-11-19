@@ -23,6 +23,7 @@
   const SETTINGS_KEYS = [
     'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset',
     'labelCase', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
+    'keepScreenOn', 'autoFullscreen',
   ];
 
   // Riga con un pulsante disattivato e l'etichetta «Prossimamente»
