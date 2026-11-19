@@ -1588,9 +1588,40 @@ body > .adult-bar { order: 0; }
  * Previsione: tessera suggerita. Solo un bordo netto intorno alla tessera (nessuna animazione,
  * nessuno spostamento, nessun cambio di misura): la posizione resta quella di sempre.
  * ===================================================================== */
+/* Contorno: un po' più spesso di prima (7 px) per vederlo meglio, ma senza coprire la tessera */
+:root { --suggest-rgb: 31 111 235; --suggest-width: 7px; }
+:root[data-suggest-width="thin"] { --suggest-width: 5px; }
+:root[data-suggest-width="thick"] { --suggest-width: 10px; }
+:root[data-suggest-color="yellow"] { --suggest-rgb: 245 180 0; }
+:root[data-suggest-color="green"] { --suggest-rgb: 26 140 60; }
+:root[data-suggest-color="orange"] { --suggest-rgb: 232 106 16; }
+:root[data-suggest-color="purple"] { --suggest-rgb: 128 64 200; }
 .symbol-cell.is-suggested,
-.suggest-sample-tile.is-suggested { outline: 5px solid var(--suggest); outline-offset: 2px; }
-[data-page-dark="true"] .symbol-cell.is-suggested { outline-color: #ffd43b; }
+.suggest-sample-tile.is-suggested {
+  outline: var(--suggest-width) solid rgb(var(--suggest-rgb) / var(--suggest-alpha, 1));
+  outline-offset: 2px;
+}
+/* Su sfondo scuro il blu si vede poco: si usa un giallo chiaro (gli altri colori restano quelli scelti) */
+:root[data-page-dark="true"]:not([data-suggest-color]) .symbol-cell.is-suggested,
+:root[data-page-dark="true"][data-suggest-color="blue"] .symbol-cell.is-suggested { --suggest-rgb: 255 212 59; }
+.suggest-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; }
+.suggest-swatch-blue { background: rgb(31 111 235); }
+.suggest-swatch-yellow { background: rgb(245 180 0); }
+.suggest-swatch-green { background: rgb(26 140 60); }
+.suggest-swatch-orange { background: rgb(232 106 16); }
+.suggest-swatch-purple { background: rgb(128 64 200); }
+/* Trasparenza: le tessere non suggerite restano al loro posto e toccabili, ma più chiare */
+.symbol-cell.is-suggest-faded { opacity: 0.3; }
+/* Solo suggerite: le altre tessere lasciano vuoto il loro posto (nessuna tessera si sposta) */
+.symbol-cell.is-suggest-hidden { visibility: hidden; }
+/* «Mostra tutto» nella barra della frase: icona e parola */
+.action-show-all { flex-direction: column; gap: 2px; border-color: var(--suggest); border-width: 3px; }
+.action-show-all .action-icon { font-size: clamp(22px, 3vw, 30px); }
+.action-show-all .action-text { font-size: 12px; font-weight: 700; line-height: 1.1; text-align: center; }
+/* Esempi degli stili nelle impostazioni */
+.suggest-sample-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.suggest-sample-tile.is-suggest-faded { opacity: 0.3; }
+.suggest-sample-tile.is-suggest-hidden { visibility: hidden; }
 .suggest-sample { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .suggest-sample-tile {
   display: inline-flex; align-items: center; justify-content: center; flex: none;

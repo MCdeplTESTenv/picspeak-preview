@@ -488,25 +488,106 @@
 
   // ---------- Categoria «Previsione» ----------
 
+  const STYLE_KEYS = { outline: 'styleOutline', graded: 'styleGraded', fade: 'styleFade', only: 'styleOnly' };
+
+  async function changeSuggest(changes) {
+    await predict.setSettings(changes);
+    app.applySuggestions();
+    ui.render();
+  }
+
   function renderSuggestSection() {
     const s = predict.settings;
     const wrap = ui.section('secSuggestTitle', 'secSuggestHelp');
     wrap.append(ui.settingRow('optSuggest', 'optSuggestHelp', ui.segmented(
       [['off', 'valNo'], ['on', 'valYes']], s.suggest ? 'on' : 'off',
-      async (value) => { await predict.setSettings({ suggest: value === 'on' }); app.applySuggestions(); ui.render(); },
+      (value) => changeSuggest({ suggest: value === 'on' }),
     )));
     if (s.suggest) {
+      wrap.append(ui.settingRow('optSuggestStyle', 'optSuggestStyleHelp', ui.segmented(
+        predict.STYLES.map((style) => [style, STYLE_KEYS[style]]), s.style,
+        // Il contorno semplice va da 1 a 3 tessere, gli altri stili da 3 a 10
+        (style) => changeSuggest({
+          style,
+          count: style === 'outline' ? Math.min(s.count, 3) : Math.max(s.count, 3),
+        }),
+      )));
+      const widthKeys = { thin: 'widthThin', medium: 'widthMedium', thick: 'widthThick' };
+      wrap.append(ui.settingRow('optSuggestWidth', 'optSuggestWidthHelp', ui.segmented(
+        predict.WIDTHS.map((w) => [w, widthKeys[w]]), s.width, (width) => changeSuggest({ width }),
+      )));
+      const colorKeys = { blue: 'colorBlue', yellow: 'colorYellow', green: 'colorGreen', orange: 'colorOrange', purple: 'colorPurple' };
+      const colors = ui.segmented(predict.COLORS.map((c) => [c, colorKeys[c]]), s.color, (color) => changeSuggest({ color }));
+      // Un pallino del colore davanti a ogni nome
+      colors.querySelectorAll('button').forEach((btn, i) => btn.prepend(el('span', `suggest-swatch suggest-swatch-${predict.COLORS[i]}`)));
+      wrap.append(ui.settingRow('optSuggestColor', 'optSuggestColorHelp', colors));
+      const counts = s.style === 'outline' ? ['1', '2', '3'] : ['3', '5', '10'];
       wrap.append(ui.settingRow('optSuggestCount', 'optSuggestCountHelp', ui.segmented(
-        [['1', 'val1'], ['2', 'val2'], ['3', 'val3']], String(s.count),
-        async (value) => { await predict.setSettings({ count: Number(value) }); app.applySuggestions(); ui.render(); },
+        counts.map((n) => [n, `val${n}`]), String(s.count),
+        (value) => changeSuggest({ count: Number(value) }),
       )));
     }
-    // Esempio dell'aspetto della tessera evidenziata
+    // Esempio dell'aspetto con lo stile scelto: tre tessere, dalla più usata a una non suggerita
     const sample = el('div', 'suggest-sample');
-    const tile = el('span', 'suggest-sample-tile is-suggested', t('suggestSample'));
-    sample.append(tile, el('small', null, t('suggestSampleHelp')));
+    const row = el('div', 'suggest-sample-row');
+    const style = s.style;
+    [1, 0.5, null].forEach((strength) => {
+      const tile = el('span', 'suggest-sample-tile', t('suggestSample'));
+      if (strength !== null) {
+        tile.classList.add('is-suggested');
+        if (style === 'graded') tile.style.setProperty('--suggest-alpha', String(0.25 + 0.75 * strength));
+      } else if (style === 'fade') tile.classList.add('is-suggest-faded');
+      else if (style === 'only') tile.classList.add('is-suggest-hidden');
+      row.append(tile);
+    });
+    sample.append(row, el('small', null, t('suggestSampleHelp')));
     wrap.append(sample);
   }
+
+  function habitsMessage(error) {
+    const key = error instanceof predict.CsvError ? `habitsError_${error.message}` : 'tplError_generic';
+    return t(key) === key ? t('tplError_generic') : t(key);
+  }
+
+  function exportHabits() {
+    const blob = new Blob([predict.exportCsv(i18n.language)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = el('a');
+    link.href = url;
+    link.download = `PicSpeak-${i18n.language === 'it' ? 'abitudini' : 'habits'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.rel = 'noopener';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  function importHabits() {
+    const input = el('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt,text/csv,text/plain';
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      try {
+        const { rows, skipped } = await predict.readCsvFile(file);
+        const mode = await choose(format('habitsImportTitle', { n: rows.length }), t('habitsImportHelp'), [
+          { value: 'merge', label: t('habitsImportMerge'), help: t('habitsImportMergeHelp'), primary: true },
+          { value: 'replace', label: t('habitsImportReplace'), help: t('habitsImportReplaceHelp'), danger: true },
+        ]);
+        if (mode !== 'merge' && mode !== 'replace') return;
+        const n = await predict.importRows(rows, mode);
+        habitsNotice = { text: skipped ? format('habitsImportedSkipped', { n, skipped }) : format('habitsImported', { n }) };
+      } catch (error) {
+        habitsNotice = { text: habitsMessage(error), error: true };
+      }
+      app.applySuggestions();
+      ui.render();
+    });
+    input.click();
+  }
+
+  let habitsNotice = null;
 
   function renderHabitsSection() {
     const s = predict.settings;
@@ -535,6 +616,20 @@
     clear.classList.add('dlg-btn-danger');
     clear.disabled = !stats.pairs;
     wrap.append(clear);
+
+    // File CSV modificabile dal terapista
+    const file = ui.section('habitsFileTitle', 'habitsFileHelp');
+    if (habitsNotice) {
+      const box = el('p', `tpl-status${habitsNotice.error ? ' is-error' : ''}`, habitsNotice.text);
+      box.setAttribute('role', 'status');
+      file.append(box);
+      habitsNotice = null;
+    }
+    const tools = el('div', 'tpl-tools');
+    const exp = ui.button(t('habitsExport'), exportHabits);
+    exp.disabled = !stats.pairs;
+    tools.append(exp, ui.button(t('habitsImport'), importHabits));
+    file.append(tools);
   }
 
   function renderHowSection() {

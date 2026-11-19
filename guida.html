@@ -591,12 +591,35 @@
       </figure>
       <ol class="steps">
         <li>Mettete <strong>Mostra i suggerimenti</strong> su <strong>Sì</strong> (all’inizio è spento).</li>
-        <li>In <strong>Tessere evidenziate</strong> scegliete quante (da 1 a 3).</li>
+        <li>In <strong>Stile dei suggerimenti</strong> scegliete come mostrarli (vedi sotto).</li>
+        <li>In <strong>Spessore del contorno</strong> e <strong>Colore del contorno</strong> regolate il bordo: più spesso
+          si vede meglio; scegliete un colore diverso da quelli delle tessere.</li>
+        <li>In <strong>Tessere evidenziate</strong> scegliete quante: da 1 a 3 con il contorno semplice, 3, 5 o 10 con gli
+          altri stili.</li>
         <li>Lasciate acceso <strong>Registra le abitudini</strong> (lo è fin dall’inizio): i suggerimenti compaiono dopo che
           una sequenza è stata usata almeno un paio di volte di recente.</li>
       </ol>
       <figure class="shot shot-narrow">
-        <img src="guida/impostazioni-previsione.webp" width="764" height="1018" alt="La sezione Suggerimenti con l’interruttore Mostra i suggerimenti, la scelta da 1 a 3 tessere evidenziate e un esempio di tessera con il bordo blu." loading="lazy">
+        <img src="guida/impostazioni-previsione.webp" width="744" height="2458" alt="La sezione Suggerimenti: Mostra i suggerimenti, Stile dei suggerimenti (Contorno, Sfumato, Trasparenza, Solo suggerite), spessore e colore del contorno, numero di tessere e tre tessere di esempio con il bordo sempre più leggero." loading="lazy">
+      </figure>
+      <table class="map">
+        <caption>Gli stili dei suggerimenti</caption>
+        <tbody>
+          <tr><th scope="row">Contorno</th><td>un bordo intorno alle tessere suggerite (da 1 a 3).</td></tr>
+          <tr><th scope="row">Sfumato</th><td>fino a 10 tessere: il bordo è più deciso per le parole usate più spesso e
+            più leggero per le altre, così disturba meno.</td></tr>
+          <tr><th scope="row">Trasparenza</th><td>le tessere suggerite hanno il bordo, tutte le altre diventano chiare
+            ma restano al loro posto e si possono toccare.</td></tr>
+          <tr><th scope="row">Solo suggerite</th><td>si vedono solo le tessere suggerite; le altre spariscono ma lasciano
+            vuoto il loro posto, quindi nessuna tessera si sposta né cambia misura. Il pulsante <strong>Tutto</strong>
+            accanto alla frase mostra di nuovo la scheda intera fino alla parola successiva. Se non ci sono suggerimenti
+            abbastanza sicuri, la scheda resta intera.</td></tr>
+        </tbody>
+      </table>
+      <figure class="shot">
+        <img src="guida/solo-suggerite.webp" width="1180" height="820" alt="Stile Solo suggerite: dopo «io voglio» restano visibili solo Mangiare, Bere e Giocare, al loro solito posto; in alto a destra il pulsante Tutto." loading="lazy">
+        <figcaption>«Solo suggerite»: dopo «io voglio» restano <strong>Mangiare</strong>, <strong>Bere</strong> e
+          <strong>Giocare</strong>, al loro solito posto. <strong>Tutto</strong> mostra di nuovo la scheda intera.</figcaption>
       </figure>
       <ul>
         <li>Si registrano solo le tessere toccate in comunicazione, mai durante la modifica.</li>
@@ -605,6 +628,20 @@
         <li>Nella stessa pagina vedete quante parole sono state registrate e potete <strong>cancellare le abitudini
           registrate</strong>.</li>
       </ul>
+      <h4>Preparare le parole prioritarie (per il terapista)</h4>
+      <ol class="steps">
+        <li>In <strong>Esporta e importa le abitudini</strong> toccate <strong>Esporta le abitudini (CSV)</strong>: si
+          scarica un file che si apre con Excel, Numbers o Fogli Google.</li>
+        <li>Ogni riga ha tre colonne: <strong>parola precedente</strong>, <strong>parola</strong>, <strong>peso</strong>.
+          «(inizio)» vuol dire inizio della frase. Più alto è il peso, prima viene suggerita la parola; un suggerimento
+          compare da circa 1,5 in su. Peso 0 toglie la coppia.</li>
+        <li>Aggiungete o cambiate le righe e salvate il file sempre come CSV.</li>
+        <li>Toccate <strong>Importa abitudini da file</strong> e scegliete <strong>Aggiungi alle attuali</strong> oppure
+          <strong>Sostituisci tutto</strong>.</li>
+      </ol>
+      <p class="tip">Le parole si scrivono come sulle tessere (maiuscole e minuscole non contano). Anche i pesi importati
+        si affievoliscono col tempo come le abitudini vere, se il bambino non usa quelle parole.</p>
+      <p class="warn">Il file contiene le abitudini del bambino: condividetelo solo con persone di fiducia.</p>
       <p class="tip">Tutto viene calcolato su questo dispositivo, anche senza internet: nessun dato viene inviato.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>

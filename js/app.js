@@ -52,6 +52,7 @@
     clear: document.getElementById('btn-clear'),
     home: document.getElementById('btn-home'),
     crumbs: document.getElementById('crumbs'),
+    showAll: document.getElementById('btn-show-all'),
     trail: document.getElementById('crumb-trail'),
     up: document.getElementById('btn-up'),
   };
@@ -277,8 +278,19 @@
     return cells.some((c) => c.kind === 'folder' && folderContains(c.targetPageId, word, depth - 1, visited));
   }
 
+  const SUGGEST_CLASSES = ['is-suggested', 'is-suggest-faded', 'is-suggest-hidden'];
+
+  /*
+   * Stili: «outline» contorno; «graded» contorno sempre più tenue per le parole meno frequenti;
+   * «fade» contorno e tessere non suggerite trasparenti; «only» si vedono solo le suggerite (le altre lasciano
+   * vuoto il loro posto, così nessuna tessera si sposta) con il pulsante «Mostra tutto» per tornare alla scheda intera.
+   */
   function applySuggestions() {
-    el.grid.querySelectorAll('.is-suggested').forEach((node) => node.classList.remove('is-suggested'));
+    el.grid.querySelectorAll('.symbol-cell').forEach((node) => {
+      node.classList.remove(...SUGGEST_CLASSES);
+      node.style.removeProperty('--suggest-alpha');
+    });
+    if (el.showAll) el.showAll.hidden = true;
     const predict = window.PicSpeak.predict;
     // Solo in comunicazione (o nell'anteprima): mentre si modificano le schede non si evidenzia nulla
     if (!predict || !predict.settings.suggest || (state.mode === 'adult' && !state.preview)) return;
@@ -287,18 +299,33 @@
     const prevItem = state.sentence[state.sentence.length - 1] || null;
     const list = predict.candidates(prevItem);
     if (!list.length) return;
+    const { style } = predict.settings;
+    // Il contorno semplice resta al massimo a 3 tessere; gli altri stili arrivano fino a 10
+    const max = style === 'outline' ? Math.min(predict.settings.count, 3) : predict.settings.count;
     const visible = data.orderedCells(page).filter((c) => c.kind !== 'empty');
-    const marked = new Set();
-    const max = predict.settings.count;
-    for (const { word } of list) {
+    const marked = new Map(); // id tessera → punteggio
+    for (const { word, score } of list) {
       if (marked.size >= max) break;
       let target = visible.find((c) => c.kind !== 'folder' && predict.wordKey(c.label) === word);
       if (!target) target = visible.find((c) => c.kind === 'folder' && folderContains(c.targetPageId, word, 2));
-      if (target) marked.add(target.id);
+      if (target && !marked.has(target.id)) marked.set(target.id, score);
     }
+    if (!marked.size) return;
+    const top = Math.max(...marked.values());
+    const filter = style === 'only' && !state.showAll;
     el.grid.querySelectorAll('.symbol-cell[data-id]').forEach((node) => {
-      if (marked.has(node.dataset.id)) node.classList.add('is-suggested');
+      const score = marked.get(node.dataset.id);
+      if (score !== undefined) {
+        node.classList.add('is-suggested');
+        // Sfumato: 1 per la parola più frequente, fino a 0,25 per le meno frequenti
+        if (style === 'graded') node.style.setProperty('--suggest-alpha', (0.25 + 0.75 * (score / top)).toFixed(2));
+      } else if (style === 'fade') {
+        node.classList.add('is-suggest-faded');
+      } else if (filter) {
+        node.classList.add('is-suggest-hidden');
+      }
     });
+    if (filter && el.showAll) el.showAll.hidden = false;
   }
 
   // Sceglie il numero di colonne che rende le celle più grandi possibile
@@ -504,6 +531,8 @@
     el.clear.disabled = empty;
     // Mantiene visibile l'ultimo simbolo aggiunto
     el.strip.scrollLeft = el.strip.scrollWidth;
+    // Dopo ogni parola la vista «solo suggerite» riparte (il pulsante «Mostra tutto» vale fino alla prossima parola)
+    state.showAll = false;
     if (state.ready) applySuggestions();
   }
 
@@ -822,6 +851,13 @@
       renderSentence();
     });
     el.home.addEventListener('click', () => goToPage(data.homePageId));
+    // «Mostra tutto»: torna alla scheda intera fino alla prossima parola scelta
+    if (el.showAll) {
+      el.showAll.addEventListener('click', () => {
+        state.showAll = true;
+        applySuggestions();
+      });
+    }
     el.up.addEventListener('click', () => {
       flash(el.up);
       goUp();
