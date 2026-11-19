@@ -136,6 +136,14 @@
         if (item.targetPageId) button.dataset.folder = item.targetPageId;
       }
       button.append(buildFace(item, 'size-cell'));
+      // In modifica un lucchetto nell'angolo indica la posizione bloccata (visibile solo se la tessera
+      // è bloccata o se è attivo il blocco di tutte le tessere, vedi css/style.css)
+      if (editing) {
+        const lock = document.createElement('span');
+        lock.className = 'lock-badge';
+        lock.setAttribute('aria-hidden', 'true');
+        button.append(lock);
+      }
       // In modifica la cartella si apre col tocco; la matita nell'angolo apre le sue impostazioni
       if (editing && item.kind === 'folder') {
         const pencil = document.createElement('span');

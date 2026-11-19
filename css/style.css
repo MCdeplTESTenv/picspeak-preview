@@ -1339,6 +1339,21 @@ body > .adult-bar { order: 0; }
 .mode-adult .symbol-cell { position: relative; }
 .symbol-cell.is-hidden-cell { opacity: 0.4; border-style: dashed !important; }
 .symbol-cell.is-locked-cell::after { box-shadow: none; }
+/* Lucchetto delle tessere con la posizione bloccata (solo in modifica, angolo opposto alla matita) */
+.lock-badge { display: none; }
+.mode-adult .symbol-cell.is-locked-cell .lock-badge,
+[data-lock-positions="on"] .mode-adult .symbol-cell .lock-badge {
+  display: block;
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(60, 64, 72, 0.9) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E") center / 13px no-repeat;
+  z-index: 1;
+  pointer-events: none;
+}
 .symbol-cell.add-cell {
   background: transparent !important;
   border: 3px dashed #b0b6bf !important;

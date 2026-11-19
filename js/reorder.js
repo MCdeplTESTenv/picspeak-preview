@@ -6,11 +6,14 @@
  * Un tocco breve continua ad aprire la modifica della tessera (editor.js).
  * Lasciando la tessera al centro di una cartella la si mette dentro; lasciandola sulla freccia «su»
  * o su una voce del percorso in alto (HOME › cartella) la si porta fuori, in quella pagina.
+ * Tenendo premuta una tessera con la posizione bloccata (es. nelle schede pronte) si apre una finestra che
+ * lo spiega e permette di togliere il blocco, invece di non succedere nulla.
  */
 (function () {
   'use strict';
 
-  const { data, app, i18n } = window.PicSpeak;
+  const { data, app, i18n, storage } = window.PicSpeak;
+  const LOCK_KEY = 'lockPositions'; // stessa chiave di settings-boards.js
 
   const HOLD_MS = 500; // tempo di pressione per staccare la tessera
   const MOVE_TOLERANCE = 10; // px: oltre questo movimento prima del tempo è uno scorrimento, non una presa
@@ -21,7 +24,7 @@
 
   const grid = document.getElementById('symbol-grid');
 
-  let pending = null; // pressione in attesa: { pointerId, cell, x, y, timer }
+  let pending = null; // pressione in attesa: { pointerId, cell, x, y, timer, locked }
   let drag = null; // trascinamento in corso: { pointerId, cell, ghost, offsetX, offsetY, x, y, frame }
   let suppressClick = false;
 
@@ -45,15 +48,84 @@
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const cell = event.target.closest('.symbol-cell[data-id]');
     if (!cell || !grid.contains(cell)) return;
-    // Posizioni bloccate (per tutte le tessere o per questa tessera): niente spostamento
-    if (document.documentElement.dataset.lockPositions === 'on' || cell.classList.contains('is-locked-cell')) return;
+    // Posizioni bloccate (per tutte le tessere o per questa tessera): niente spostamento, ma tenendo
+    // premuto si spiega perché e si può togliere il blocco
+    const locked = allLocked() || cell.classList.contains('is-locked-cell');
     pending = {
       pointerId: event.pointerId,
       cell,
       x: event.clientX,
       y: event.clientY,
-      timer: setTimeout(() => startDrag(), HOLD_MS),
+      locked,
+      timer: setTimeout(() => (locked ? explainLock() : startDrag()), HOLD_MS),
     };
+  }
+
+  function allLocked() {
+    return document.documentElement.dataset.lockPositions === 'on';
+  }
+
+  // Pressione lunga su una tessera bloccata: finestra con la spiegazione e i modi per sbloccarla
+  async function explainLock() {
+    if (!pending) return;
+    const { cell } = pending;
+    pending = null;
+    const ui = window.PicSpeak.settingsUi;
+    const pageId = app.pageId;
+    const page = data.page(pageId);
+    if (!ui || !page || !cell.isConnected || !isEditing()) return;
+    const cellId = cell.dataset.id;
+    const record = page.cells.find((c) => c.id === cellId);
+    if (!record) return;
+    // Il clic che segue il rilascio non deve aprire anche la modifica della tessera
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 400);
+    const t = i18n.t;
+    const options = [];
+    if (allLocked()) options.push({ value: 'all', label: t('unlockAll'), help: t('unlockAllHelp') });
+    if (record.locked) {
+      options.push({ value: 'cell', label: t('unlockCell'), help: t('unlockCellHelp') });
+      if (page.cells.filter((c) => c.locked).length > 1) {
+        options.push({ value: 'page', label: t('unlockPage'), help: t('unlockPageHelp') });
+      }
+    }
+    if (options.length) options[0].primary = true;
+    const choice = await ui.runPanelDialog({
+      title: t('lockedTitle'),
+      help: allLocked() ? t('lockedAllHelp') : t('lockedHelp'),
+      className: 'choice-dialog',
+      build(close) {
+        const box = document.createElement('div');
+        box.className = 'choice-options';
+        options.forEach((opt) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `choice-option${opt.primary ? ' is-primary' : ''}`;
+          const strong = document.createElement('strong');
+          strong.textContent = opt.label;
+          const small = document.createElement('small');
+          small.textContent = opt.help;
+          btn.append(strong, small);
+          btn.addEventListener('click', () => close(opt.value));
+          box.append(btn);
+        });
+        return box;
+      },
+    });
+    if (!choice || !isEditing()) return;
+    if (choice === 'all') {
+      document.documentElement.dataset.lockPositions = 'off';
+      await storage.set(LOCK_KEY, 'off');
+    } else if (choice === 'cell') {
+      await data.updateCell(pageId, cellId, { locked: false });
+    } else if (choice === 'page') {
+      const ids = page.cells.filter((c) => c.locked).map((c) => c.id);
+      for (const id of ids) await data.updateCell(pageId, id, { locked: false }); // eslint-disable-line no-await-in-loop
+    }
+    app.renderGrid();
+    const current = data.page(pageId);
+    const after = current && current.cells.find((c) => c.id === cellId);
+    if (!allLocked() && after && !after.locked) app.notice(t('unlockedNotice'));
   }
 
   function startDrag() {
