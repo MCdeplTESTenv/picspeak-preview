@@ -68,6 +68,15 @@
     }
   }
 
+  async function remove(key) {
+    memory.delete(key);
+    try {
+      await run(SETTINGS, 'readwrite', (store) => { store.delete(key); });
+    } catch (error) {
+      // Nulla da fare
+    }
+  }
+
   // ---------- Archivi del modello dati (record con campo "id") ----------
 
   async function getRecord(storeName, id) {
@@ -115,6 +124,6 @@
 
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
-    get, set, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
+    get, set, remove, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
   };
 })();
