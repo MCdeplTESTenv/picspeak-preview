@@ -24,13 +24,13 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const MIN_SCORE = 1.5; // sotto questo valore (circa due usi recenti) non si suggerisce nulla
   const SETTINGS_KEY = 'prediction';
-  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', width: 'medium', color: 'blue' };
+  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', dim: false, width: 'medium', color: 'blue' };
   // Spessore e colore del contorno dei suggerimenti
   const WIDTHS = ['thin', 'medium', 'thick'];
   const COLORS = ['blue', 'yellow', 'green', 'orange', 'purple'];
   // Stili dei suggerimenti: contorno, contorno sfumato secondo la frequenza, trasparenza delle altre tessere,
   // solo le tessere suggerite (le altre lasciano vuoto il loro posto)
-  const STYLES = ['outline', 'graded', 'fade', 'only'];
+  const STYLES = ['outline', 'graded', 'only'];
   const COUNTS = [1, 2, 3, 5, 10];
   // File CSV delle abitudini: limiti per l'importazione
   const CSV_MAX_BYTES = 2 * 1024 * 1024;
@@ -72,7 +72,10 @@
     settings.collect = settings.collect !== false;
     settings.suggest = settings.suggest === true;
     settings.count = COUNTS.includes(settings.count) ? settings.count : DEFAULTS.count;
+    // Vecchio stile «fade» (trasparenza da sola): ora è contorno + interruttore «altre tessere trasparenti»
+    if (settings.style === 'fade') { settings.style = 'outline'; settings.dim = true; }
     settings.style = STYLES.includes(settings.style) ? settings.style : DEFAULTS.style;
+    settings.dim = settings.dim === true;
     settings.width = WIDTHS.includes(settings.width) ? settings.width : DEFAULTS.width;
     settings.color = COLORS.includes(settings.color) ? settings.color : DEFAULTS.color;
     applyLook();

@@ -282,8 +282,9 @@
 
   /*
    * Stili: «outline» contorno; «graded» contorno sempre più tenue per le parole meno frequenti;
-   * «fade» contorno e tessere non suggerite trasparenti; «only» si vedono solo le suggerite (le altre lasciano
-   * vuoto il loro posto, così nessuna tessera si sposta) con il pulsante «Mostra tutto» per tornare alla scheda intera.
+   * «only» si vedono solo le suggerite (le altre lasciano vuoto il loro posto, così nessuna tessera si sposta)
+   * con il pulsante «Mostra tutto» per tornare alla scheda intera.
+   * L'interruttore «dim» (contorno o sfumato) rende trasparenti le tessere non suggerite: gli effetti si sommano.
    */
   function applySuggestions() {
     el.grid.querySelectorAll('.symbol-cell').forEach((node) => {
@@ -299,7 +300,7 @@
     const prevItem = state.sentence[state.sentence.length - 1] || null;
     const list = predict.candidates(prevItem);
     if (!list.length) return;
-    const { style } = predict.settings;
+    const { style, dim } = predict.settings;
     // Il contorno semplice resta al massimo a 3 tessere; gli altri stili arrivano fino a 10
     const max = style === 'outline' ? Math.min(predict.settings.count, 3) : predict.settings.count;
     const visible = data.orderedCells(page).filter((c) => c.kind !== 'empty');
@@ -319,7 +320,7 @@
         node.classList.add('is-suggested');
         // Sfumato: 1 per la parola più frequente, fino a 0,25 per le meno frequenti
         if (style === 'graded') node.style.setProperty('--suggest-alpha', (0.25 + 0.75 * (score / top)).toFixed(2));
-      } else if (style === 'fade') {
+      } else if (dim && style !== 'only') {
         node.classList.add('is-suggest-faded');
       } else if (filter) {
         node.classList.add('is-suggest-hidden');

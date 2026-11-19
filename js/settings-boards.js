@@ -488,7 +488,7 @@
 
   // ---------- Categoria «Previsione» ----------
 
-  const STYLE_KEYS = { outline: 'styleOutline', graded: 'styleGraded', fade: 'styleFade', only: 'styleOnly' };
+  const STYLE_KEYS = { outline: 'styleOutline', graded: 'styleGraded', only: 'styleOnly' };
 
   async function changeSuggest(changes) {
     await predict.setSettings(changes);
@@ -512,6 +512,13 @@
           count: style === 'outline' ? Math.min(s.count, 3) : Math.max(s.count, 3),
         }),
       )));
+      // Trasparenza delle altre tessere: si combina con contorno e sfumato (con «solo suggerite» non serve)
+      if (s.style !== 'only') {
+        wrap.append(ui.settingRow('optSuggestDim', 'optSuggestDimHelp', ui.segmented(
+          [['off', 'valNo'], ['on', 'valYes']], s.dim ? 'on' : 'off',
+          (value) => changeSuggest({ dim: value === 'on' }),
+        )));
+      }
       const widthKeys = { thin: 'widthThin', medium: 'widthMedium', thick: 'widthThick' };
       wrap.append(ui.settingRow('optSuggestWidth', 'optSuggestWidthHelp', ui.segmented(
         predict.WIDTHS.map((w) => [w, widthKeys[w]]), s.width, (width) => changeSuggest({ width }),
@@ -536,7 +543,7 @@
       if (strength !== null) {
         tile.classList.add('is-suggested');
         if (style === 'graded') tile.style.setProperty('--suggest-alpha', String(0.25 + 0.75 * strength));
-      } else if (style === 'fade') tile.classList.add('is-suggest-faded');
+      } else if (s.dim && style !== 'only') tile.classList.add('is-suggest-faded');
       else if (style === 'only') tile.classList.add('is-suggest-hidden');
       row.append(tile);
     });
