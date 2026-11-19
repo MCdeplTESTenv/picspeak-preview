@@ -286,6 +286,14 @@
     return status[id];
   }
 
+  // Toglie dal dispositivo tutti i pacchetti e gli indici scaricati (per «Cancella tutto»)
+  async function clearDownloads() {
+    PACK_IDS.forEach((id) => packIndexes.delete(id));
+    ONLINE_IDS.forEach((id) => sourceIndexes.delete(id));
+    if (!('caches' in window)) return;
+    await Promise.all([...PACK_IDS, ...ONLINE_IDS].map((id) => caches.delete(PACK_CACHE_PREFIX + id)));
+  }
+
   async function removePack(id) {
     packIndexes.delete(id);
     if ('caches' in window) await caches.delete(PACK_CACHE_PREFIX + id);
@@ -632,6 +640,7 @@
     activeSources,
     loadSourceIndex,
     removeSource,
+    clearDownloads,
     search,
     acquire,
     packStatus,

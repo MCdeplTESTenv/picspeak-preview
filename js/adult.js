@@ -154,7 +154,7 @@
       }
       const primary = document.createElement('button');
       primary.type = 'submit';
-      primary.className = 'dlg-btn dlg-btn-primary';
+      primary.className = cfg.destructive ? 'dlg-btn dlg-btn-primary dlg-btn-destructive' : 'dlg-btn dlg-btn-primary';
       primary.textContent = cfg.primary;
       actions.append(primary);
       form.append(actions);

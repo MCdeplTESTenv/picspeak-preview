@@ -77,6 +77,22 @@
     }
   }
 
+  // Cancella tutto il contenuto di tutti gli archivi (impostazioni, PIN, schede, immagini, abitudini…).
+  // Si svuotano gli archivi invece di eliminare il database: funziona anche con l'app aperta in un'altra scheda.
+  async function clearAll() {
+    memory.clear();
+    memoryStores.forEach((store) => store.clear());
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const names = [SETTINGS, ...RECORD_STORES].filter((name) => db.objectStoreNames.contains(name));
+      const tx = db.transaction(names, 'readwrite');
+      names.forEach((name) => tx.objectStore(name).clear());
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
   // ---------- Archivi del modello dati (record con campo "id") ----------
 
   async function getRecord(storeName, id) {
@@ -124,6 +140,6 @@
 
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
-    get, set, remove, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
+    name: DB_NAME, get, set, remove, clearAll, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
   };
 })();

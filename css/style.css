@@ -1372,6 +1372,8 @@ body > .adult-bar { order: 0; }
 .editor-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .editor-option { display: flex; flex-direction: column; gap: 6px; }
 .dlg-btn-danger { color: #b3261e; border-color: #e3b4b1; }
+/* Pulsante che conferma una cancellazione definitiva */
+.dlg-btn-primary.dlg-btn-destructive { background: #b3261e; border-color: #b3261e; color: #fff; }
 /* Campi dell'editor: testo come scritto (il maiuscolo dei campi PIN/codice non si applica qui) */
 .editor-field input[type="text"] { text-transform: none; letter-spacing: normal; font-size: 18px; }
 .editor-field input[type="text"]::placeholder { text-transform: none; color: #9aa0a8; }
