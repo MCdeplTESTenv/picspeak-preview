@@ -9,7 +9,7 @@
 (function () {
   'use strict';
 
-  const DB_NAME = 'picspeak';
+  const DB_NAME = 'picspeak-anteprima';
   const DB_VERSION = 2;
   const SETTINGS = 'settings';
   const RECORD_STORES = ['profiles', 'pages', 'images', 'contexts', 'usage', 'audio'];
