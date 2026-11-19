@@ -3,7 +3,7 @@
  * Strategia "prima la rete": online si riceve sempre l'ultima versione,
  * offline si usa la copia salvata. Cambiare CACHE_VERSION quando si aggiungono file.
  */
-const CACHE_VERSION = 'picspeak-v23';
+const CACHE_VERSION = 'picspeak-v24';
 // Pacchetti di simboli scaricati dall'adulto (Mulberry, OpenMoji) e indici delle fonti online (Twemoji):
 // cache separate, mai cancellate dagli aggiornamenti
 const PACK_CACHE_PREFIX = 'picspeak-pack-';
@@ -71,6 +71,8 @@ const APP_FILES = [
   'templates/primi-passi-16.json',
   'templates/base-36.json',
   'templates/base-60.json',
+  'templates/base-36-alto.json',
+  'templates/base-60-alto.json',
   // Dizionario italiano → inglese per la ricerca dei simboli (funziona anche offline)
   'symbols/it-en.json',
   'icons/icon-192.png',
