@@ -39,6 +39,22 @@
     return dbPromise;
   }
 
+  /*
+   * Chiede al browser di non cancellare da solo i dati di PicSpeak quando lo spazio scarseggia
+   * (archiviazione «persistente»). Safari e Chrome decidono da soli senza finestre (Safari la concede in genere
+   * all'app aggiunta alla schermata Home); Firefox mostra una richiesta di permesso: per questo si chiede
+   * all'ingresso nella modalità adulto, mai davanti al bambino. Se non è disponibile non cambia nulla.
+   */
+  function requestPersistence() {
+    try {
+      const sm = navigator.storage;
+      if (!sm || typeof sm.persist !== 'function' || typeof sm.persisted !== 'function') return;
+      sm.persisted().then((already) => (already ? true : sm.persist())).catch(() => {});
+    } catch (error) {
+      // Nulla da fare
+    }
+  }
+
   function run(storeName, mode, action) {
     return openDb().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, mode);
@@ -140,6 +156,6 @@
 
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
-    name: DB_NAME, get, set, remove, clearAll, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
+    name: DB_NAME, get, set, remove, clearAll, requestPersistence, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
   };
 })();

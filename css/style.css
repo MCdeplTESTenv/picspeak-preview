@@ -1628,7 +1628,7 @@ body > .adult-bar { order: 0; }
 .suggest-swatch-orange { background: rgb(232 106 16); }
 .suggest-swatch-purple { background: rgb(128 64 200); }
 /* Trasparenza: le tessere non suggerite restano al loro posto e toccabili, ma più chiare */
-.symbol-cell.is-suggest-faded { opacity: 0.3; }
+.symbol-cell.is-suggest-faded { opacity: var(--suggest-fade-opacity, 0.5); }
 /* Solo suggerite: le altre tessere lasciano vuoto il loro posto (nessuna tessera si sposta) */
 .symbol-cell.is-suggest-hidden { visibility: hidden; }
 /* «Mostra tutto» nella barra della frase: icona e parola */
@@ -1637,7 +1637,7 @@ body > .adult-bar { order: 0; }
 .action-show-all .action-text { font-size: 12px; font-weight: 700; line-height: 1.1; text-align: center; }
 /* Esempi degli stili nelle impostazioni */
 .suggest-sample-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.suggest-sample-tile.is-suggest-faded { opacity: 0.3; }
+.suggest-sample-tile.is-suggest-faded { opacity: var(--suggest-fade-opacity, 0.5); }
 .suggest-sample-tile.is-suggest-hidden { visibility: hidden; }
 .suggest-sample { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .suggest-sample-tile {
@@ -2019,4 +2019,49 @@ body > .adult-bar { order: 0; }
 @media (max-width: 520px) {
   [data-sentence-size="l"] .sentence-strip { min-height: calc(var(--bar-height) - 2 * var(--gap)); }
   [data-sentence-size="xl"] .sentence-strip { min-height: calc(var(--bar-height) - 2 * var(--gap)); }
+}
+
+/* =====================================================================
+ * Contesti della previsione (Impostazioni → Previsione → Contesti)
+ * ===================================================================== */
+.ctx-list, .ctx-pairs { list-style: none; margin: 0; padding: 0; width: calc(100% - 32px); display: flex; flex-direction: column; gap: 8px; }
+.ctx-item, .ctx-pair {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid #d8dbe0; border-radius: 10px; background: #ffffff;
+}
+.ctx-item.is-active { border-color: var(--focus); border-width: 2px; padding: 9px 11px; }
+.ctx-text, .ctx-pair-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.ctx-name { font-size: 16px; overflow-wrap: anywhere; }
+.ctx-text small, .ctx-pair-text small { color: #5b616b; font-size: 13px; line-height: 1.35; }
+.ctx-state { flex: none; font-size: 13px; font-weight: 600; color: #3a3f47; padding: 4px 10px; border-radius: 999px; background: #eceef1; }
+.ctx-state.is-active { background: #e8f0fe; color: #17325c; }
+.ctx-item .dlg-btn, .ctx-pair .dlg-btn { min-height: 44px; flex: none; }
+.ctx-pair-words { font-size: 15px; text-transform: uppercase; overflow-wrap: anywhere; }
+.ctx-pair-actions { display: flex; gap: 8px; flex: none; }
+.ctx-pair.is-removed { background: #f6f7f8; }
+.ctx-pair.is-removed .ctx-pair-words { text-decoration: line-through; color: #6b717b; }
+.ctx-pair.is-edited:not(.is-removed) { border-left: 4px solid var(--focus); }
+.settings-section > .ctx-field, .settings-section > .ctx-pair-fields { width: calc(100% - 32px); }
+.ctx-field .name-input { width: 100%; box-sizing: border-box; font-weight: 400; }
+.ctx-pair-fields { display: flex; gap: 12px; flex-wrap: wrap; }
+.ctx-pair-fields > .ctx-field { flex: 1 1 160px; width: auto; }
+.ctx-date { display: flex; gap: 8px; }
+.ctx-date select:first-child { flex: 0 0 76px; }
+.ctx-date select:last-child { flex: 1 1 auto; }
+.ctx-days { gap: 6px; }
+.ctx-day { min-width: 52px; min-height: 44px; text-transform: capitalize; }
+.ctx-day[aria-pressed="true"] { border-color: var(--focus); background: var(--pressed); font-weight: 700; }
+.settings-section > :is(.ctx-list, .ctx-pairs) { margin-top: 12px; }
+.settings-section > .ctx-list:last-child, .settings-section > .ctx-pairs:last-child { margin-bottom: 16px; }
+
+/* Pulsante del contesto nella barra della modalità adulto */
+.ctx-chip { flex: 0 1 auto; min-width: 0; max-width: 34vw; gap: 4px; overflow: hidden; }
+.ctx-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 700px) {
+  .ctx-chip-label { display: none; }
+  .ctx-chip { max-width: 30vw; }
+}
+/* Telefono stretto: nella barra non c'è posto, il contesto attivo si vede in Impostazioni › Previsione */
+@media (max-width: 440px) {
+  .ctx-chip { display: none; }
 }

@@ -416,6 +416,7 @@
 
   function enterAdult() {
     app.setMode('adult');
+    storage.requestPersistence();
     setTimeout(updateZoomLabel, 0);
     el.adultBar.hidden = false;
     el.lock.hidden = true;
@@ -1487,8 +1488,13 @@
     el.settingsBody.replaceChildren(layout);
   }
 
-  function openSettings() {
+  // categoryId (facoltativo): apre direttamente quella categoria (es. 'prediction' dal pulsante del contesto)
+  function openSettings(categoryId) {
     showPanelOnPhone = false;
+    if (typeof categoryId === 'string' && CATEGORIES.some((cat) => cat.id === categoryId)) {
+      currentCategory = categoryId;
+      showPanelOnPhone = true;
+    }
     renderSettings();
     el.settings.hidden = false;
     document.body.classList.add('settings-open');
@@ -1601,6 +1607,7 @@
     runPanelDialog,
     render: () => { if (!el.settings.hidden) renderSettings(); },
     closeSettings,
+    openSettings,
     // Nuova categoria nel menu delle impostazioni, dopo quella indicata
     addCategory(category, afterId) {
       const index = CATEGORIES.findIndex((cat) => cat.id === afterId);

@@ -96,6 +96,7 @@
               <li><a href="#tocco">Aiutare chi ha tremori o tocca per sbaglio</a></li>
               <li><a href="#frase">Decidere come si comporta la frase</a></li>
               <li><a href="#previsione">Suggerire la parola successiva</a></li>
+              <li><a href="#contesti">Dare più peso alle parole di un momento (contesti)</a></li>
               <li><a href="#aspetto">Cambiare l’aspetto della tabella</a></li>
               <li><a href="#voce">Scegliere la voce</a></li>
             </ul>
@@ -626,6 +627,9 @@
         <li>In <strong>Stile dei suggerimenti</strong> scegliete come mostrarli (vedi sotto).</li>
         <li>Con <strong>Altre tessere trasparenti</strong> su <strong>Sì</strong> le tessere non suggerite diventano chiare:
           si può aggiungere al contorno o allo sfumato, e gli effetti si sommano.</li>
+        <li>Subito sotto, in <strong>Trasparenza</strong>, scegliete quanto devono diventare chiare con i pulsanti
+          <strong>−</strong> e <strong>+</strong>, da 10% a 90% (all’inizio è al 50%): con una percentuale più alta le
+          tessere non suggerite si vedono meno. Le tessere di esempio in fondo alla sezione mostrano subito l’effetto.</li>
         <li>In <strong>Spessore del contorno</strong> e <strong>Colore del contorno</strong> regolate il bordo: più spesso
           si vede meglio; scegliete un colore diverso da quelli delle tessere.</li>
         <li>In <strong>Tessere evidenziate</strong> scegliete quante: da 1 a 3 con il contorno semplice, 3, 5 o 10 con gli
@@ -649,7 +653,9 @@
         </tbody>
       </table>
       <p>Con <strong>Altre tessere trasparenti</strong> le tessere non suggerite diventano chiare ma restano al loro posto
-        e si possono toccare. Insieme allo <strong>Sfumato</strong> le parole più probabili risaltano di più e le altre
+        e si possono toccare; quanto chiare lo decidete voi con <strong>Trasparenza</strong>. Per un bambino che si
+        distrae facilmente può servire una percentuale alta; se invece deve poter trovare anche le altre parole, meglio
+        restare intorno al 50%. Insieme allo <strong>Sfumato</strong> le parole più probabili risaltano di più e le altre
         restano comunque a portata di mano.</p>
       <figure class="shot">
         <img src="guida/sfumato-trasparenza.webp" width="1180" height="820" alt="Sfumato con altre tessere trasparenti: dopo «io voglio» Mangiare, Bere e Giocare hanno il bordo, più deciso per Mangiare; le altre tessere sono chiare." loading="lazy">
@@ -664,25 +670,95 @@
       <ul>
         <li>Si registrano solo le tessere toccate in comunicazione, mai durante la modifica.</li>
         <li>Le abitudini recenti contano di più; quelle vecchie si affievoliscono da sole in qualche settimana (per esempio,
-          finita la vacanza al mare). Conta anche l’ora del giorno.</li>
-        <li>Nella stessa pagina vedete quante parole sono state registrate e potete <strong>cancellare le abitudini
-          registrate</strong>.</li>
+          finita la vacanza al mare). Contano anche l’ora del giorno e i <a href="#contesti">contesti</a>.</li>
+        <li>PicSpeak non registra ogni singolo tocco: per ogni giorno tiene solo quante volte ogni coppia di parole è stata
+          usata in ciascuna ora. Così l’archivio resta leggero anche dopo anni.</li>
+        <li>Nella stessa pagina vedete quante parole sono state registrate, quanti giorni d’uso e quanto spazio occupano,
+          il contesto attivo in quel momento, e potete <strong>cancellare le abitudini registrate</strong> (i contesti
+          restano).</li>
       </ul>
       <h4>Preparare le parole prioritarie (per il terapista)</h4>
       <ol class="steps">
         <li>In <strong>Esporta e importa le abitudini</strong> toccate <strong>Esporta le abitudini (CSV)</strong>: si
           scarica un file che si apre con Excel, Numbers o Fogli Google.</li>
-        <li>Ogni riga ha tre colonne: <strong>parola precedente</strong>, <strong>parola</strong>, <strong>peso</strong>.
-          «(inizio)» vuol dire inizio della frase. Più alto è il peso, prima viene suggerita la parola; un suggerimento
-          compare da circa 1,5 in su. Peso 0 toglie la coppia.</li>
+        <li>Ogni riga ha quattro colonne: <strong>parola precedente</strong>, <strong>parola</strong>, <strong>peso</strong>
+          e <strong>contesto</strong>. «(inizio)» vuol dire inizio della frase. Più alto è il peso, prima viene suggerita la
+          parola; un suggerimento compare da circa 1,5 in su. Peso 0 toglie la coppia.</li>
+        <li>Con la colonna <strong>contesto</strong> vuota la riga vale sempre. Se scrivete il nome di un contesto (per
+          esempio «Scuola»), la riga vale per quel contesto, come se l’aveste cambiata nella sua pagina; il contesto deve
+          già esistere su questo dispositivo. I file con tre colonne, esportati prima, si possono ancora importare.</li>
         <li>Aggiungete o cambiate le righe e salvate il file sempre come CSV.</li>
-        <li>Toccate <strong>Importa abitudini da file</strong> e scegliete <strong>Aggiungi alle attuali</strong> oppure
-          <strong>Sostituisci tutto</strong>.</li>
+        <li>Toccate <strong>Importa abitudini da file</strong> e scegliete <strong>Aggiungi alle attuali</strong> (cambiano
+          solo le coppie del file) oppure <strong>Sostituisci i pesi</strong> (si tolgono prima i pesi importati in passato
+          e le modifiche fatte a mano nei contesti). Lo storico d’uso giorno per giorno non viene mai cancellato
+          dall’importazione.</li>
       </ol>
       <p class="tip">Le parole si scrivono come sulle tessere (maiuscole e minuscole non contano). Anche i pesi importati
         si affievoliscono col tempo come le abitudini vere, se il bambino non usa quelle parole.</p>
       <p class="warn">Il file contiene le abitudini del bambino: condividetelo solo con persone di fiducia.</p>
+      <h4>Spostare lo storico e i contesti su un altro dispositivo</h4>
+      <ol class="steps">
+        <li>In <strong>Storico e contesti in un file</strong> toccate <strong>Esporta storico e contesti</strong>: si
+          scarica un file con tutto lo storico d’uso, i contesti e le loro modifiche.</li>
+        <li>Sull’altro dispositivo toccate <strong>Importa storico e contesti</strong> e scegliete
+          <strong>Unisci</strong> (gli usi si sommano: non importate due volte lo stesso file) oppure
+          <strong>Sostituisci</strong>.</li>
+      </ol>
       <p class="tip">Tutto viene calcolato su questo dispositivo, anche senza internet: nessun dato viene inviato.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="contesti" data-search>
+      <h3>Dare più peso alle parole di un momento (contesti)</h3>
+      <p class="where-line"><span class="where"><span>Impostazioni</span><span>Previsione</span><span>Contesti</span></span></p>
+      <p>Un <strong>contesto</strong> è un momento ricorrente della vita del bambino: la scuola dal lunedì al venerdì, la
+        logopedia il martedì pomeriggio, le vacanze al mare. Quando un contesto è acceso, le combinazioni di parole usate
+        in quel momento vengono suggerite di più. Le altre parole non vengono mai escluse.</p>
+      <ol class="steps">
+        <li>Toccate <strong>Nuovo contesto</strong> e date un nome, per esempio «Scuola».</li>
+        <li>In <strong>Quando vale</strong> scegliete <strong>Giorni e orari</strong> (i giorni della settimana e le ore,
+          dalle… alle…, a fasce di un’ora) oppure <strong>Periodo dell’anno</strong> (per esempio dal 1 al 15 giugno, ogni
+          anno).</li>
+        <li>In <strong>Accensione</strong> scegliete <strong>Automatica</strong> (il contesto si accende da solo in quei
+          giorni e orari), <strong>Sempre acceso</strong> (per esempio il primo giorno di mare, se quest’anno le date sono
+          diverse) oppure <strong>Spento</strong>.</li>
+        <li>In <strong>Storico usato</strong> lasciate <strong>Come la regola</strong> per prendere le parole usate negli
+          stessi giorni e orari, oppure scegliete <strong>Periodo preciso</strong> e indicate le date, per esempio le due
+          settimane di mare dell’anno scorso.</li>
+        <li>In <strong>Prevalenza</strong> scegliete quanto devono pesare le parole del contesto: <strong>Poca</strong>,
+          <strong>Media</strong> o <strong>Molta</strong>.</li>
+        <li>Toccate <strong>Salva il contesto</strong>.</li>
+      </ol>
+      <figure class="shot shot-narrow">
+        <img src="guida/contesti.webp" width="510" height="510" alt="Le combinazioni del contesto: (inizio) → io con peso 9, modificata; io → voglio; voglio → giocare aggiunta a mano; voglio → ancora barrata perché tolta dal contesto. Ogni riga ha i pulsanti Peso e Togli, oppure Rimetti." loading="lazy">
+        <figcaption>Le combinazioni di un contesto: si possono cambiare, togliere o aggiungere.</figcaption>
+      </figure>
+      <h4>Vedere e correggere le parole del contesto</h4>
+      <p>Nella pagina del contesto, <strong>Le combinazioni del contesto</strong> mostra le coppie di parole che il
+        bambino ha usato nel periodo scelto, dalla più usata. L’elenco cambia subito quando cambiate giorni, orari o date.</p>
+      <ul>
+        <li><strong>Peso</strong>: scrivete un numero da 0 a 1000; più è alto, più la combinazione viene suggerita.
+          Ogni uso recente vale circa 1.</li>
+        <li><strong>Togli</strong>: la combinazione non riceve più la spinta del contesto (resta suggeribile come prima).
+          <strong>Rimetti</strong> la riporta.</li>
+        <li><strong>Aggiungi una combinazione</strong>: per le parole che il bambino ha imparato dopo, scrivete la parola
+          precedente (vuota per l’inizio della frase), la parola e il peso.</li>
+        <li><strong>Annulla le modifiche e torna allo storico</strong>: toglie tutte le correzioni fatte a mano.</li>
+      </ul>
+      <p>Le parole di un contesto si affievoliscono molto più lentamente delle altre: le parole del mare dell’estate scorsa
+        contano ancora l’estate dopo.</p>
+      <h4>Vedere quale contesto è acceso</h4>
+      <p>Nella modalità adulto, nella barra in alto, il pulsante <strong>Contesto</strong> mostra il contesto acceso in
+        quel momento e apre questa pagina. Sui telefoni più stretti il pulsante non c’è: il contesto acceso si legge in
+        <span class="where"><span>Previsione</span><span>Abitudini d’uso</span></span>. Nella schermata del bambino i
+        contesti non si vedono e non si possono cambiare.</p>
+      <h4>Dare un contesto a un’altra persona</h4>
+      <p>Nella pagina del contesto toccate <strong>Esporta questo contesto</strong>: il file contiene la regola, le date e
+        le correzioni fatte a mano, non lo storico. Sull’altro dispositivo toccate <strong>Importa un contesto da
+        file</strong>; se esiste già un contesto con lo stesso nome viene sostituito. Tutti i contesti, insieme allo
+        storico, si esportano anche da <span class="where"><span>Previsione</span><span>Esporta storico e
+        contesti</span></span>.</p>
+      <p class="tip">Eliminare un contesto non cancella lo storico d’uso del bambino.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -917,7 +993,7 @@
         <li>Il primo avviso ricorda che non esiste ancora una copia di sicurezza completa. Se volete tenere le schede
           toccate <strong>Prima esporta le schede (.obz)</strong>: il file, con immagini e foto, si potrà riaprire da
           <span class="where"><span>Schede</span><span>Scambio con altre app</span></span>. Le abitudini d’uso si salvano
-          a parte da <span class="where"><span>Previsione</span><span>Esporta le abitudini (CSV)</span></span>.</li>
+          a parte da <span class="where"><span>Previsione</span><span>Esporta storico e contesti</span></span>.</li>
         <li>Toccate <strong>Continua</strong>, scrivete il PIN attuale e la parola <strong>CANCELLA</strong>, poi
           <strong>Cancella tutto</strong>.</li>
       </ol>
@@ -1010,6 +1086,7 @@
         <li><a href="#simboli">Cerca simbolo</a></li>
         <li><a href="#pin">Codice di recupero</a></li>
         <li><a href="#colori">Colori per tipo di parola</a></li>
+        <li><a href="#contesti">Contesti</a></li>
         <li><a href="#crediti">Crediti</a></li>
         <li><a href="#dati">Dati e privacy</a></li>
         <li><a href="#modelli">Esporta</a></li>
@@ -1048,6 +1125,7 @@
         <li><a href="#stampa-guida">Stampa della guida</a></li>
         <li><a href="#stampa">Stampa delle schede</a></li>
         <li><a href="#aspetto">Stili pronti</a></li>
+        <li><a href="#previsione">Storico d’uso</a></li>
         <li><a href="#tocco">Tenere premuto</a></li>
         <li><a href="#tocco">Tremori</a></li>
         <li><a href="#voce">Voce</a></li>

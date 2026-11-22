@@ -1,18 +1,28 @@
 /*
- * Previsione della parola successiva (basi): tutto calcolato sul dispositivo.
+ * Previsione della parola successiva: tutto calcolato sul dispositivo.
  *
- * Raccolta: ogni volta che il bambino aggiunge una tessera alla frase si registra la coppia
- * «parola precedente → parola» (bigramma; "^" = inizio della frase) e la parola da sola.
- * Ogni conteggio sbiadisce nel tempo (dimezza ogni 30 giorni): le abitudini recenti pesano di più,
- * quelle vecchie si spengono da sole senza essere cancellate. Si tiene anche la fascia oraria
- * e se l'uso è avvenuto in un giorno feriale o nel fine settimana.
+ * Raccolta (dal 22/11/2026): invece di registrare ogni tocco si tiene un RIEPILOGO PER GIORNO.
+ * Per ogni giorno d'uso e per ogni combinazione «parola precedente → parola» usata quel giorno si conta
+ * quante volte è stata usata in ciascuna fascia di un'ora. Ore e combinazioni non usate non occupano spazio.
+ * Ogni voce occupa 4 byte (vedi pack). "^" = inizio della frase.
  *
- * Suggerimento: le parole più probabili dopo l'ultima della frase vengono EVIDENZIATE nella
- * pagina (o si evidenzia la cartella che le contiene). Le tessere non si spostano mai:
- * la posizione stabile è la base della memoria motoria.
+ * Punteggio: le abitudini recenti pesano di più (dimezzano ogni 30 giorni) e quelle della stessa ora
+ * e dello stesso tipo di giorno (feriale/fine settimana) un po' di più.
  *
- * Privacy: nessun dato esce dal dispositivo; niente rete, niente servizi esterni.
- * Archivio IndexedDB "usage" (vedi docs/FORMATO-DATI.md).
+ * Contesti (Scuola, Logopedia, Mare…): una regola (giorni della settimana e orari, oppure un periodo
+ * dell'anno) che filtra lo storico. Quando il contesto è attivo, le sue combinazioni ricevono una
+ * prevalenza regolabile (×2, ×4, ×8) senza escludere le altre. Nel contesto le abitudini sbiadiscono
+ * lentamente (dimezzano in un anno), così «Mare» dell'estate scorsa conta ancora l'estate dopo.
+ * L'adulto vede le combinazioni del contesto e può cambiarne il peso, toglierle o aggiungerne.
+ *
+ * Pesi di partenza: valori senza data e ora (dal file CSV o dalle abitudini del vecchio formato),
+ * che si sommano allo storico e sbiadiscono dal giorno in cui sono stati inseriti.
+ *
+ * I punteggi si preparano all'avvio, a ogni cambio d'ora e a ogni modifica dei contesti:
+ * a ogni tocco si legge solo la tabella già pronta.
+ *
+ * Suggerimento: le parole più probabili vengono EVIDENZIATE (le tessere non si spostano mai).
+ * Privacy: nessun dato esce dal dispositivo. Archivi IndexedDB "usage" e "contexts" (docs/FORMATO-DATI.md).
  */
 (function () {
   'use strict';
@@ -21,48 +31,278 @@
 
   const START = '^'; // inizio della frase
   const HALF_LIFE_DAYS = 30;
+  const CONTEXT_HALF_LIFE_DAYS = 365;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const MIN_SCORE = 1.5; // sotto questo valore (circa due usi recenti) non si suggerisce nulla
   const SETTINGS_KEY = 'prediction';
-  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', dim: false, width: 'medium', color: 'blue' };
-  // Spessore e colore del contorno dei suggerimenti
+  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', dim: false, dimLevel: 50, width: 'medium', color: 'blue' };
+  const DIM_LEVEL = { min: 10, max: 90, step: 10 };
   const WIDTHS = ['thin', 'medium', 'thick'];
   const COLORS = ['blue', 'yellow', 'green', 'orange', 'purple'];
-  // Stili dei suggerimenti: contorno, contorno sfumato secondo la frequenza, trasparenza delle altre tessere,
-  // solo le tessere suggerite (le altre lasciano vuoto il loro posto)
   const STYLES = ['outline', 'graded', 'only'];
   const COUNTS = [1, 2, 3, 5, 10];
   // File CSV delle abitudini: limiti per l'importazione
   const CSV_MAX_BYTES = 2 * 1024 * 1024;
-  const CSV_MAX_ROWS = 5000;
+  const CSV_MAX_ROWS = 20000;
   const CSV_MAX_WEIGHT = 1000;
-  const MAX_RECORDS = 20000; // tetto totale delle abitudini salvate (coppie + parole singole)
+  // Storico: limiti
+  const MAX_COMBOS = 60000; // combinazioni diverse (oltre, le nuove non si registrano più)
+  const MAX_BASE = 20000; // pesi di partenza
+  const COMBO_PAGE = 1024; // combinazioni per record salvato (si riscrive solo la pagina cambiata)
+  const MAX_COUNT = 255; // usi della stessa combinazione nella stessa ora dello stesso giorno
+  const COMPACT_THRESHOLD = 300000; // voci totali oltre le quali i giorni vecchi si accorpano per mese
+  const COMPACT_AFTER_DAYS = 400; // circa 13 mesi
+  // Contesti: limiti
+  const BOOSTS = [2, 4, 8];
+  const MODES = ['auto', 'on', 'off'];
+  const MAX_CONTEXTS = 30;
+  const MAX_EDITS = 2000;
+  const NAME_MAX = 40;
+  // File dello storico (esportazione a parte e, in futuro, parte del backup completo)
+  const HISTORY_FORMAT_VERSION = 1;
+  const HISTORY_MAX_BYTES = 40 * 1024 * 1024;
+  const HISTORY_MAX_DAYS = 20000;
+  const HISTORY_MAX_ENTRIES_PER_DAY = 100000;
+  const HISTORY_MAX_TOTAL_ENTRIES = 2000000;
 
   let settings = { ...DEFAULTS };
   let profileId = null;
-  const records = new Map(); // id → record
-  const dirty = new Set();
-  let saveTimer = null;
   let ready = null;
+
+  // ---------- Stato in memoria del profilo attivo ----------
+  let combos = []; // indice → [prev, word]
+  let comboIndex = new Map(); // "prev\u0001word" → indice
+  let days = new Map(); // giorno → Uint32Array (giorni passati e di oggi già salvati)
+  let months = new Map(); // primo giorno del mese → Uint32Array (giorni vecchi accorpati)
+  let today = { day: -1, counts: new Map() }; // oggi: (combinazione * 32 + ora) → conteggio
+  let base = []; // pesi di partenza: { prev, word, weight, day, ctx }
+  let contexts = []; // contesti del profilo
+  // Cose da salvare
+  const dirtyPages = new Set();
+  const dirtyDays = new Set();
+  const deletedIds = new Set();
+  let dirtyBase = false;
+  let saveTimer = null;
+  // Tabella dei punteggi pronta: prev → Map(word → punteggio)
+  let table = new Map();
+  let tableHour = -1; // ora (giorno * 24 + ora) per cui è stata preparata
+  let hourTimer = null;
+
+  // ---------- Piccoli aiuti ----------
 
   // Parola normalizzata: la stessa parola in schede diverse conta come una sola
   function wordKey(label) {
-    return String(label || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60);
+    return String(label || '').replace(/[\p{Cc}\p{Cf}]/gu, '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60);
   }
 
-  function recordId(prev, word) {
-    return `u_${profileId}_${encodeURIComponent(prev || '')}_${encodeURIComponent(word)}`;
+  const pairKey = (prev, word) => `${prev}\u0001${word}`;
+
+  // Voce di 4 byte: conteggio (bit 0-7), ora (8-12), fine settimana (13, solo nei mesi accorpati), combinazione (14-31)
+  function pack(combo, hour, count, weekend) {
+    return ((combo << 14) | ((weekend ? 1 : 0) << 13) | (hour << 8) | Math.min(MAX_COUNT, count)) >>> 0;
   }
 
-  // Valore attuale di un conteggio che sbiadisce nel tempo
-  function decayed(record, at = Date.now()) {
-    const age = Math.max(0, at - Date.parse(record.lastUsed || 0)) / DAY_MS;
-    return record.count * 0.5 ** (age / HALF_LIFE_DAYS);
+  // Giorno locale come numero intero (giorni dal 1/1/1970): non dipende dal fuso orario
+  function localDay(date) {
+    return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
   }
 
-  function isHoliday(date) {
-    const day = date.getDay();
-    return day === 0 || day === 6;
+  // 0 = domenica … 6 = sabato
+  const dayOfWeek = (day) => (day + 4) % 7;
+  const isWeekendDay = (day) => { const d = dayOfWeek(day); return d === 0 || d === 6; };
+  // Giorno ISO: 1 = lunedì … 7 = domenica
+  const isoDay = (day) => dayOfWeek(day) || 7;
+
+  // "MM-GG" di un giorno
+  function monthDay(day) {
+    const date = new Date(day * DAY_MS);
+    return `${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  function monthStart(day) {
+    const date = new Date(day * DAY_MS);
+    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / DAY_MS);
+  }
+
+  function daysInMonth(start) {
+    const date = new Date(start * DAY_MS);
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  }
+
+  const decay = (ageDays, halfLife) => 0.5 ** (Math.max(0, ageDays) / halfLife);
+
+  const dayId = (day) => `ud_${profileId}_${day}`;
+  const monthId = (start) => `um_${profileId}_${start}`;
+  const pageId = (page) => `uc_${profileId}_${page}`;
+  const baseId = () => `ub_${profileId}`;
+
+  // ---------- Regole dei contesti ----------
+
+  // Regola valida o null. weekly: giorni ISO 1-7, ore intere da/a (a escluso); dates: "MM-GG" da/a, ogni anno
+  function cleanRule(rule) {
+    if (!rule || typeof rule !== 'object') return null;
+    if (rule.type === 'weekly') {
+      const list = Array.isArray(rule.days) ? [...new Set(rule.days.filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort() : [];
+      const from = Number.isInteger(rule.from) && rule.from >= 0 && rule.from <= 23 ? rule.from : null;
+      const to = Number.isInteger(rule.to) && rule.to >= 1 && rule.to <= 24 ? rule.to : null;
+      if (!list.length || from === null || to === null || to <= from) return null;
+      return { type: 'weekly', days: list, from, to };
+    }
+    if (rule.type === 'dates') {
+      const ok = (v) => typeof v === 'string' && /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(v)
+        && Number(v.slice(3)) <= [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Number(v.slice(0, 2)) - 1];
+      if (!ok(rule.from) || !ok(rule.to)) return null;
+      return { type: 'dates', from: rule.from, to: rule.to };
+    }
+    return null;
+  }
+
+  // Periodo preciso dello storico da cui prendere le combinazioni: "AAAA-MM-GG" da/a (null = come la regola)
+  function cleanSource(source) {
+    if (!source || typeof source !== 'object') return null;
+    const toDay = (v) => {
+      if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+      const t = Date.parse(`${v}T00:00:00Z`);
+      return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === v ? Math.floor(t / DAY_MS) : null;
+    };
+    const from = toDay(source.from);
+    const to = toDay(source.to);
+    if (from === null || to === null || to < from || to - from > 3660) return null;
+    return { from: source.from, to: source.to };
+  }
+
+  // Filtro sullo storico di un contesto: la regola stessa oppure il periodo preciso scelto
+  function filterOf(ctx) {
+    const source = cleanSource(ctx.source);
+    if (source) return { type: 'range', from: Math.floor(Date.parse(`${source.from}T00:00:00Z`) / DAY_MS), to: Math.floor(Date.parse(`${source.to}T00:00:00Z`) / DAY_MS) };
+    return cleanRule(ctx.rule);
+  }
+
+  function inDates(rule, md) {
+    return rule.from <= rule.to ? md >= rule.from && md <= rule.to : md >= rule.from || md <= rule.to;
+  }
+
+  // La regola comprende questo giorno e questa ora?
+  function ruleMatches(rule, day, hour) {
+    if (rule.type === 'weekly') return rule.days.includes(isoDay(day)) && hour >= rule.from && hour < rule.to;
+    return inDates(rule, monthDay(day));
+  }
+
+  // Per i mesi accorpati: quale parte del mese (o dei giorni di quel tipo) cade nella regola, da 0 a 1
+  function monthFraction(rule, start, hour, weekend) {
+    if (rule.type === 'range') {
+      const n = daysInMonth(start);
+      const inside = Math.max(0, Math.min(rule.to, start + n - 1) - Math.max(rule.from, start) + 1);
+      return inside / n;
+    }
+    if (rule.type === 'weekly') {
+      if (hour < rule.from || hour >= rule.to) return 0;
+      const sameType = rule.days.filter((d) => (d >= 6) === Boolean(weekend)).length;
+      return sameType / (weekend ? 2 : 5);
+    }
+    // Periodo dell'anno: dipende solo dal mese, si calcola una volta per mese e regola
+    const key = `${rule.from}|${rule.to}|${start}`;
+    if (!datesFractionCache.has(key)) {
+      const n = daysInMonth(start);
+      let inside = 0;
+      for (let d = 0; d < n; d += 1) if (inDates(rule, monthDay(start + d))) inside += 1;
+      datesFractionCache.set(key, inside / n);
+    }
+    return datesFractionCache.get(key);
+  }
+  const datesFractionCache = new Map();
+
+  function isActive(ctx, day, hour) {
+    if (ctx.mode === 'on') return true;
+    if (ctx.mode === 'off') return false;
+    return ruleMatches(ctx.rule, day, hour);
+  }
+
+  function activeContexts(when = new Date()) {
+    const day = localDay(when);
+    return contexts.filter((ctx) => isActive(ctx, day, when.getHours()));
+  }
+
+  // ---------- Caricamento e conversione dal formato precedente ----------
+
+  function resetState() {
+    combos = [];
+    comboIndex = new Map();
+    days = new Map();
+    months = new Map();
+    today = { day: -1, counts: new Map() };
+    base = [];
+    contexts = [];
+    dirtyPages.clear();
+    dirtyDays.clear();
+    deletedIds.clear();
+    dirtyBase = false;
+    table = new Map();
+    tableHour = -1;
+  }
+
+  function comboFor(prev, word, create) {
+    const key = pairKey(prev, word);
+    let index = comboIndex.get(key);
+    if (index === undefined && create) {
+      if (combos.length >= MAX_COMBOS) return -1;
+      index = combos.length;
+      combos.push([prev, word]);
+      comboIndex.set(key, index);
+      dirtyPages.add(Math.floor(index / COMBO_PAGE));
+    }
+    return index === undefined ? -1 : index;
+  }
+
+  function cleanContext(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = String(raw.name || '').replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, NAME_MAX);
+    const rule = cleanRule(raw.rule);
+    if (!name || !rule) return null;
+    const edits = [];
+    const seen = new Set();
+    (Array.isArray(raw.edits) ? raw.edits : []).slice(0, MAX_EDITS).forEach((e) => {
+      if (!e || typeof e !== 'object') return;
+      const prev = e.prev === START ? START : wordKey(e.prev);
+      const word = wordKey(e.word);
+      const weight = Number(e.weight);
+      if (!prev || !word || !Number.isFinite(weight) || weight < 0) return;
+      const key = pairKey(prev, word);
+      if (seen.has(key)) return;
+      seen.add(key);
+      edits.push({ prev, word, weight: Math.min(CSV_MAX_WEIGHT, Math.round(weight * 10) / 10) });
+    });
+    return {
+      id: typeof raw.id === 'string' && /^ctx_[\w-]{1,40}$/.test(raw.id) ? raw.id : `ctx_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+      profileId,
+      kind: 'prediction',
+      name,
+      rule,
+      mode: MODES.includes(raw.mode) ? raw.mode : 'auto',
+      boost: BOOSTS.includes(raw.boost) ? raw.boost : 4,
+      source: cleanSource(raw.source),
+      edits,
+    };
+  }
+
+  /*
+   * Abitudini salvate con il formato precedente (un record per coppia, conteggio che sbiadisce, senza date):
+   * diventano pesi di partenza con la data dell'ultimo uso. Si scrive prima il nuovo e poi si cancella il vecchio.
+   */
+  async function migrateOld(oldRecords) {
+    const existing = new Set(base.map((b) => pairKey(b.prev, b.word)));
+    oldRecords.forEach((r) => {
+      if (r.prevWord === null || r.prevWord === undefined) return; // la parola da sola ora si ricava dalle coppie
+      const prev = r.prevWord === START ? START : wordKey(r.prevWord);
+      const word = wordKey(r.word);
+      const at = Date.parse(r.lastUsed);
+      if (!prev || !word || !(r.count > 0) || existing.has(pairKey(prev, word)) || base.length >= MAX_BASE) return;
+      existing.add(pairKey(prev, word));
+      base.push({ prev, word, weight: Math.round(r.count * 100) / 100, day: Number.isFinite(at) ? localDay(new Date(at)) : localDay(new Date()), ctx: null });
+    });
+    dirtyBase = true;
+    await flush();
+    await Promise.all(oldRecords.map((r) => storage.deleteRecord('usage', r.id)));
   }
 
   async function init(activeProfileId) {
@@ -76,19 +316,105 @@
     if (settings.style === 'fade') { settings.style = 'outline'; settings.dim = true; }
     settings.style = STYLES.includes(settings.style) ? settings.style : DEFAULTS.style;
     settings.dim = settings.dim === true;
+    settings.dimLevel = Number.isInteger(settings.dimLevel) && settings.dimLevel >= DIM_LEVEL.min
+      && settings.dimLevel <= DIM_LEVEL.max && settings.dimLevel % DIM_LEVEL.step === 0
+      ? settings.dimLevel : DEFAULTS.dimLevel;
     settings.width = WIDTHS.includes(settings.width) ? settings.width : DEFAULTS.width;
     settings.color = COLORS.includes(settings.color) ? settings.color : DEFAULTS.color;
     applyLook();
-    records.clear();
-    const all = await storage.getAllRecords('usage');
-    all.filter((r) => r && r.profileId === profileId && typeof r.word === 'string' && Number.isFinite(r.count))
-      .forEach((r) => records.set(r.id, r));
+
+    resetState();
+    const all = (await storage.getAllRecords('usage')).filter((r) => r && r.profileId === profileId);
+    const pages = [];
+    const old = [];
+    all.forEach((r) => {
+      if (r.kind === 'combos' && Number.isInteger(r.page) && Array.isArray(r.list)) pages.push(r);
+      else if (r.kind === 'day' && Number.isInteger(r.day) && r.entries instanceof Uint32Array) days.set(r.day, r.entries);
+      else if (r.kind === 'month' && Number.isInteger(r.day) && r.entries instanceof Uint32Array) months.set(r.day, r.entries);
+      else if (r.kind === 'base' && Array.isArray(r.list)) base = r.list.filter((b) => b && typeof b.word === 'string' && Number.isFinite(b.weight));
+      else if (!r.kind && typeof r.word === 'string' && Number.isFinite(r.count)) old.push(r);
+    });
+    pages.sort((a, b) => a.page - b.page).forEach((p) => {
+      p.list.forEach((pair, i) => {
+        const index = p.page * COMBO_PAGE + i;
+        combos[index] = pair;
+        if (Array.isArray(pair)) comboIndex.set(pairKey(pair[0], pair[1]), index);
+      });
+    });
+    const allContexts = await storage.getAllRecords('contexts');
+    contexts = allContexts.filter((c) => c && c.profileId === profileId && c.kind === 'prediction').map(cleanContext).filter(Boolean);
+    if (old.length) await migrateOld(old);
+    // Il riepilogo di oggi si riprende per continuare a contarlo
+    const now = new Date();
+    const todayDay = localDay(now);
+    startDay(todayDay);
+    await compactIfNeeded(todayDay);
+    rebuild(now);
+    scheduleHourly();
+  }
+
+  function startDay(day) {
+    today = { day, counts: new Map() };
+    const saved = days.get(day);
+    if (saved) {
+      saved.forEach((v) => {
+        const key = (v >>> 14) * 32 + ((v >>> 8) & 31);
+        today.counts.set(key, (today.counts.get(key) || 0) + (v & 255));
+      });
+    }
+  }
+
+  function todayEntries() {
+    const out = new Uint32Array(today.counts.size);
+    let i = 0;
+    today.counts.forEach((n, key) => { out[i] = pack(Math.floor(key / 32), key % 32, n, false); i += 1; });
+    return out;
   }
 
   function load(activeProfileId) {
     ready = init(activeProfileId);
     return ready;
   }
+
+  // ---------- Accorpamento dei giorni molto vecchi (solo se lo storico diventa grande) ----------
+
+  async function compactIfNeeded(todayDay) {
+    let total = 0;
+    days.forEach((e) => { total += e.length; });
+    months.forEach((e) => { total += e.length; });
+    if (total <= COMPACT_THRESHOLD) return;
+    const limit = todayDay - COMPACT_AFTER_DAYS;
+    const merged = new Map(); // mese → Map(chiave → conteggio)
+    [...days.keys()].filter((d) => d < limit).forEach((d) => {
+      const start = monthStart(d);
+      if (!merged.has(start)) {
+        const m = new Map();
+        (months.get(start) || []).forEach((v) => { m.set(v & ~255, (m.get(v & ~255) || 0) + (v & 255)); });
+        merged.set(start, m);
+      }
+      const m = merged.get(start);
+      const weekend = isWeekendDay(d);
+      days.get(d).forEach((v) => {
+        const key = pack(v >>> 14, (v >>> 8) & 31, 0, weekend);
+        m.set(key, (m.get(key) || 0) + (v & 255));
+      });
+      days.delete(d);
+      deletedIds.add(dayId(d));
+    });
+    const records = [];
+    merged.forEach((m, start) => {
+      const entries = new Uint32Array(m.size);
+      let i = 0;
+      m.forEach((n, key) => { entries[i] = (key | Math.min(MAX_COUNT, n)) >>> 0; i += 1; });
+      months.set(start, entries);
+      records.push({ id: monthId(start), profileId, kind: 'month', day: start, entries });
+    });
+    await storage.putRecords('usage', records);
+    await Promise.all([...deletedIds].map((id) => storage.deleteRecord('usage', id)));
+    deletedIds.clear();
+  }
+
+  // ---------- Salvataggio ----------
 
   function scheduleSave() {
     clearTimeout(saveTimer);
@@ -97,33 +423,157 @@
 
   async function flush() {
     clearTimeout(saveTimer);
-    if (!dirty.size) return;
-    const list = [...dirty].map((id) => records.get(id)).filter(Boolean);
-    dirty.clear();
-    await storage.putRecords('usage', list);
+    if (!profileId) return;
+    const records = [];
+    dirtyPages.forEach((page) => {
+      records.push({ id: pageId(page), profileId, kind: 'combos', page, list: combos.slice(page * COMBO_PAGE, (page + 1) * COMBO_PAGE) });
+    });
+    dirtyPages.clear();
+    dirtyDays.forEach((day) => {
+      const entries = day === today.day ? todayEntries() : days.get(day);
+      if (!entries) return;
+      days.set(day, entries);
+      if (entries.length) records.push({ id: dayId(day), profileId, kind: 'day', day, entries });
+      else deletedIds.add(dayId(day));
+    });
+    dirtyDays.clear();
+    if (dirtyBase) {
+      records.push({ id: baseId(), profileId, kind: 'base', list: base });
+      dirtyBase = false;
+    }
+    if (records.length) await storage.putRecords('usage', records);
+    if (deletedIds.size) {
+      const ids = [...deletedIds];
+      deletedIds.clear();
+      await Promise.all(ids.map((id) => storage.deleteRecord('usage', id)));
+    }
   }
 
-  function bump(prev, word, cellId, prevCellId, when) {
-    const id = recordId(prev, word);
-    const nowIso = when.toISOString();
-    let record = records.get(id);
-    if (!record) {
-      record = {
-        id, profileId, contextId: null, word, prevWord: prev, cellId, prevCellId: prevCellId || null,
-        count: 0, lastUsed: nowIso, byHour: new Array(24).fill(0), weekday: 0, holiday: 0,
-      };
-      records.set(id, record);
-    }
-    // Prima si fa sbiadire il valore accumulato, poi si aggiunge l'uso di adesso
-    const factor = record.count ? decayed(record, when.getTime()) / record.count : 1;
-    record.count = record.count * factor + 1;
-    record.byHour = record.byHour.map((v, h) => v * factor + (h === when.getHours() ? 1 : 0));
-    record.weekday = record.weekday * factor + (isHoliday(when) ? 0 : 1);
-    record.holiday = record.holiday * factor + (isHoliday(when) ? 1 : 0);
-    record.lastUsed = nowIso;
-    record.cellId = cellId;
-    dirty.add(id);
+  // ---------- Punteggi ----------
+
+  // Aggiunge un contributo alla tabella
+  function addScore(map, prev, word, value) {
+    let row = map.get(prev);
+    if (!row) { row = new Map(); map.set(prev, row); }
+    row.set(word, (row.get(word) || 0) + value);
   }
+
+  /*
+   * Peso di ogni combinazione nello storico filtrato da una regola (null = tutto), con il tempo di dimezzamento
+   * indicato. Restituisce Map(pairKey → { prev, word, weight, uses }).
+   */
+  function filteredWeights(rule, halfLife, nowDay, timeOf) {
+    const out = new Map();
+    const add = (c, value, uses) => {
+      const pair = combos[c];
+      if (!pair) return;
+      const key = pairKey(pair[0], pair[1]);
+      const item = out.get(key);
+      if (item) { item.weight += value; item.uses += uses; } else out.set(key, { prev: pair[0], word: pair[1], weight: value, uses });
+    };
+    const visitDay = (day, entries) => {
+      const dec = decay(nowDay - day, halfLife);
+      if (!rule && dec < 1e-4) return;
+      const weekend = isWeekendDay(day);
+      let datesOk = true;
+      if (rule && rule.type === 'dates') datesOk = inDates(rule, monthDay(day));
+      if (rule && rule.type === 'range') datesOk = day >= rule.from && day <= rule.to;
+      if (!datesOk) return;
+      const dayOk = rule && rule.type === 'weekly' ? rule.days.includes(isoDay(day)) : true;
+      if (!dayOk) return;
+      for (let i = 0; i < entries.length; i += 1) {
+        const v = entries[i];
+        const h = (v >>> 8) & 31;
+        if (rule && rule.type === 'weekly' && (h < rule.from || h >= rule.to)) continue;
+        const n = v & 255;
+        add(v >>> 14, n * dec * (timeOf ? timeOf(h, weekend) : 1), n);
+      }
+    };
+    days.forEach((entries, day) => { if (day !== today.day) visitDay(day, entries); });
+    if (today.day >= 0) visitDay(today.day, todayEntries());
+    months.forEach((entries, start) => {
+      const dec = decay(nowDay - (start + 14), halfLife);
+      if (!rule && dec < 1e-4) return;
+      for (let i = 0; i < entries.length; i += 1) {
+        const v = entries[i];
+        const h = (v >>> 8) & 31;
+        const weekend = Boolean((v >>> 13) & 1);
+        const part = rule ? monthFraction(rule, start, h, weekend) : 1;
+        if (!part) continue;
+        const n = v & 255;
+        add(v >>> 14, n * dec * part * (timeOf ? timeOf(h, weekend) : 1), n * part);
+      }
+    });
+    return out;
+  }
+
+  // Combinazioni di un contesto (anche non ancora salvato): storico filtrato + pesi di partenza + modifiche dell'adulto
+  function contextPairs(ctx, now = new Date()) {
+    const filter = filterOf(ctx);
+    if (!filter) return [];
+    const map = filteredWeights(filter, CONTEXT_HALF_LIFE_DAYS, localDay(now), null);
+    base.filter((b) => b.ctx && b.ctx === ctx.id).forEach((b) => {
+      const key = pairKey(b.prev, b.word);
+      const value = b.weight * decay(localDay(now) - b.day, CONTEXT_HALF_LIFE_DAYS);
+      const item = map.get(key);
+      if (item) item.weight += value; else map.set(key, { prev: b.prev, word: b.word, weight: value, uses: 0 });
+    });
+    (ctx.edits || []).forEach((e) => {
+      const key = pairKey(e.prev, e.word);
+      const item = map.get(key);
+      if (item) { item.weight = e.weight; item.edited = true; } else map.set(key, { prev: e.prev, word: e.word, weight: e.weight, uses: 0, edited: true });
+    });
+    return [...map.values()].map((item) => ({ ...item, removed: Boolean(item.edited && item.weight === 0) }))
+      .sort((a, b) => (a.removed - b.removed) || (b.weight - a.weight));
+  }
+
+  // Peso generale (senza preferenza per l'ora): per statistiche ed esportazione
+  function generalWeights(now = new Date()) {
+    const nowDay = localDay(now);
+    const map = filteredWeights(null, HALF_LIFE_DAYS, nowDay, null);
+    base.filter((b) => !b.ctx).forEach((b) => {
+      const key = pairKey(b.prev, b.word);
+      const value = b.weight * decay(nowDay - b.day, HALF_LIFE_DAYS);
+      const item = map.get(key);
+      if (item) item.weight += value; else map.set(key, { prev: b.prev, word: b.word, weight: value, uses: 0 });
+    });
+    return map;
+  }
+
+  // Prepara la tabella dei punteggi per l'ora attuale e i contesti attivi
+  function rebuild(now = new Date()) {
+    const nowDay = localDay(now);
+    const hour = now.getHours();
+    const weekendNow = isWeekendDay(nowDay);
+    // Le abitudini della stessa ora e dello stesso tipo di giorno contano un po' di più
+    const timeOf = (h, weekend) => 1 + (h === hour ? 0.5 : 0) + (weekend === weekendNow ? 0.25 : 0);
+    const next = new Map();
+    filteredWeights(null, HALF_LIFE_DAYS, nowDay, timeOf).forEach((item) => addScore(next, item.prev, item.word, item.weight));
+    base.filter((b) => !b.ctx).forEach((b) => addScore(next, b.prev, b.word, b.weight * decay(nowDay - b.day, HALF_LIFE_DAYS)));
+    activeContexts(now).forEach((ctx) => {
+      contextPairs(ctx, now).forEach((item) => { if (!item.removed) addScore(next, item.prev, item.word, ctx.boost * item.weight); });
+    });
+    table = next;
+    tableHour = nowDay * 24 + hour;
+  }
+
+  // Ricalcolo allo scoccare di ogni ora (i contesti si accendono e si spengono da soli)
+  function scheduleHourly() {
+    clearTimeout(hourTimer);
+    const now = new Date();
+    const wait = (60 - now.getMinutes()) * 60000 - now.getSeconds() * 1000 + 500;
+    hourTimer = setTimeout(() => {
+      rebuild();
+      scheduleHourly();
+      if (window.PicSpeak.app) window.PicSpeak.app.applySuggestions();
+    }, wait);
+  }
+
+  function ensureFresh(now) {
+    if (localDay(now) * 24 + now.getHours() !== tableHour) rebuild(now);
+  }
+
+  // ---------- Registrazione ----------
 
   /*
    * Registra una tessera aggiunta alla frase. prevItem = tessera precedente nella frase (o null).
@@ -132,20 +582,29 @@
     if (!settings.collect || !profileId || !item) return;
     const word = wordKey(item.label);
     if (!word) return;
-    const prev = prevItem ? wordKey(prevItem.label) : START;
-    const when = new Date();
-    bump(prev, word, item.cellId, prevItem ? prevItem.cellId : null, when);
-    bump(null, word, item.cellId, null, when); // frequenza della parola da sola
+    const prev = prevItem ? wordKey(prevItem.label) || START : START;
+    const now = new Date();
+    const day = localDay(now);
+    if (day !== today.day) {
+      if (today.day >= 0 && today.counts.size) { days.set(today.day, todayEntries()); dirtyDays.add(today.day); }
+      startDay(day);
+    }
+    const c = comboFor(prev, word, true);
+    if (c < 0) return;
+    const key = c * 32 + now.getHours();
+    const n = today.counts.get(key) || 0;
+    if (n >= MAX_COUNT) return;
+    today.counts.set(key, n + 1);
+    dirtyDays.add(day);
+    // La tabella si aggiorna subito, senza ricalcolare tutto
+    ensureFresh(now);
+    let value = 1.75; // uso di adesso: stessa ora e stesso tipo di giorno
+    activeContexts(now).forEach((ctx) => {
+      const edited = ctx.edits.some((e) => e.prev === prev && e.word === word);
+      if (!edited && ruleMatches(ctx.rule, day, now.getHours())) value += ctx.boost;
+    });
+    addScore(table, prev, word, value);
     scheduleSave();
-  }
-
-  // Peso per l'ora e il tipo di giorno: le abitudini di questo momento contano un po' di più
-  function contextWeight(rec, when) {
-    const total = rec.byHour.reduce((a, b) => a + b, 0) || 1;
-    const hourShare = (rec.byHour[when.getHours()] || 0) / total;
-    const dayTotal = (rec.weekday + rec.holiday) || 1;
-    const dayShare = (isHoliday(when) ? rec.holiday : rec.weekday) / dayTotal;
-    return 1 + 0.5 * hourShare + 0.25 * dayShare;
   }
 
   /*
@@ -153,41 +612,85 @@
    * Restituisce [{ word, score }].
    */
   function candidates(prevItem) {
-    const prev = prevItem ? wordKey(prevItem.label) : START;
-    const now = new Date();
+    const prev = prevItem ? wordKey(prevItem.label) || START : START;
+    ensureFresh(new Date());
+    const row = table.get(prev);
+    if (!row) return [];
     const list = [];
-    records.forEach((rec) => {
-      if (rec.prevWord !== prev) return;
-      const score = decayed(rec, now.getTime()) * contextWeight(rec, now);
-      if (score >= MIN_SCORE) list.push({ word: rec.word, score });
-    });
+    row.forEach((score, word) => { if (score >= MIN_SCORE) list.push({ word, score }); });
     return list.sort((a, b) => b.score - a.score);
   }
 
   function stats() {
-    const now = Date.now();
+    const weights = generalWeights();
     let uses = 0;
-    let pairs = 0;
-    const top = [];
-    records.forEach((rec) => {
-      if (rec.prevWord === null || rec.prevWord === undefined) {
-        uses += Math.round(rec.count);
-        return;
-      }
-      pairs += 1;
-      if (rec.prevWord !== START) top.push({ from: rec.prevWord, to: rec.word, score: decayed(rec, now) });
-    });
-    top.sort((a, b) => b.score - a.score);
-    return { uses, pairs, top: top.slice(0, 5) };
+    let entries = 0;
+    const count = (list) => { entries += list.length; list.forEach((v) => { uses += v & 255; }); };
+    days.forEach((list, day) => { if (day !== today.day) count(list); });
+    count(todayEntries());
+    months.forEach(count);
+    base.forEach((b) => { if (!b.ctx && b.weight > 0) uses += Math.round(b.weight); });
+    const top = [...weights.values()].filter((item) => item.prev !== START && item.weight > 0)
+      .sort((a, b) => b.weight - a.weight).slice(0, 5).map((item) => ({ from: item.prev, to: item.word, score: item.weight }));
+    const dayCount = new Set([...days.keys(), ...(today.counts.size ? [today.day] : [])]).size;
+    // Spazio approssimato: 4 byte per voce più le parole delle combinazioni
+    let bytes = entries * 4;
+    combos.forEach((p) => { bytes += (p[0].length + p[1].length + 8); });
+    bytes += base.length * 40;
+    return { uses, pairs: weights.size, top, days: dayCount, months: months.size, bytes };
   }
 
+  // Cancella lo storico e i pesi di partenza del profilo (i contesti e le loro modifiche restano)
   async function clearAll() {
     clearTimeout(saveTimer);
-    dirty.clear();
-    const ids = [...records.keys()];
-    records.clear();
+    const ids = [];
+    const all = await storage.getAllRecords('usage');
+    all.forEach((r) => { if (r && r.profileId === profileId) ids.push(r.id); });
+    resetStateKeepContexts();
     await Promise.all(ids.map((id) => storage.deleteRecord('usage', id)));
+    rebuild();
   }
+
+  function resetStateKeepContexts() {
+    const keep = contexts;
+    resetState();
+    contexts = keep;
+    startDay(localDay(new Date()));
+  }
+
+  // ---------- Contesti: elenco, salvataggio, eliminazione ----------
+
+  function listContexts() {
+    const now = new Date();
+    const day = localDay(now);
+    return contexts.map((ctx) => ({ ...ctx, edits: ctx.edits.map((e) => ({ ...e })), activeNow: isActive(ctx, day, now.getHours()) }));
+  }
+
+  // Salva un contesto (nuovo o modificato). Restituisce il contesto salvato o lancia ContextError
+  async function saveContext(raw) {
+    const ctx = cleanContext({ ...raw, name: raw.name });
+    if (!String(raw.name || '').trim()) throw new ContextError('name');
+    if (!ctx) throw new ContextError('rule');
+    const index = contexts.findIndex((c) => c.id === ctx.id);
+    const clash = contexts.find((c) => c.id !== ctx.id && c.name.toLowerCase() === ctx.name.toLowerCase());
+    if (clash) throw new ContextError('duplicate');
+    if (index < 0 && contexts.length >= MAX_CONTEXTS) throw new ContextError('full');
+    if (index >= 0) contexts[index] = ctx; else contexts.push(ctx);
+    await storage.putRecord('contexts', ctx);
+    rebuild();
+    return ctx;
+  }
+
+  async function deleteContext(id) {
+    contexts = contexts.filter((c) => c.id !== id);
+    const before = base.length;
+    base = base.filter((b) => b.ctx !== id);
+    if (base.length !== before) { dirtyBase = true; await flush(); }
+    await storage.deleteRecord('contexts', id);
+    rebuild();
+  }
+
+  class ContextError extends Error {}
 
   // ---------- Esportare e importare le abitudini (CSV modificabile con un foglio di calcolo) ----------
 
@@ -197,6 +700,8 @@
   function csvCell(value) {
     let text = String(value);
     if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    // Anche dopo un separatore interno: un foglio di calcolo che divide sulla virgola non deve vedere una formula
+    text = text.replace(/([,;\t])(\s*)([=+\-@])/g, "$1$2'$3");
     return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }
 
@@ -205,24 +710,28 @@
   }
 
   /*
-   * Testo CSV delle coppie «parola precedente → parola» del profilo attivo, con il peso attuale.
-   * Separatore «;» (si apre direttamente in Excel, Numbers e Fogli Google anche con le impostazioni italiane).
+   * Testo CSV: una riga per coppia con il peso attuale (colonna «contesto» vuota) e, per ogni contesto,
+   * le sue combinazioni con il peso nel contesto. Le righe con peso quasi nullo non si scrivono
+   * (reimportate con peso 0 cancellerebbero la coppia). Separatore «;».
    */
   function exportCsv(lang) {
-    const now = Date.now();
     const decimal = lang === 'it' ? ',' : '.';
-    const head = lang === 'it' ? ['parola precedente', 'parola', 'peso'] : ['previous word', 'word', 'weight'];
+    const head = lang === 'it' ? ['parola precedente', 'parola', 'peso', 'contesto'] : ['previous word', 'word', 'weight', 'context'];
     const rows = [];
-    records.forEach((rec) => {
-      if (rec.prevWord === null || rec.prevWord === undefined) return;
-      rows.push([rec.prevWord === START ? startLabel(lang) : rec.prevWord, rec.word, decayed(rec, now)]);
-    });
+    generalWeights().forEach((item) => { if (item.weight >= 0.05) rows.push([item.prev, item.word, item.weight, '']); });
     rows.sort((a, b) => b[2] - a[2]);
-    const lines = [head.map(csvCell).join(';')];
-    rows.forEach(([prev, word, weight]) => {
-      lines.push([csvCell(prev), csvCell(word), (Math.round(weight * 10) / 10).toString().replace('.', decimal)].join(';'));
+    contexts.forEach((ctx) => {
+      contextPairs(ctx).forEach((item) => {
+        if (item.removed) rows.push([item.prev, item.word, 0, ctx.name]);
+        else if (item.weight >= 0.05) rows.push([item.prev, item.word, item.weight, ctx.name]);
+      });
     });
-    return `\ufeff${lines.join('\r\n')}\r\n`;
+    const lines = [head.map(csvCell).join(';')];
+    rows.forEach(([prev, word, weight, ctx]) => {
+      lines.push([csvCell(prev === START ? startLabel(lang) : prev), csvCell(word),
+        (Math.round(weight * 10) / 10).toString().replace('.', decimal), csvCell(ctx)].join(';'));
+    });
+    return `﻿${lines.join('\r\n')}\r\n`;
   }
 
   // Divide una riga CSV (separatore ; , o tabulazione, campi tra virgolette)
@@ -242,11 +751,12 @@
   }
 
   /*
-   * Legge un CSV delle abitudini. Restituisce [{ prev, word, weight }] già controllate.
-   * prev = START per l'inizio della frase. Le righe non valide vengono saltate e contate.
+   * Legge un CSV delle abitudini. Restituisce { rows: [{ prev, word, weight, context }], skipped }.
+   * prev = START per l'inizio della frase; context = nome del contesto ('' = abitudini generali).
+   * Le righe non valide vengono saltate e contate. I file con tre colonne (versione precedente) restano validi.
    */
   function parseCsv(text) {
-    const lines = String(text).replace(/^\ufeff/, '').split(/\r\n|\n|\r/).filter((l) => l.trim());
+    const lines = String(text).replace(/^﻿/, '').split(/\r\n|\n|\r/).filter((l) => l.trim());
     if (lines.length > CSV_MAX_ROWS + 1) throw new CsvError('rows');
     const first = lines[0] || '';
     const sep = [';', '\t', ','].find((c) => first.includes(c)) || ';';
@@ -265,7 +775,8 @@
       const prev = !rawPrev || rawPrev === '(inizio)' || rawPrev === '(start)' || rawPrev === '^' ? START : wordKey(cells[0]);
       const word = wordKey(cells[1]);
       if (!word || !prev || weight < 0) { skipped += 1; return; }
-      rows.push({ prev, word, weight: Math.min(weight, CSV_MAX_WEIGHT) });
+      const context = String(cells[3] || '').slice(0, NAME_MAX).trim();
+      rows.push({ prev, word, weight: Math.min(weight, CSV_MAX_WEIGHT), context });
     });
     if (!rows.length) throw new CsvError('empty');
     return { rows, skipped };
@@ -276,50 +787,300 @@
     return parseCsv(await file.text());
   }
 
-  /*
-   * Applica le righe importate. mode 'merge': le coppie del file sostituiscono quelle uguali, le altre restano;
-   * 'replace': prima si cancellano tutte le abitudini del profilo. Peso 0 = coppia tolta.
-   */
-  async function importRows(rows, mode) {
-    if (!profileId) return 0;
-    // Con «Aggiungi» le abitudini non possono crescere senza limite (rallenterebbero i suggerimenti)
-    if (mode !== 'replace' && records.size + rows.length * 2 > MAX_RECORDS) throw new CsvError('full');
-    if (mode === 'replace') await clearAll();
-    const nowIso = new Date().toISOString();
-    const remove = [];
-    rows.forEach(({ prev, word, weight }) => {
-      const id = recordId(prev, word);
-      if (weight === 0) {
-        if (records.delete(id)) remove.push(id);
-        dirty.delete(id);
-        return;
-      }
-      const old = records.get(id);
-      records.set(id, {
-        id, profileId, contextId: null, word, prevWord: prev, cellId: old ? old.cellId : null,
-        prevCellId: old ? old.prevCellId : null, count: weight, lastUsed: nowIso,
-        byHour: new Array(24).fill(0), weekday: 0, holiday: 0,
-      });
-      dirty.add(id);
-      // La parola da sola deve esistere per le statistiche
-      const single = recordId(null, word);
-      if (!records.has(single)) {
-        records.set(single, {
-          id: single, profileId, contextId: null, word, prevWord: null, cellId: null, prevCellId: null,
-          count: weight, lastUsed: nowIso, byHour: new Array(24).fill(0), weekday: 0, holiday: 0,
-        });
-        dirty.add(single);
+  // Toglie dallo storico tutti gli usi di una combinazione (peso 0 nel file)
+  // set = insieme degli indici delle combinazioni da togliere (un solo passaggio sullo storico)
+  function deletePairHistory(set) {
+    const strip = (entries) => entries.filter((v) => !set.has(v >>> 14));
+    days.forEach((entries, day) => {
+      const next = strip(entries);
+      if (next.length !== entries.length) { days.set(day, next); dirtyDays.add(day); }
+    });
+    months.forEach((entries, start) => {
+      const next = strip(entries);
+      if (next.length !== entries.length) {
+        months.set(start, next);
+        if (next.length) storage.putRecord('usage', { id: monthId(start), profileId, kind: 'month', day: start, entries: next });
+        else deletedIds.add(monthId(start));
       }
     });
-    await Promise.all(remove.map((id) => storage.deleteRecord('usage', id)));
-    await flush();
-    return rows.length;
+    [...today.counts.keys()].forEach((key) => { if (set.has(Math.floor(key / 32))) today.counts.delete(key); });
+    if (today.day >= 0) dirtyDays.add(today.day);
   }
 
-  // Spessore e colore del contorno: attributi sulla pagina, letti dal foglio di stile
+  /*
+   * Applica le righe importate. Righe senza contesto: il peso della coppia diventa quello del file
+   * (si aggiunge un peso di partenza pari alla differenza con lo storico); peso 0 toglie la coppia anche dallo storico.
+   * Righe con un contesto: il peso nel contesto diventa quello del file (0 = tolta dal contesto);
+   * un contesto che non esiste su questo dispositivo fa saltare la riga.
+   * mode 'replace': prima si tolgono tutti i pesi di partenza e le modifiche dei contesti (lo storico resta).
+   * Restituisce { imported, unknown }.
+   */
+  async function importRows(rows, mode) {
+    if (!profileId) return { imported: 0, unknown: 0 };
+    if (mode === 'replace') {
+      base = [];
+      dirtyBase = true;
+      contexts.forEach((ctx) => { ctx.edits = []; });
+    }
+    if (base.length + rows.filter((r) => !r.context).length > MAX_BASE) throw new CsvError('full');
+    const nowDay = localDay(new Date());
+    const history = generalWeightsFromHistory(nowDay);
+    let imported = 0;
+    let unknown = 0;
+    const touched = new Set();
+    // Pesi generali indicizzati per coppia (niente ricerche ripetute su tutto l'elenco)
+    const general = new Map();
+    const others = [];
+    base.forEach((b) => { if (b.ctx) others.push(b); else general.set(pairKey(b.prev, b.word), b); });
+    const toDelete = new Set();
+    rows.forEach(({ prev, word, weight, context }) => {
+      const key = pairKey(prev, word);
+      if (context) {
+        const ctx = contexts.find((c) => c.name.toLowerCase() === context.toLowerCase());
+        if (!ctx) { unknown += 1; return; }
+        ctx.edits = ctx.edits.filter((e) => pairKey(e.prev, e.word) !== key);
+        if (ctx.edits.length >= MAX_EDITS) { unknown += 1; return; }
+        ctx.edits.push({ prev, word, weight: Math.round(weight * 10) / 10 });
+        touched.add(ctx);
+        imported += 1;
+        return;
+      }
+      general.delete(key);
+      if (weight === 0) {
+        const c = comboFor(prev, word, false);
+        if (c >= 0) toDelete.add(c);
+      } else {
+        const fromHistory = history.get(key) || 0;
+        general.set(key, { prev, word, weight: Math.round((weight - fromHistory) * 100) / 100, day: nowDay, ctx: null });
+      }
+      dirtyBase = true;
+      imported += 1;
+    });
+    base = [...others, ...general.values()];
+    if (toDelete.size) deletePairHistory(toDelete);
+    const changed = mode === 'replace' ? contexts : [...touched];
+    await Promise.all(changed.map((ctx) => storage.putRecord('contexts', ctx)));
+    await flush();
+    rebuild();
+    return { imported, unknown };
+  }
+
+  function generalWeightsFromHistory(nowDay) {
+    const out = new Map();
+    filteredWeights(null, HALF_LIFE_DAYS, nowDay, null).forEach((item, key) => out.set(key, item.weight));
+    return out;
+  }
+
+  // ---------- Storico completo e contesti in un file a parte (anche parte del futuro backup) ----------
+
+  class HistoryError extends Error {}
+
+  // Oggetto con lo storico, i pesi di partenza e i contesti del profilo attivo (formato in docs/FORMATO-DATI.md)
+  function exportData() {
+    const dayList = [];
+    days.forEach((entries, day) => { if (day !== today.day && entries.length) dayList.push([day, Array.from(entries)]); });
+    if (today.counts.size) dayList.push([today.day, Array.from(todayEntries())]);
+    dayList.sort((a, b) => a[0] - b[0]);
+    const monthList = [...months].filter(([, e]) => e.length).map(([start, e]) => [start, Array.from(e)]).sort((a, b) => a[0] - b[0]);
+    const nameOf = (id) => (contexts.find((c) => c.id === id) || {}).name || null;
+    return {
+      format: 'picspeak',
+      kind: 'habits',
+      formatVersion: HISTORY_FORMAT_VERSION,
+      app: 'PicSpeak',
+      createdAt: new Date().toISOString(),
+      combos: combos.map((p) => [p[0], p[1]]),
+      days: dayList,
+      months: monthList,
+      base: base.map((b) => [b.prev, b.word, b.weight, b.day, b.ctx ? nameOf(b.ctx) : null]).filter((b) => b[4] !== undefined),
+      contexts: contexts.map(contextOut),
+    };
+  }
+
+  function contextOut(c) {
+    return { name: c.name, rule: c.rule, source: c.source, mode: c.mode, boost: c.boost, edits: c.edits.map((e) => [e.prev, e.word, e.weight]) };
+  }
+
+  // Un contesto da solo (regola, periodo, modifiche e pesi di partenza), per darlo a un'altra famiglia o a scuola
+  function exportContextJson(id) {
+    const ctx = contexts.find((c) => c.id === id);
+    if (!ctx) return null;
+    return JSON.stringify({
+      format: 'picspeak',
+      kind: 'contexts',
+      formatVersion: HISTORY_FORMAT_VERSION,
+      app: 'PicSpeak',
+      createdAt: new Date().toISOString(),
+      combos: [],
+      days: [],
+      months: [],
+      base: base.filter((b) => b.ctx === id).map((b) => [b.prev, b.word, b.weight, b.day, ctx.name]),
+      contexts: [contextOut(ctx)],
+    });
+  }
+
+  function exportJson() {
+    return JSON.stringify(exportData());
+  }
+
+  // Controlla un file dello storico e restituisce i dati puliti (lancia HistoryError)
+  function parseHistory(text) {
+    let obj;
+    try { obj = JSON.parse(text); } catch (error) { throw new HistoryError('format'); }
+    if (!obj || obj.format !== 'picspeak' || (obj.kind !== 'habits' && obj.kind !== 'contexts')) throw new HistoryError('format');
+    if (!Number.isInteger(obj.formatVersion) || obj.formatVersion > HISTORY_FORMAT_VERSION) throw new HistoryError('version');
+    const list = (v) => (Array.isArray(v) ? v : []);
+    if (list(obj.combos).length > MAX_COMBOS || list(obj.days).length > HISTORY_MAX_DAYS
+      || list(obj.months).length > HISTORY_MAX_DAYS || list(obj.base).length > MAX_BASE
+      || list(obj.contexts).length > MAX_CONTEXTS) throw new HistoryError('size');
+    const pairs = list(obj.combos).map((p) => {
+      if (!Array.isArray(p)) return null;
+      const prev = p[0] === START ? START : wordKey(p[0]);
+      const word = wordKey(p[1]);
+      return prev && word ? [prev, word] : null;
+    });
+    const cleanEntries = (raw, allowWeekend) => {
+      const out = [];
+      const items = list(raw).slice(0, HISTORY_MAX_ENTRIES_PER_DAY);
+      totalEntries += items.length;
+      if (totalEntries > HISTORY_MAX_TOTAL_ENTRIES) throw new HistoryError('size');
+      items.forEach((v) => {
+        if (!Number.isInteger(v) || v < 0 || v > 0xffffffff) return;
+        const c = v >>> 14;
+        const h = (v >>> 8) & 31;
+        const n = v & 255;
+        if (!pairs[c] || h > 23 || !n || (!allowWeekend && ((v >>> 13) & 1))) return;
+        out.push(v >>> 0);
+      });
+      return out;
+    };
+    // Niente giorni nel futuro: non sbiadirebbero mai
+    const maxDay = localDay(new Date()) + 1;
+    const validDay = (d) => Number.isInteger(d) && d > 0 && d <= maxDay;
+    // Tetto sul totale delle voci (memoria e tempo di calcolo)
+    let totalEntries = 0;
+    const daysOut = list(obj.days).filter((d) => Array.isArray(d) && validDay(d[0])).map((d) => [d[0], cleanEntries(d[1], false)]);
+    const monthsOut = list(obj.months).filter((d) => Array.isArray(d) && validDay(d[0])).map((d) => [monthStart(d[0]), cleanEntries(d[1], true)]);
+    const ctxOut = list(obj.contexts).map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      return cleanContext({
+        name: c.name, rule: c.rule, source: c.source, mode: c.mode, boost: c.boost,
+        edits: list(c.edits).map((e) => (Array.isArray(e) ? { prev: e[0], word: e[1], weight: e[2] } : null)),
+      });
+    }).filter(Boolean);
+    const baseOut = list(obj.base).map((b) => {
+      if (!Array.isArray(b)) return null;
+      const prev = b[0] === START ? START : wordKey(b[0]);
+      const word = wordKey(b[1]);
+      const weight = Number(b[2]);
+      if (!prev || !word || !Number.isFinite(weight) || Math.abs(weight) > CSV_MAX_WEIGHT || !validDay(b[3])) return null;
+      const ctxName = typeof b[4] === 'string' ? b[4].replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, NAME_MAX) : null;
+      return { prev, word, weight, day: b[3], ctxName: ctxName || null };
+    }).filter(Boolean);
+    // Un file «solo contesti» (da un'altra famiglia o dalla scuola) non tocca lo storico né i pesi generali
+    if (obj.kind === 'contexts') {
+      const names = new Set(ctxOut.map((c) => c.name.toLowerCase()));
+      return { kind: obj.kind, pairs: [], days: [], months: [], base: baseOut.filter((b) => b.ctxName && names.has(b.ctxName.toLowerCase())), contexts: ctxOut };
+    }
+    return { kind: obj.kind, pairs, days: daysOut, months: monthsOut, base: baseOut, contexts: ctxOut };
+  }
+
+  async function readHistoryFile(file) {
+    if (!file || file.size > HISTORY_MAX_BYTES) throw new HistoryError('size');
+    const parsed = parseHistory(await file.text());
+    const dayCount = parsed.days.length;
+    return { parsed, summary: { kind: parsed.kind, days: dayCount, contexts: parsed.contexts.length, names: parsed.contexts.map((c) => c.name) } };
+  }
+
+  /*
+   * Applica un file dello storico. mode 'merge': i conteggi si sommano, i contesti con lo stesso nome vengono
+   * sostituiti da quelli del file; 'replace': storico, pesi di partenza e contesti del profilo vengono sostituiti.
+   */
+  async function importData(parsed, mode) {
+    if (!profileId) return;
+    await flush();
+    if (mode === 'replace') {
+      const ids = contexts.map((c) => c.id);
+      await clearAll();
+      await Promise.all(ids.map((id) => storage.deleteRecord('contexts', id)));
+      contexts = [];
+    }
+    // Contesti
+    const idByName = new Map(contexts.map((c) => [c.name.toLowerCase(), c.id]));
+    for (const ctx of parsed.contexts) {
+      const existing = idByName.get(ctx.name.toLowerCase());
+      if (existing) ctx.id = existing;
+      else if (contexts.length >= MAX_CONTEXTS) continue;
+      const index = contexts.findIndex((c) => c.id === ctx.id);
+      if (index >= 0) contexts[index] = ctx; else contexts.push(ctx);
+      idByName.set(ctx.name.toLowerCase(), ctx.id);
+      await storage.putRecord('contexts', ctx);
+    }
+    // Combinazioni del file → combinazioni di questo dispositivo
+    // Si creano solo le combinazioni davvero usate da qualche voce del file
+    const map = new Map();
+    const remap = (v) => {
+      const from = v >>> 14;
+      if (!map.has(from)) {
+        const p = parsed.pairs[from];
+        map.set(from, p ? comboFor(p[0], p[1], true) : -1);
+      }
+      const c = map.get(from);
+      return c >= 0 ? (((c << 14) | (v & 0x3fff)) >>> 0) : null;
+    };
+    const mergeInto = (target, keyFn, entries) => {
+      const m = new Map();
+      (target || []).forEach((v) => m.set(v & ~255, (m.get(v & ~255) || 0) + (v & 255)));
+      entries.forEach((v) => {
+        const r = remap(v);
+        if (r === null) return;
+        m.set(r & ~255, Math.min(MAX_COUNT, (m.get(r & ~255) || 0) + (r & 255)));
+      });
+      const out = new Uint32Array(m.size);
+      let i = 0;
+      m.forEach((n, key) => { out[i] = (key | Math.min(MAX_COUNT, n)) >>> 0; i += 1; });
+      return out;
+    };
+    parsed.days.forEach(([day, entries]) => {
+      if (day === today.day) {
+        entries.forEach((v) => {
+          const r = remap(v);
+          if (r === null) return;
+          const key = (r >>> 14) * 32 + ((r >>> 8) & 31);
+          today.counts.set(key, Math.min(MAX_COUNT, (today.counts.get(key) || 0) + (r & 255)));
+        });
+      } else days.set(day, mergeInto(days.get(day), null, entries));
+      dirtyDays.add(day);
+    });
+    const monthRecords = [];
+    parsed.months.forEach(([start, entries]) => {
+      const merged = mergeInto(months.get(start), null, entries);
+      months.set(start, merged);
+      monthRecords.push({ id: monthId(start), profileId, kind: 'month', day: start, entries: merged });
+    });
+    if (monthRecords.length) await storage.putRecords('usage', monthRecords);
+    // Pesi di partenza
+    const byKey = new Map(base.map((x) => [`${x.ctx || ''}\u0002${pairKey(x.prev, x.word)}`, x]));
+    parsed.base.forEach((b) => {
+      const ctxId = b.ctxName ? idByName.get(b.ctxName.toLowerCase()) : null;
+      if (b.ctxName && !ctxId) return;
+      const key = `${ctxId || ''}\u0002${pairKey(b.prev, b.word)}`;
+      if (!byKey.has(key) && byKey.size >= MAX_BASE) return;
+      byKey.set(key, { prev: b.prev, word: b.word, weight: b.weight, day: b.day, ctx: ctxId || null });
+    });
+    base = [...byKey.values()];
+    dirtyBase = true;
+    await flush();
+    rebuild();
+  }
+
+  // ---------- Aspetto dei suggerimenti ----------
+
   function applyLook() {
     document.documentElement.dataset.suggestWidth = settings.width;
     document.documentElement.dataset.suggestColor = settings.color;
+    // Opacità delle tessere non suggerite = 100% meno la trasparenza scelta
+    document.documentElement.style.setProperty('--suggest-fade-opacity', String((100 - settings.dimLevel) / 100));
   }
 
   async function setSettings(changes) {
@@ -328,8 +1089,11 @@
     await storage.set(SETTINGS_KEY, settings);
   }
 
-  // Salva subito quando la pagina viene nascosta (chiusura dell'app, cambio di scheda)
-  document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+  // Salva subito quando la pagina viene nascosta; al ritorno si ricalcola (può essere cambiata l'ora o il giorno)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) flush();
+    else if (profileId) { rebuild(); scheduleHourly(); }
+  });
 
   window.PicSpeak.predict = {
     load,
@@ -342,8 +1106,28 @@
     exportCsv,
     readCsvFile,
     importRows,
+    exportJson,
+    exportContextJson,
+    exportData,
+    readHistoryFile,
+    importData,
+    listContexts,
+    saveContext,
+    deleteContext,
+    contextPairs,
+    activeContexts: () => activeContexts().map((c) => c.name),
+    cleanRule,
+    cleanSource,
+    flush,
     CsvError,
+    ContextError,
+    HistoryError,
+    START,
+    BOOSTS,
+    MODES,
+    NAME_MAX,
     STYLES,
+    DIM_LEVEL,
     WIDTHS,
     COLORS,
     get settings() { return { ...settings }; },
