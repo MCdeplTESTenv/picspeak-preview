@@ -280,6 +280,13 @@
       async (value) => { await predict.setSettings({ showContext: value === 'on' }); refresh(); },
     )));
     const list = predict.listContexts();
+    // Molti contesti accesi insieme: nessun divieto, ma un avviso (le spinte si sommano e si diluiscono)
+    const activeCount = list.filter((c) => c.activeNow).length;
+    if (activeCount > 3) {
+      const warn = el('p', 'tpl-status', format('ctxManyActive', { n: activeCount }));
+      warn.setAttribute('role', 'status');
+      wrap.append(warn);
+    }
     if (!list.length) wrap.append(el('p', 'settings-help', t('ctxNone')));
     else {
       const ul = el('ul', 'ctx-list');

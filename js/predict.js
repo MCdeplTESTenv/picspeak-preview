@@ -1114,13 +1114,14 @@
   }
 
   /*
-   * Più contesti accesi insieme: elenco completo «CASA · SCUOLA» dove c'è spazio, forma breve «CASA +1» sugli schermi
-   * stretti (il CSS sceglie quale mostrare). Il primo è quello con la prevalenza più alta.
+   * Più contesti accesi insieme: al massimo due nomi dove c'è spazio («SCUOLA · CASA +2»), uno sugli schermi stretti
+   * («SCUOLA +3»; il CSS sceglie quale mostrare). Il primo è quello con la prevalenza più alta. L'elenco completo
+   * resta nella pagina dei contesti.
    */
   function contextNameNodes(names) {
     const full = document.createElement('span');
     full.className = 'ctx-names-full';
-    full.textContent = names.join(' · ');
+    full.textContent = names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '');
     const short = document.createElement('span');
     short.className = 'ctx-names-short';
     short.textContent = names.length > 1 ? `${names[0]} +${names.length - 1}` : (names[0] || '');
