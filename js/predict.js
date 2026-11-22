@@ -1119,13 +1119,23 @@
    * resta nella pagina dei contesti.
    */
   function contextNameNodes(names) {
-    const full = document.createElement('span');
-    full.className = 'ctx-names-full';
-    full.textContent = names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '');
-    const short = document.createElement('span');
-    short.className = 'ctx-names-short';
-    short.textContent = names.length > 1 ? `${names[0]} +${names.length - 1}` : (names[0] || '');
-    return [full, short];
+    // Il «+N» sta in un elemento a parte, fuori dal troncamento: con un nome lungo si accorcia solo il nome
+    const variant = (cls, shown) => {
+      const box = document.createElement('span');
+      box.className = cls;
+      const text = document.createElement('span');
+      text.className = 'ctx-names-text';
+      text.textContent = names.slice(0, shown).join(' · ');
+      box.append(text);
+      if (names.length > shown) {
+        const more = document.createElement('span');
+        more.className = 'ctx-names-more';
+        more.textContent = `+${names.length - shown}`;
+        box.append(more);
+      }
+      return box;
+    };
+    return [variant('ctx-names-full', 2), variant('ctx-names-short', 1)];
   }
 
   async function setSettings(changes) {

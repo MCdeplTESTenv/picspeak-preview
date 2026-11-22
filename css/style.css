@@ -2082,9 +2082,12 @@ body > .adult-bar { order: 0; }
 }
 
 /* Più contesti accesi: elenco completo dove c'è spazio, «CASA +1» sugli schermi stretti */
+.ctx-names-full, .ctx-names-short { display: flex; min-width: 0; max-width: 100%; gap: 0.3em; }
 .ctx-names-short { display: none; }
 @media (max-width: 700px) {
   .ctx-names-full { display: none; }
-  .ctx-names-short { display: inline; }
+  .ctx-names-short { display: flex; }
 }
-.ctx-chip-name > span, .context-tag > span { overflow: hidden; text-overflow: ellipsis; }
+/* Si accorcia solo il nome; il «+N» resta sempre visibile */
+.ctx-names-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-names-more { flex: none; white-space: nowrap; }
