@@ -1617,6 +1617,12 @@ body > .adult-bar { order: 0; }
 .suggest-sample-tile.is-suggested {
   outline: var(--suggest-width) solid rgb(var(--suggest-rgb) / var(--suggest-alpha, 1));
   outline-offset: 2px;
+  /* In primo piano: il contorno sta nello spazio tra le tessere e senza questo le tessere vicine
+   * (cartelle, tessere rese trasparenti) lo coprivano. Il contorno resta fuori dalla tessera e non
+   * arriva alle immagini e alle parole delle vicine (spazio + bordo + margine interno), quindi copre
+   * al massimo il loro bordo. */
+  position: relative;
+  z-index: 1;
 }
 /* Su sfondo scuro il blu si vede poco: si usa un giallo chiaro (gli altri colori restano quelli scelti) */
 :root[data-page-dark="true"]:not([data-suggest-color]) .symbol-cell.is-suggested,
