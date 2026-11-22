@@ -461,6 +461,14 @@
       });
       wrap.append(ol);
     }
+    // Combinazioni in comune con altri contesti accesi negli stessi orari: la spinta non si somma, vale la più forte
+    const shared = predict.sharedPairs(draftContext(), pairs);
+    if (shared.length === 1) {
+      wrap.append(el('p', 'settings-help', format(shared[0].count === 1 ? 'ctxSharedOne' : 'ctxShared', { n: shared[0].count, name: shared[0].name })));
+    } else if (shared.length > 1) {
+      const names = shared.map((x) => `${x.name} (${x.count})`).join(', ');
+      wrap.append(el('p', 'settings-help', format('ctxSharedMany', { names })));
+    }
     const tools = el('div', 'tpl-tools');
     // Elenchi lunghi: 30 alla volta, dalla combinazione più pesante (la pagina non diventa infinita in un colpo)
     if (pairs.length > draft.shown) {

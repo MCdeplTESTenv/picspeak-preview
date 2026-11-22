@@ -544,6 +544,67 @@
       .sort((a, b) => (a.removed - b.removed) || (b.weight - a.weight));
   }
 
+  /*
+   * Ore di accensione di un contesto per ciascuno dei prossimi 371 giorni (un anno e una settimana): per ogni giorno
+   * un numero in cui il bit h vale 1 se il contesto è acceso all'ora h. Si calcola una volta per contesto.
+   */
+  const ALL_HOURS = (1 << 24) - 1;
+  function hourMasks(ctx, startDay) {
+    const masks = new Int32Array(371);
+    if (ctx.mode === 'off') return masks;
+    if (ctx.mode === 'on') return masks.fill(ALL_HOURS);
+    const rule = ctx.rule;
+    if (rule.type === 'weekly') {
+      // Le ore di un giorno dipendono solo da quale giorno della settimana è (e da quello prima)
+      const week = [];
+      for (let iso = 1; iso <= 7; iso += 1) {
+        const prevIso = iso === 1 ? 7 : iso - 1;
+        let m = 0;
+        for (let h = 0; h < 24; h += 1) if (weeklyHour(rule, h, rule.days.includes(iso), rule.days.includes(prevIso))) m |= 1 << h;
+        week[iso] = m;
+      }
+      for (let i = 0; i < 371; i += 1) masks[i] = week[isoDay(startDay + i)];
+    } else {
+      for (let i = 0; i < 371; i += 1) masks[i] = inDates(rule, monthDay(startDay + i)) ? ALL_HOURS : 0;
+    }
+    return masks;
+  }
+
+  /*
+   * Contesti che si accendono negli stessi orari di ctx (anche non ancora salvato) e hanno combinazioni in comune:
+   * [{ name, count }]. Se si accendono in orari diversi non si segnala nulla. pairs = combinazioni di ctx già
+   * calcolate (facoltativo). Le combinazioni dei contesti salvati vengono dalla memoria (vedi savedPairs).
+   */
+  function sharedPairs(ctx, pairs, now = new Date()) {
+    const rule = cleanRule(ctx.rule);
+    if (!rule || ctx.mode === 'off') return [];
+    const startDay = localDay(now);
+    const mine = hourMasks({ mode: ctx.mode, rule }, startDay);
+    let keys = null;
+    const out = [];
+    contexts.forEach((other) => {
+      if (other.id === ctx.id || other.mode === 'off') return;
+      const theirs = hourMasks(other, startDay);
+      let overlap = false;
+      for (let i = 0; i < 371 && !overlap; i += 1) overlap = (mine[i] & theirs[i]) !== 0;
+      if (!overlap) return;
+      if (!keys) keys = new Set((pairs || contextPairs(ctx, now)).filter((p) => !p.removed).map((p) => pairKey(p.prev, p.word)));
+      const count = savedPairs(other, now).filter((p) => !p.removed && keys.has(pairKey(p.prev, p.word))).length;
+      if (count) out.push({ name: other.name, count });
+    });
+    return out.sort((a, b) => (b.count - a.count) || a.name.localeCompare(b.name));
+  }
+
+  /*
+   * Combinazioni di un contesto salvato, tenute in memoria finché non cambia qualcosa (storico, pesi, contesti):
+   * la memoria si svuota a ogni ricalcolo della tabella e a ogni tessera registrata.
+   */
+  const pairsCache = new Map();
+  function savedPairs(ctx, now = new Date()) {
+    if (!pairsCache.has(ctx.id)) pairsCache.set(ctx.id, contextPairs(ctx, now));
+    return pairsCache.get(ctx.id);
+  }
+
   // Peso generale (senza preferenza per l'ora): per statistiche ed esportazione
   function generalWeights(now = new Date()) {
     const nowDay = localDay(now);
@@ -565,11 +626,24 @@
     // Le abitudini della stessa ora e dello stesso tipo di giorno contano un po' di più
     const timeOf = (h, weekend) => 1 + (h === hour ? 0.5 : 0) + (weekend === weekendNow ? 0.25 : 0);
     const next = new Map();
+    pairsCache.clear();
     filteredWeights(null, HALF_LIFE_DAYS, nowDay, timeOf).forEach((item) => addScore(next, item.prev, item.word, item.weight));
     base.filter((b) => !b.ctx).forEach((b) => addScore(next, b.prev, b.word, b.weight * decay(nowDay - b.day, HALF_LIFE_DAYS)));
+    /*
+     * Spinta dei contesti accesi. Se la stessa combinazione è in più contesti accesi insieme, le spinte NON si
+     * sommano: vale solo la più forte (altrimenti due contesti simili gonfierebbero troppo la stessa parola).
+     */
+    const boosts = new Map();
     activeContexts(now).forEach((ctx) => {
-      contextPairs(ctx, now).forEach((item) => { if (!item.removed) addScore(next, item.prev, item.word, ctx.boost * item.weight); });
+      savedPairs(ctx, now).forEach((item) => {
+        if (item.removed) return;
+        const key = pairKey(item.prev, item.word);
+        const value = ctx.boost * item.weight;
+        const old = boosts.get(key);
+        if (!old || value > old.value) boosts.set(key, { prev: item.prev, word: item.word, value });
+      });
     });
+    boosts.forEach((b) => addScore(next, b.prev, b.word, b.value));
     table = next;
     tableHour = nowDay * 24 + hour;
     updateContextTag(now);
@@ -614,14 +688,16 @@
     if (n >= MAX_COUNT) return;
     today.counts.set(key, n + 1);
     dirtyDays.add(day);
+    pairsCache.clear();
     // La tabella si aggiorna subito, senza ricalcolare tutto
     ensureFresh(now);
-    let value = 1.75; // uso di adesso: stessa ora e stesso tipo di giorno
+    // Uso di adesso: stessa ora e stesso tipo di giorno, più la spinta del contesto più forte (non la somma)
+    let ctxBoost = 0;
     activeContexts(now).forEach((ctx) => {
       const edited = ctx.edits.some((e) => e.prev === prev && e.word === word);
-      if (!edited && ruleMatches(ctx.rule, day, now.getHours())) value += ctx.boost;
+      if (!edited && ruleMatches(ctx.rule, day, now.getHours())) ctxBoost = Math.max(ctxBoost, ctx.boost);
     });
-    addScore(table, prev, word, value);
+    addScore(table, prev, word, 1.75 + ctxBoost);
     scheduleSave();
   }
 
@@ -1171,6 +1247,7 @@
     saveContext,
     deleteContext,
     contextPairs,
+    sharedPairs,
     activeContexts: () => activeContexts().map((c) => c.name),
     cleanRule,
     cleanSource,
