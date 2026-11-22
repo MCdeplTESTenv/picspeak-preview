@@ -717,7 +717,9 @@
       <ol class="steps">
         <li>Toccate <strong>Nuovo contesto</strong> e date un nome, per esempio «Scuola».</li>
         <li>In <strong>Quando vale</strong> scegliete <strong>Giorni e orari</strong> (i giorni della settimana e le ore,
-          dalle… alle…, a fasce di un’ora) oppure <strong>Periodo dell’anno</strong> (per esempio dal 1 al 15 giugno, ogni
+          dalle… alle…, a fasce di un’ora; una fascia può passare la mezzanotte, per esempio dalle 18 alle 6: le ore dopo
+          mezzanotte appartengono al giorno in cui la fascia comincia, quindi «venerdì dalle 18 alle 6» vale fino a sabato
+          mattina) oppure <strong>Periodo dell’anno</strong> (per esempio dal 1 al 15 giugno, ogni
           anno).</li>
         <li>In <strong>Accensione</strong> scegliete <strong>Automatica</strong> (il contesto si accende da solo in quei
           giorni e orari), <strong>Sempre acceso</strong> (per esempio il primo giorno di mare, se quest’anno le date sono
@@ -726,7 +728,7 @@
           stessi giorni e orari, oppure scegliete <strong>Periodo preciso</strong> e indicate le date, per esempio le due
           settimane di mare dell’anno scorso.</li>
         <li>In <strong>Prevalenza</strong> scegliete quanto devono pesare le parole del contesto: <strong>Poca</strong>,
-          <strong>Media</strong> o <strong>Molta</strong>.</li>
+          <strong>Media</strong> o <strong>Molta</strong> (vedi sotto).</li>
         <li>Toccate <strong>Salva il contesto</strong>.</li>
       </ol>
       <figure class="shot shot-narrow">
@@ -745,8 +747,18 @@
           precedente (vuota per l’inizio della frase), la parola e il peso.</li>
         <li><strong>Annulla le modifiche e torna allo storico</strong>: toglie tutte le correzioni fatte a mano.</li>
       </ul>
+      <p>L’elenco compare già mentre create il contesto e cambia appena cambiate giorni, orari o date. Se le combinazioni
+        sono tante se ne vedono 30, dalla più pesante; <strong>Mostra altre</strong> ne aggiunge 30 alla volta e
+        <strong>Mostra meno</strong> torna alle prime 30.</p>
       <p>Le parole di un contesto si affievoliscono molto più lentamente delle altre: le parole del mare dell’estate scorsa
         contano ancora l’estate dopo.</p>
+      <h4>Come funziona la prevalenza</h4>
+      <p>Quando il contesto è acceso, il peso di ogni sua combinazione viene moltiplicato e aggiunto al peso normale:
+        per 2 con <strong>Poca</strong>, per 4 con <strong>Media</strong>, per 8 con <strong>Molta</strong>. Per esempio, se
+        «voglio → mare» ha peso 3 nel contesto Mare e «voglio → mangiare» ha peso 10 in generale, con <strong>Poca</strong>
+        mangiare resta davanti (6 contro 10), con <strong>Media</strong> mare la raggiunge (12 contro 10), con
+        <strong>Molta</strong> mare passa decisamente in testa (24 contro 10). Le altre parole restano sempre suggeribili.
+        Quando il contesto è spento non conta nulla.</p>
       <h4>Vedere quale contesto è acceso</h4>
       <p>Nella modalità adulto, nella barra in alto, il pulsante <strong>Contesto</strong> mostra il contesto acceso in
         quel momento e apre questa pagina. Sui telefoni più stretti il pulsante non c’è: il contesto acceso si legge in

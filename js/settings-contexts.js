@@ -64,7 +64,7 @@
     if (!rule) return '';
     if (rule.type === 'weekly') {
       return rule.days.length === 7 && rule.from === 0 && rule.to === 24
-        ? t('ctxAlways') : format('ctxWeeklyText', { days: daysText(rule.days), from: rule.from, to: rule.to });
+        ? t('ctxAlways') : format(rule.to < rule.from ? 'ctxWeeklyNightText' : 'ctxWeeklyText', { days: daysText(rule.days), from: rule.from, to: rule.to });
     }
     return format('ctxDatesText', { from: mdText(rule.from), to: mdText(rule.to) });
   }
@@ -95,7 +95,7 @@
       sourceMode: 'rule',
       source: { from: `${lastYear}-06-01`, to: `${lastYear}-06-15` },
       edits: [],
-      showAll: false,
+      shown: SHOWN_PAIRS, // combinazioni visibili: si allunga di 30 alla volta
       error: null,
     };
   }
@@ -352,6 +352,7 @@
         field('ctxTo', select(range(1, 24).map((h) => [h, `${h}:00`]), draft.weekly.to, (v) => { draft.weekly.to = Number(v); refresh(); })),
       );
       wrap.append(hours);
+      if (draft.weekly.to < draft.weekly.from) wrap.append(el('p', 'settings-help', format('ctxNightHelp', { to: draft.weekly.to })));
     } else {
       const months = range(1, 12).map((m) => [m, monthName(m)]);
       const part = (key) => {
@@ -423,7 +424,7 @@
     const pairs = predict.contextPairs(draftContext());
     const visible = pairs.filter((p) => !p.removed);
     if (!pairs.length) wrap.append(el('p', 'settings-help', t('ctxPairsNone')));
-    const shown = draft.showAll ? pairs : pairs.slice(0, SHOWN_PAIRS);
+    const shown = pairs.slice(0, draft.shown);
     if (shown.length) {
       const ol = el('ol', 'ctx-pairs');
       shown.forEach((item) => {
@@ -452,8 +453,13 @@
       wrap.append(ol);
     }
     const tools = el('div', 'tpl-tools');
-    if (pairs.length > SHOWN_PAIRS) {
-      tools.append(ui.button(draft.showAll ? t('ctxPairsFewer') : format('ctxPairsAll', { n: pairs.length }), () => { draft.showAll = !draft.showAll; refresh(); }));
+    // Elenchi lunghi: 30 alla volta, dalla combinazione più pesante (la pagina non diventa infinita in un colpo)
+    if (pairs.length > draft.shown) {
+      const more = Math.min(SHOWN_PAIRS, pairs.length - draft.shown);
+      tools.append(ui.button(`${format('ctxPairsMore', { n: more })} (${draft.shown}/${pairs.length})`, () => { draft.shown += SHOWN_PAIRS; refresh(); }));
+    }
+    if (draft.shown > SHOWN_PAIRS) {
+      tools.append(ui.button(t('ctxPairsFewer'), () => { draft.shown = SHOWN_PAIRS; refresh(); }));
     }
     tools.append(ui.button(t('ctxPairAdd'), async () => {
       const res = await ui.runDialog({

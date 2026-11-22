@@ -145,7 +145,8 @@
       const list = Array.isArray(rule.days) ? [...new Set(rule.days.filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort() : [];
       const from = Number.isInteger(rule.from) && rule.from >= 0 && rule.from <= 23 ? rule.from : null;
       const to = Number.isInteger(rule.to) && rule.to >= 1 && rule.to <= 24 ? rule.to : null;
-      if (!list.length || from === null || to === null || to <= from) return null;
+      // «to» minore di «from» = fascia che passa la mezzanotte (es. 18 → 6): finisce il mattino dopo
+      if (!list.length || from === null || to === null || to === from) return null;
       return { type: 'weekly', days: list, from, to };
     }
     if (rule.type === 'dates') {
@@ -183,8 +184,18 @@
   }
 
   // La regola comprende questo giorno e questa ora?
+  /*
+   * Fascia oraria settimanale. dayIn = il giorno è tra quelli scelti; prevIn = lo è il giorno prima.
+   * Una fascia che passa la mezzanotte (es. venerdì 18 → 6) appartiene al giorno in cui comincia:
+   * le ore dopo mezzanotte contano se il giorno PRIMA è tra quelli scelti (sabato 0-6 per «venerdì»).
+   */
+  function weeklyHour(rule, hour, dayIn, prevIn) {
+    if (rule.from < rule.to) return dayIn && hour >= rule.from && hour < rule.to;
+    return (dayIn && hour >= rule.from) || (prevIn && hour < rule.to);
+  }
+
   function ruleMatches(rule, day, hour) {
-    if (rule.type === 'weekly') return rule.days.includes(isoDay(day)) && hour >= rule.from && hour < rule.to;
+    if (rule.type === 'weekly') return weeklyHour(rule, hour, rule.days.includes(isoDay(day)), rule.days.includes(isoDay(day - 1)));
     return inDates(rule, monthDay(day));
   }
 
@@ -196,7 +207,7 @@
       return inside / n;
     }
     if (rule.type === 'weekly') {
-      if (hour < rule.from || hour >= rule.to) return 0;
+      if (!weeklyHour(rule, hour, true, true)) return 0;
       const sameType = rule.days.filter((d) => (d >= 6) === Boolean(weekend)).length;
       return sameType / (weekend ? 2 : 5);
     }
@@ -480,12 +491,14 @@
       if (rule && rule.type === 'dates') datesOk = inDates(rule, monthDay(day));
       if (rule && rule.type === 'range') datesOk = day >= rule.from && day <= rule.to;
       if (!datesOk) return;
-      const dayOk = rule && rule.type === 'weekly' ? rule.days.includes(isoDay(day)) : true;
-      if (!dayOk) return;
+      const weekly = rule && rule.type === 'weekly';
+      const dayIn = weekly ? rule.days.includes(isoDay(day)) : true;
+      const prevIn = weekly && rule.from > rule.to ? rule.days.includes(isoDay(day - 1)) : false;
+      if (!dayIn && !prevIn) return;
       for (let i = 0; i < entries.length; i += 1) {
         const v = entries[i];
         const h = (v >>> 8) & 31;
-        if (rule && rule.type === 'weekly' && (h < rule.from || h >= rule.to)) continue;
+        if (weekly && !weeklyHour(rule, h, dayIn, prevIn)) continue;
         const n = v & 255;
         add(v >>> 14, n * dec * (timeOf ? timeOf(h, weekend) : 1), n);
       }

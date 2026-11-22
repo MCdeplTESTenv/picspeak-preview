@@ -1710,7 +1710,7 @@ body > .adult-bar { order: 0; }
 /* Spazi verticali tra gli elementi delle sezioni Schede e Previsione */
 .settings-section > :is(.tpl-list, .tpl-tools, .type-legend, .suggest-sample, .habits-stats, .habits-top-title,
   .habits-top, .tpl-page-name, .tpl-status) { margin-top: 12px; margin-bottom: 0; }
-.settings-section > :is(.tpl-list, .type-legend, .habits-top, .suggest-sample, .tpl-status):last-child { margin-bottom: 16px; }
+.settings-section > :is(.tpl-list, .tpl-tools, .type-legend, .habits-top, .suggest-sample, .tpl-status):last-child { margin-bottom: 16px; }
 .settings-section > .dlg-btn-danger:last-child { margin: 12px 16px 16px; }
 .settings-section > .tpl-page-name + .setting-row { margin-top: 8px; }
 
@@ -2042,7 +2042,8 @@ body > .adult-bar { order: 0; }
 .ctx-pair.is-removed .ctx-pair-words { text-decoration: line-through; color: #6b717b; }
 .ctx-pair.is-edited:not(.is-removed) { border-left: 4px solid var(--focus); }
 .settings-section > .ctx-field, .settings-section > .ctx-pair-fields { width: calc(100% - 32px); }
-.ctx-field .name-input { width: 100%; box-sizing: border-box; font-weight: 400; }
+/* Nel campo in colonna il «flex: 1 1 200px» di .name-input diventerebbe un'altezza di 200px: qui altezza normale */
+.ctx-field .name-input { flex: none; width: 100%; box-sizing: border-box; font-weight: 400; min-height: 44px; }
 .ctx-pair-fields { display: flex; gap: 12px; flex-wrap: wrap; }
 .ctx-pair-fields > .ctx-field { flex: 1 1 160px; width: auto; }
 .ctx-date { display: flex; gap: 8px; }
