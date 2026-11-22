@@ -481,9 +481,20 @@
 
   // ---------- Impostazioni ----------
 
-  function section(titleKey, helpKey) {
+  // Voci «avanzate»: restano nascoste finché l'adulto non tocca «Mostra impostazioni avanzate».
+  // Sono solo nascoste: i valori già scelti continuano a valere.
+  let showAdvanced = false;
+
+  function markAdvanced(node) {
+    node.classList.add('is-advanced');
+    return node;
+  }
+
+  // options.advanced: true = sezione delle impostazioni avanzate
+  function section(titleKey, helpKey, options = {}) {
     const wrap = document.createElement('section');
     wrap.className = 'settings-section';
+    if (options.advanced) markAdvanced(wrap);
     const title = document.createElement('h3');
     title.textContent = t(titleKey);
     wrap.append(title);
@@ -1026,9 +1037,9 @@
         values: [['color', 'valColor'], ['gray', 'valGray'], ['contrast', 'valContrast']] },
       { key: 'cellContent', labelKey: 'optCellContent', helpKey: 'optCellContentHelp',
         values: [['both', 'valBoth'], ['image', 'valImageOnly'], ['text', 'valTextOnly']] },
-      { key: 'labelPosition', labelKey: 'optLabelPosition',
+      { key: 'labelPosition', advanced: true, labelKey: 'optLabelPosition',
         values: [['below', 'valBelow'], ['above', 'valAbove']] },
-      { key: 'imageFrame', labelKey: 'optImageFrame', helpKey: 'optImageFrameHelp',
+      { key: 'imageFrame', advanced: true, labelKey: 'optImageFrame', helpKey: 'optImageFrameHelp',
         values: [['none', 'valNo'], ['frame', 'valYes']] },
     ] },
     { titleKey: 'grpText', options: [
@@ -1036,33 +1047,33 @@
         values: [['upper', 'caseUpper'], ['lower', 'caseLower'], ['as-is', 'caseAsIs']] },
       { key: 'textSize', labelKey: 'optTextSize',
         values: [['m', 'valMedium'], ['s', 'valSmall'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
-      { key: 'font', labelKey: 'optFont', helpKey: 'optFontHelp',
+      { key: 'font', advanced: true, labelKey: 'optFont', helpKey: 'optFontHelp',
         values: [['standard', 'valStandard'], ['readable', 'valReadable'], ['rounded', 'valRounded']] },
     ] },
     { titleKey: 'grpCells', options: [
-      { key: 'cellGap', labelKey: 'optCellGap',
+      { key: 'cellGap', advanced: true, labelKey: 'optCellGap',
         values: [['normal', 'valNormal'], ['tight', 'valTight'], ['wide', 'valWide']] },
-      { key: 'border', labelKey: 'optBorder',
+      { key: 'border', advanced: true, labelKey: 'optBorder',
         values: [['normal', 'valNormal'], ['thin', 'valThin'], ['thick', 'valThick']] },
-      { key: 'corners', labelKey: 'optCorners',
+      { key: 'corners', advanced: true, labelKey: 'optCorners',
         values: [['rounded', 'valRoundedCorners'], ['square', 'valSquare']] },
-      { key: 'cellOpacity', labelKey: 'optCellOpacity', helpKey: 'optCellOpacityHelp',
+      { key: 'cellOpacity', advanced: true, labelKey: 'optCellOpacity', helpKey: 'optCellOpacityHelp',
         values: [['solid', 'valSolid'], ['translucent', 'valTranslucent']] },
     ] },
     { titleKey: 'grpLayout', options: [
       { key: 'sentencePosition', labelKey: 'optSentencePosition',
         values: [['top', 'valTop'], ['bottom', 'valBottom']] },
-      { key: 'sentenceSize', labelKey: 'optSentenceSize', helpKey: 'optSentenceSizeHelp',
+      { key: 'sentenceSize', advanced: true, labelKey: 'optSentenceSize', helpKey: 'optSentenceSizeHelp',
         values: [['normal', 'valNormal'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
-      { key: 'controlsSide', labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
+      { key: 'controlsSide', advanced: true, labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
         values: [['right', 'valRight'], ['left', 'valLeft']] },
-      { key: 'pageTitle', labelKey: 'optPageTitle',
+      { key: 'pageTitle', advanced: true, labelKey: 'optPageTitle',
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
-      { key: 'touchFeedback', labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
+      { key: 'touchFeedback', advanced: true, labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
         values: [['on', 'valOn'], ['strong', 'valStrong'], ['off', 'valOff']] },
-      { key: 'shakeHome', labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
+      { key: 'shakeHome', advanced: true, labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
-      { key: 'swipeClear', labelKey: 'optSwipeClear', helpKey: 'optSwipeClearHelp',
+      { key: 'swipeClear', advanced: true, labelKey: 'optSwipeClear', helpKey: 'optSwipeClearHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
     ] },
   ];
@@ -1183,9 +1194,11 @@
     }
   }
 
-  function settingRow(labelKey, helpKey, control) {
+  // options.advanced: true = riga delle impostazioni avanzate
+  function settingRow(labelKey, helpKey, control, options = {}) {
     const row = document.createElement('div');
     row.className = 'setting-row';
+    if (options.advanced) markAdvanced(row);
     const text = document.createElement('div');
     text.className = 'setting-text';
     const label = document.createElement('strong');
@@ -1362,7 +1375,7 @@
           applyAppearance();
           await storage.set('appearance', appearance);
           renderSettings();
-        })));
+        }), { advanced: opt.advanced }));
       });
     });
   }
@@ -1483,9 +1496,34 @@
     panel.append(title, intro);
     currentPanel = panel;
     category.render.forEach((fn) => fn());
+    // Se la categoria ha voci avanzate, in fondo c'è il pulsante per mostrarle o nasconderle
+    panel.classList.toggle('hide-advanced', !showAdvanced);
+    if (panel.querySelector('.is-advanced')) panel.append(advancedToggle());
 
     layout.append(nav, panel);
     el.settingsBody.replaceChildren(layout);
+  }
+
+  function advancedToggle() {
+    const box = document.createElement('div');
+    box.className = 'advanced-toggle';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dlg-btn advanced-toggle-btn';
+    btn.setAttribute('aria-expanded', String(showAdvanced));
+    btn.textContent = t(showAdvanced ? 'advancedHide' : 'advancedShow');
+    btn.addEventListener('click', async () => {
+      showAdvanced = !showAdvanced;
+      await storage.set('showAdvanced', showAdvanced);
+      renderSettings();
+      const again = el.settingsBody.querySelector('.advanced-toggle-btn');
+      if (again) again.focus();
+    });
+    const help = document.createElement('p');
+    help.className = 'settings-help';
+    help.textContent = t(showAdvanced ? 'advancedHideHelp' : 'advancedShowHelp');
+    box.append(btn, help);
+    return box;
   }
 
   // categoryId (facoltativo): apre direttamente quella categoria (es. 'prediction' dal pulsante del contesto)
@@ -1589,6 +1627,10 @@
     applyAppearance();
   }
 
+  async function restoreShowAdvanced() {
+    showAdvanced = (await storage.get('showAdvanced')) === true;
+  }
+
   async function restoreOnlineSearch() {
     const saved = await storage.get('onlineSearch');
     if (ONLINE_SEARCH_VALUES.some(([value]) => value === saved)) onlineSearch = saved;
@@ -1598,7 +1640,8 @@
 
   // Strumenti condivisi con le altre pagine delle impostazioni (schede pronte, previsione)
   window.PicSpeak.settingsUi = {
-    section: (titleKey, helpKey) => section(titleKey, helpKey),
+    section: (titleKey, helpKey, options) => section(titleKey, helpKey, options),
+    advanced: markAdvanced,
     settingRow,
     segmented,
     button,
@@ -1616,6 +1659,7 @@
   };
 
   bindEvents();
+  restoreShowAdvanced();
   restoreOnlineSearch();
   restorePageBackground();
   restoreAppearance();

@@ -493,6 +493,10 @@
       // Previsione (Impostazioni → Previsione)
       catPrediction: 'Previsione',
       catPredictionIntro: 'Suggerimenti della prossima parola, imparati dalle frasi del bambino. Tutto resta su questo dispositivo.',
+      advancedShow: 'Mostra impostazioni avanzate',
+      advancedShowHelp: 'Altre regolazioni per chi vuole personalizzare di più. Non servono per iniziare: quelle già scelte continuano a valere anche se sono nascoste.',
+      advancedHide: 'Nascondi impostazioni avanzate',
+      advancedHideHelp: 'Le impostazioni avanzate restano visibili in tutte le categorie finché non le nascondete. Nasconderle non cambia nulla di quello che avete scelto.',
       secSuggestTitle: 'Suggerimenti',
       secSuggestHelp: 'Dopo ogni parola PicSpeak evidenzia le tessere che il bambino usa più spesso subito dopo (o la cartella che le contiene). Le tessere non si spostano mai: restano dove la mano le cerca.',
       optSuggest: 'Mostra i suggerimenti', optSuggestHelp: 'All’inizio molti terapisti preferiscono tenerli spenti; le abitudini si registrano comunque.',
@@ -1238,6 +1242,10 @@
       // Prediction (Settings → Prediction)
       catPrediction: 'Prediction',
       catPredictionIntro: 'Next-word suggestions learnt from the child’s sentences. Everything stays on this device.',
+      advancedShow: 'Show advanced settings',
+      advancedShowHelp: 'More adjustments for those who want to customise further. You do not need them to get started: the ones already chosen keep working even when hidden.',
+      advancedHide: 'Hide advanced settings',
+      advancedHideHelp: 'Advanced settings stay visible in every category until you hide them. Hiding them changes nothing you have chosen.',
       secSuggestTitle: 'Suggestions',
       secSuggestHelp: 'After each word PicSpeak highlights the tiles the child most often uses next (or the folder that contains them). Tiles never move: they stay where the hand looks for them.',
       optSuggest: 'Show suggestions', optSuggestHelp: 'At first many therapists prefer them off; habits are recorded anyway.',
