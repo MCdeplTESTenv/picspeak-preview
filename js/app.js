@@ -27,6 +27,10 @@
     fixed: false,
     // Ultima selezione di una tessera (per ignorare i tocchi ripetuti)
     lastSelectAt: 0,
+    // Gioco in corso sulle schede vere (Storie, Trova la tessera, composizione di una storia): vedi js/games.js.
+    // { onTap(item, cell) → true se il tocco è stato gestito dal gioco }. Durante un gioco nulla entra nelle
+    // abitudini della previsione e non si evidenziano suggerimenti.
+    game: null,
   };
 
   /*
@@ -117,7 +121,7 @@
 
     // In modalità impostazioni si vedono anche le tessere nascoste (attenuate) e la tessera "+",
     // tranne durante l'anteprima dello zoom, che mostra la pagina esattamente come la vede il bambino
-    const editing = state.mode === 'adult' && !state.preview;
+    const editing = state.mode === 'adult' && !state.preview && !state.game;
     const cells = data.orderedCells(page, { includeHidden: editing }).map((item) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -302,7 +306,7 @@
     if (el.showAll) el.showAll.hidden = true;
     const predict = window.PicSpeak.predict;
     // Solo in comunicazione (o nell'anteprima): mentre si modificano le schede non si evidenzia nulla
-    if (!predict || !predict.settings.suggest || (state.mode === 'adult' && !state.preview)) return;
+    if (!predict || !predict.settings.suggest || (state.mode === 'adult' && !state.preview) || state.game) return;
     const page = data.page(state.pageId);
     if (!page) return;
     const prevItem = state.sentence[state.sentence.length - 1] || null;
@@ -553,6 +557,11 @@
     speech.speak(text, i18n.speechLocale);
   }
 
+  // Parola di una tessera: si legge dopo quelle toccate subito prima, senza tagliarle
+  function sayWord(text) {
+    speech.speak(text, i18n.speechLocale, { queue: true });
+  }
+
   // Breve evidenziazione visiva del tocco (senza animazioni invasive)
   function flash(node) {
     node.classList.add('is-pressed');
@@ -577,6 +586,11 @@
   function onCellTap(event) {
     const cell = event.target.closest('.symbol-cell');
     if (!cell) return;
+    // Composizione di una storia (impostazioni sbloccate): le tessere si scelgono come in comunicazione
+    if (state.game && state.mode === 'adult') {
+      selectCell(cell);
+      return;
+    }
     // Impostazioni sbloccate: il tocco apre la modifica della tessera (o ne aggiunge una);
     // la cartella invece si apre, e le sue impostazioni sono sulla matita nell'angolo
     if (state.mode === 'adult' && window.PicSpeak.editor) {
@@ -609,26 +623,63 @@
     if (!item || item.kind === 'empty') return;
     state.lastSelectAt = now;
     flash(cell);
+    // Gioco in corso: il tocco può essere gestito dal gioco (es. «Trova la tessera»)
+    if (state.game && state.game.onTap && state.game.onTap(item, cell)) return;
     const speakNow = options.speakWords !== 'sentence';
     if (item.kind === 'folder') {
       // Cartella «silenziosa» (opzione nelle sue impostazioni): si apre senza leggerne il nome
-      if (speakNow && !item.silent) say(speechOf(item));
+      if (speakNow && !item.silent) sayWord(speechOf(item));
       openFolder(item.targetPageId);
       return;
     }
-    if (speakNow) say(speechOf(item));
+    if (speakNow) sayWord(speechOf(item));
     // Ritorno automatico alla Home dopo una parola presa in una cartella
     if (options.autoHome && state.pageId !== data.homePageId) setTimeout(() => goToPage(data.homePageId), 250);
-    if (state.sentence.length < MAX_SENTENCE_LENGTH) {
-      const entry = {
-        cellId: item.id, label: item.label, speak: item.speak, kind: item.kind,
-        wordType: item.wordType, color: item.color, imageId: item.imageId,
-      };
-      // Abitudini d'uso (solo sul dispositivo): coppia «parola precedente → parola»
-      if (window.PicSpeak.predict) window.PicSpeak.predict.record(entry, state.sentence[state.sentence.length - 1] || null);
-      state.sentence.push(entry);
-      renderSentence();
-    }
+    pushWord(item);
+  }
+
+  // Aggiunge una tessera alla frase. Le abitudini si registrano solo nella comunicazione vera, mai nei giochi
+  function pushWord(item) {
+    if (state.sentence.length >= MAX_SENTENCE_LENGTH) return false;
+    const entry = {
+      cellId: item.id, label: item.label, speak: item.speak, kind: item.kind,
+      wordType: item.wordType, color: item.color, imageId: item.imageId,
+    };
+    // Abitudini d'uso (solo sul dispositivo): coppia «parola precedente → parola»
+    if (!state.game && window.PicSpeak.predict) window.PicSpeak.predict.record(entry, state.sentence[state.sentence.length - 1] || null);
+    state.sentence.push(entry);
+    renderSentence();
+    return true;
+  }
+
+  // ---------- Strumenti per i giochi (js/games.js) ----------
+
+  function setGame(game) {
+    state.game = game || null;
+    document.body.classList.toggle('is-board-game', Boolean(state.game));
+    el.grid.querySelectorAll('.is-demo-target').forEach((n) => n.classList.remove('is-demo-target'));
+    // In comunicazione le tessere restano le stesse (un tocco in corso non deve perdere la sua tessera):
+    // cambia solo l'evidenziazione dei suggerimenti. Con le impostazioni sbloccate spariscono i segni di modifica
+    if (!state.ready) return;
+    if (state.mode === 'adult') renderGrid(); else applySuggestions();
+  }
+
+  // Nodo della tessera mostrata con questo id (null se non è nella pagina)
+  function cellNode(cellId) {
+    return [...el.grid.querySelectorAll('.symbol-cell[data-id]')].find((n) => n.dataset.id === cellId) || null;
+  }
+
+  // Evidenzia (senza animazioni) l'elemento che il gioco sta per «toccare»: una tessera o un pulsante
+  function highlight(node) {
+    document.querySelectorAll('.is-demo-target').forEach((n) => n.classList.remove('is-demo-target'));
+    if (!node) return;
+    node.classList.add('is-demo-target');
+    if (node.closest('#symbol-grid')) node.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setSentence(items) {
+    state.sentence = Array.isArray(items) ? items.slice(0, MAX_SENTENCE_LENGTH).map((x) => ({ ...x })) : [];
+    renderSentence();
   }
 
   // Striscia frase: in modalità bambino il tocco ripete solo la parola (nessuna cancellazione
@@ -643,7 +694,7 @@
       renderSentence();
       return;
     }
-    say(speechOf(state.sentence[index]));
+    sayWord(speechOf(state.sentence[index]));
   }
 
   function applyStaticLabels() {
@@ -741,6 +792,7 @@
   }
 
   function clearSentenceAnimated(direction) {
+    speech.stop();
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) {
       state.sentence = [];
@@ -814,9 +866,10 @@
     if (!text) return;
     if (!options.clearAfter) { say(text); return; }
     const snapshot = state.sentence;
+    const length = snapshot.length;
     const clear = () => {
-      // Solo se nel frattempo non si è cominciata un'altra frase
-      if (state.sentence === snapshot) { state.sentence = []; renderSentence(); }
+      // Solo se nel frattempo non si è cominciata un'altra frase né aggiunta un'altra parola
+      if (state.sentence === snapshot && snapshot.length === length) { state.sentence = []; renderSentence(); }
     };
     if (!speech.speak(text, i18n.speechLocale, { onEnd: clear })) setTimeout(clear, 1500);
   }
@@ -856,6 +909,8 @@
       renderSentence();
     });
     el.clear.addEventListener('click', () => {
+      // Cancellando la frase si zittiscono anche le parole ancora in coda
+      speech.stop();
       state.sentence = [];
       renderSentence();
     });
@@ -916,7 +971,17 @@
     getOptions: () => ({ ...options }),
     oops,
     say,
+    sayWord,
     flash,
+    setGame,
+    cellNode,
+    highlight,
+    pushWord,
+    setSentence,
+    sentence: () => state.sentence.map((x) => ({ ...x })),
+    speakSentence: (onEnd) => speech.speak(sentenceText(), i18n.speechLocale, { onEnd }),
+    get game() { return state.game; },
+    get ready() { return state.ready; },
     get fixedLayout() { return Boolean(state.fixed); },
     get preview() { return state.preview; },
     get mode() { return state.mode; },

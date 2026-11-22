@@ -18,12 +18,12 @@
 
   // Chiavi dell'archivio "settings" che contengono solo scelte delle impostazioni.
   // Restano fuori, di proposito: security e securityAttempts (PIN), activeProfileId, previousPages:*,
-  // userTemplates (modelli salvati), symbolPacks (pacchetti già scaricati) e onlineSearch: una scelta
+  // userTemplates (modelli salvati), gameStories (storie dei giochi scritte dall'adulto), symbolPacks (pacchetti già scaricati) e onlineSearch: una scelta
   // di privacy sull'uso di internet non deve tornare «Attiva» senza che l'adulto se ne accorga.
   const SETTINGS_KEYS = [
     'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset',
     'labelCase', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
-    'keepScreenOn', 'autoFullscreen', 'showAdvanced',
+    'keepScreenOn', 'autoFullscreen', 'showAdvanced', 'games',
   ];
 
   // Riga con un pulsante disattivato e l'etichetta «Prossimamente»

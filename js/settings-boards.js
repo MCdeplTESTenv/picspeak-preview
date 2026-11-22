@@ -623,15 +623,6 @@
       [['off', 'valNo'], ['on', 'valYes']], s.collect ? 'on' : 'off',
       async (value) => { await predict.setSettings({ collect: value === 'on' }); ui.render(); },
     )));
-    // Base di partenza: combinazioni di parole di base con pesi bassi, superate presto dall'uso reale
-    wrap.append(ui.settingRow('optStarter', 'optStarterHelp', ui.segmented(
-      [['off', 'valNo'], ['on', 'valYes']], predict.starterBaseOn() ? 'on' : 'off',
-      (value) => runSafely(async () => {
-        await predict.setStarterBase(value === 'on', i18n.language);
-        app.applySuggestions();
-        ui.render();
-      }),
-    )));
     const stats = predict.stats();
     wrap.append(el('p', 'habits-stats', format('habitsStats', { uses: stats.uses, pairs: stats.pairs })));
     // Quanto occupa lo storico sul dispositivo
@@ -651,7 +642,7 @@
         { value: 'yes', label: t('habitsClear'), danger: true },
       ]);
       if (ok !== 'yes') return;
-      await predict.clearAll({ keepStarter: true });
+      await predict.clearAll();
       app.applySuggestions();
       ui.render();
     }));

@@ -63,10 +63,8 @@
   function ruleText(rule) {
     if (!rule) return '';
     if (rule.type === 'weekly') {
-      // Una riga per fascia, unite da «;» (es. «lun–ven, dalle 16 alle 19; sab, dom, dalle 9 alle 12»)
-      return rule.slots.map((slot) => (slot.days.length === 7 && slot.from === 0 && slot.to === 24
-        ? t('ctxAlways') : format(slot.to < slot.from ? 'ctxWeeklyNightText' : 'ctxWeeklyText', { days: daysText(slot.days), from: slot.from, to: slot.to })))
-        .join('; ');
+      return rule.days.length === 7 && rule.from === 0 && rule.to === 24
+        ? t('ctxAlways') : format(rule.to < rule.from ? 'ctxWeeklyNightText' : 'ctxWeeklyText', { days: daysText(rule.days), from: rule.from, to: rule.to });
     }
     return format('ctxDatesText', { from: mdText(rule.from), to: mdText(rule.to) });
   }
@@ -90,7 +88,7 @@
       id: null,
       name: '',
       type: 'weekly',
-      weekly: [{ days: [1, 2, 3, 4, 5], from: 8, to: 12 }], // una o più fasce
+      weekly: { days: [1, 2, 3, 4, 5], from: 8, to: 12 },
       dates: { from: '06-01', to: '06-15' },
       mode: 'auto',
       boost: 4,
@@ -107,13 +105,12 @@
     d.id = ctx.id;
     d.name = ctx.name;
     d.type = ctx.rule.type;
-    if (ctx.rule.type === 'weekly') d.weekly = ctx.rule.slots.map((slot) => ({ days: [...slot.days], from: slot.from, to: slot.to }));
+    if (ctx.rule.type === 'weekly') d.weekly = { days: [...ctx.rule.days], from: ctx.rule.from, to: ctx.rule.to };
     else d.dates = { from: ctx.rule.from, to: ctx.rule.to };
     d.mode = ctx.mode;
     d.boost = ctx.boost;
     if (ctx.source) { d.sourceMode = 'range'; d.source = { ...ctx.source }; }
     d.edits = ctx.edits.map((e) => ({ ...e }));
-    d.builtin = ctx.builtin || null;
     return d;
   }
 
@@ -121,7 +118,7 @@
     return {
       id: draft.id || undefined,
       name: draft.name,
-      rule: draft.type === 'weekly' ? { type: 'weekly', slots: draft.weekly.map((slot) => ({ ...slot })) } : { type: 'dates', ...draft.dates },
+      rule: draft.type === 'weekly' ? { type: 'weekly', ...draft.weekly } : { type: 'dates', ...draft.dates },
       mode: draft.mode,
       boost: draft.boost,
       source: draft.sourceMode === 'range' ? { ...draft.source } : null,
@@ -297,7 +294,6 @@
         const li = el('li', `ctx-item${ctx.activeNow ? ' is-active' : ''}`);
         const text = el('div', 'ctx-text');
         text.append(el('strong', 'ctx-name', ctx.name), el('small', null, ruleText(ctx.rule)));
-        if (ctx.builtin) text.append(el('small', 'ctx-builtin-tag', t('ctxBuiltinTag')));
         if (ctx.source) text.append(el('small', null, format('ctxSourceText', { from: isoText(ctx.source.from), to: isoText(ctx.source.to) })));
         const state = el('span', `ctx-state${ctx.activeNow ? ' is-active' : ''}`, stateText(ctx));
         const edit = ui.button(t('ctxEdit'), () => { draft = draftFrom(ctx); refresh(); });
@@ -312,40 +308,6 @@
       ui.advanced(ui.button(t('ctxImportFile'), () => importFile((m) => { notice = m; refresh(); }))),
     );
     wrap.append(tools);
-    renderBuiltins();
-  }
-
-  // Contesti pronti di PicSpeak: si aggiungono uno per uno, poi si modificano come gli altri
-  function renderBuiltins() {
-    const wrap = ui.section('ctxBuiltinTitle', 'ctxBuiltinHelp');
-    const ul = el('ul', 'ctx-list');
-    predict.builtinContexts(i18n.language).forEach((item) => {
-      const li = el('li', 'ctx-item');
-      const text = el('div', 'ctx-text');
-      text.append(el('strong', 'ctx-name', item.name), el('small', null, ruleText(item.rule)),
-        el('small', null, format('ctxBuiltinCount', { n: item.count })));
-      if (item.clash) text.append(el('small', null, t('ctxBuiltinClash')));
-      li.append(text);
-      if (item.contextId) li.append(el('span', 'ctx-state is-active', t('ctxBuiltinAdded')));
-      else {
-        const add = ui.button(t('ctxBuiltinAdd'), async () => {
-          try {
-            const ctx = await predict.addBuiltin(item.id, i18n.language);
-            notice = { text: format('ctxBuiltinAddedNotice', { name: ctx.name }) };
-          } catch (error) {
-            const key = error instanceof predict.ContextError ? `ctxError_${error.message}` : 'ctxError_rule';
-            notice = { text: t(key) === key ? t('ctxError_rule') : t(key), error: true };
-          }
-          if (window.PicSpeak.app) window.PicSpeak.app.applySuggestions();
-          updateChip();
-          refresh();
-        });
-        add.disabled = item.clash;
-        li.append(add);
-      }
-      ul.append(li);
-    });
-    wrap.append(ul);
   }
 
   // ---------- Scheda di modifica ----------
@@ -376,51 +338,30 @@
       (value) => { draft.type = value; refresh(); },
     )));
     if (draft.type === 'weekly') {
-      // Una o più fasce: ognuna con i suoi giorni e i suoi orari (es. pranzo e cena, feriali e fine settimana)
-      const many = draft.weekly.length > 1;
-      draft.weekly.forEach((slot, index) => {
-        const box = el('div', many ? 'ctx-slot' : 'ctx-slot is-single');
-        if (many) box.append(el('p', 'ctx-slot-title', format('ctxSlot', { n: index + 1 })));
-        const daysBox = el('div', 'choice-group ctx-days');
-        daysBox.setAttribute('role', 'group');
-        daysBox.setAttribute('aria-label', many ? `${t('ctxDays')} · ${format('ctxSlot', { n: index + 1 })}` : t('ctxDays'));
-        dayNames().forEach((name, i) => {
-          const day = i + 1;
-          const btn = el('button', 'dlg-btn ctx-day', name);
-          btn.type = 'button';
-          btn.setAttribute('aria-pressed', String(slot.days.includes(day)));
-          btn.addEventListener('click', () => {
-            const set = new Set(slot.days);
-            if (set.has(day)) set.delete(day); else set.add(day);
-            slot.days = [...set].sort((a, b) => a - b);
-            refresh();
-          });
-          daysBox.append(btn);
-        });
-        box.append(field('ctxDays', daysBox));
-        const hours = el('div', 'ctx-pair-fields');
-        hours.append(
-          field('ctxFrom', select(range(0, 23).map((h) => [h, `${h}:00`]), slot.from, (v) => { slot.from = Number(v); refresh(); })),
-          field('ctxTo', select(range(1, 24).map((h) => [h, `${h}:00`]), slot.to, (v) => { slot.to = Number(v); refresh(); })),
-        );
-        box.append(hours);
-        if (slot.to < slot.from) box.append(el('p', 'settings-help', format('ctxNightHelp', { to: slot.to })));
-        if (many) {
-          const del = ui.button(t('ctxSlotRemove'), () => { draft.weekly.splice(index, 1); refresh(); });
-          box.append(del);
-        }
-        wrap.append(box);
-      });
-      if (draft.weekly.length < predict.MAX_SLOTS) {
-        const tools = el('div', 'tpl-tools');
-        tools.append(ui.button(t('ctxSlotAdd'), () => {
-          const last = draft.weekly[draft.weekly.length - 1];
-          draft.weekly.push({ days: [...last.days], from: last.to % 24 === 0 ? 8 : last.to, to: last.to % 24 === 0 ? 9 : Math.min(24, last.to + 1) });
+      const daysBox = el('div', 'choice-group ctx-days');
+      daysBox.setAttribute('role', 'group');
+      daysBox.setAttribute('aria-label', t('ctxDays'));
+      dayNames().forEach((name, i) => {
+        const day = i + 1;
+        const btn = el('button', 'dlg-btn ctx-day', name);
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', String(draft.weekly.days.includes(day)));
+        btn.addEventListener('click', () => {
+          const set = new Set(draft.weekly.days);
+          if (set.has(day)) set.delete(day); else set.add(day);
+          draft.weekly.days = [...set].sort((a, b) => a - b);
           refresh();
-        }));
-        wrap.append(tools);
-      }
-      wrap.append(el('p', 'settings-help', t('ctxSlotsHelp')));
+        });
+        daysBox.append(btn);
+      });
+      wrap.append(field('ctxDays', daysBox));
+      const hours = el('div', 'ctx-pair-fields');
+      hours.append(
+        field('ctxFrom', select(range(0, 23).map((h) => [h, `${h}:00`]), draft.weekly.from, (v) => { draft.weekly.from = Number(v); refresh(); })),
+        field('ctxTo', select(range(1, 24).map((h) => [h, `${h}:00`]), draft.weekly.to, (v) => { draft.weekly.to = Number(v); refresh(); })),
+      );
+      wrap.append(hours);
+      if (draft.weekly.to < draft.weekly.from) wrap.append(el('p', 'settings-help', format('ctxNightHelp', { to: draft.weekly.to })));
     } else {
       const months = range(1, 12).map((m) => [m, monthName(m)]);
       const part = (key) => {
@@ -581,24 +522,6 @@
     refresh();
   }
 
-  // Contesto pronto: torna com'era all'inizio (nome, orari, combinazioni e pesi); le modifiche si perdono
-  async function restore() {
-    const ok = await choose(format('ctxRestoreTitle', { name: draft.name }), t('ctxRestoreHelp'), [
-      { value: 'yes', label: t('ctxRestore'), danger: true },
-    ]);
-    if (ok !== 'yes') return;
-    try {
-      const ctx = await predict.restoreBuiltin(draft.id);
-      notice = { text: format('ctxRestored', { name: ctx.name }) };
-    } catch (error) {
-      notice = { text: t('ctxError_rule'), error: true };
-    }
-    draft = null;
-    if (window.PicSpeak.app) window.PicSpeak.app.applySuggestions();
-    updateChip();
-    refresh();
-  }
-
   async function remove() {
     const ok = await choose(format('ctxDeleteTitle', { name: draft.name }), t('ctxDeleteHelp'), [
       { value: 'yes', label: t('ctxDelete'), danger: true },
@@ -639,7 +562,6 @@
       draft.name = name.value;
     });
     head.append(field('ctxName', name));
-    if (draft.builtin) head.append(el('p', 'settings-help', t('ctxBuiltinNote')));
 
     const when = ui.section('ctxWhenTitle', 'ctxWhenHelp');
     renderWhen(when);
@@ -667,7 +589,6 @@
     if (draft.id) {
       const id = draft.id;
       tools.append(ui.advanced(ui.button(t('ctxExportOne'), () => exportOne(id, draft.name))));
-      if (draft.builtin) tools.append(ui.button(t('ctxRestore'), restore));
       const del = ui.button(t('ctxDelete'), remove);
       del.classList.add('dlg-btn-danger');
       tools.append(del);

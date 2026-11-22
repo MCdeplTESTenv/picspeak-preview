@@ -30,7 +30,6 @@
   const { storage } = window.PicSpeak;
 
   const START = '^'; // inizio della frase
-  const STARTER = 'starter'; // segno dei pesi di partenza messi dalla base di PicSpeak
   const HALF_LIFE_DAYS = 30;
   const CONTEXT_HALF_LIFE_DAYS = 365;
   const DAY_MS = 24 * 60 * 60 * 1000;
@@ -58,10 +57,9 @@
   const MODES = ['auto', 'on', 'off'];
   const MAX_CONTEXTS = 30;
   const MAX_EDITS = 2000;
-  const MAX_SLOTS = 6; // fasce orarie per contesto
   const NAME_MAX = 40;
   // File dello storico (esportazione a parte e, in futuro, parte del backup completo)
-  const HISTORY_FORMAT_VERSION = 2; // 2: regole settimanali con più fasce (i file della versione 1 restano validi)
+  const HISTORY_FORMAT_VERSION = 1;
   const HISTORY_MAX_BYTES = 40 * 1024 * 1024;
   const HISTORY_MAX_DAYS = 20000;
   const HISTORY_MAX_ENTRIES_PER_DAY = 100000;
@@ -140,34 +138,16 @@
 
   // ---------- Regole dei contesti ----------
 
-  // Una fascia settimanale valida o null: giorni ISO 1-7, ore intere da/a (a escluso)
-  function cleanSlot(slot) {
-    if (!slot || typeof slot !== 'object') return null;
-    const list = Array.isArray(slot.days) ? [...new Set(slot.days.filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort() : [];
-    const from = Number.isInteger(slot.from) && slot.from >= 0 && slot.from <= 23 ? slot.from : null;
-    const to = Number.isInteger(slot.to) && slot.to >= 1 && slot.to <= 24 ? slot.to : null;
-    // «to» minore di «from» = fascia che passa la mezzanotte (es. 18 → 6): finisce il mattino dopo
-    if (!list.length || from === null || to === null || to === from) return null;
-    return { days: list, from, to };
-  }
-
-  /*
-   * Regola valida o null. weekly: una o più fasce (slots), ognuna con giorni e orari; dates: "MM-GG" da/a, ogni anno.
-   * Migrazione: la regola settimanale del formato precedente ({ days, from, to }, una sola fascia) diventa
-   * { slots: [ { days, from, to } ] } senza perdere nulla.
-   */
+  // Regola valida o null. weekly: giorni ISO 1-7, ore intere da/a (a escluso); dates: "MM-GG" da/a, ogni anno
   function cleanRule(rule) {
     if (!rule || typeof rule !== 'object') return null;
     if (rule.type === 'weekly') {
-      const raw = Array.isArray(rule.slots) ? rule.slots.slice(0, MAX_SLOTS) : [rule];
-      const seen = new Set();
-      const slots = [];
-      raw.forEach((item) => {
-        const slot = cleanSlot(item);
-        const key = slot && `${slot.days.join(',')}|${slot.from}|${slot.to}`;
-        if (slot && !seen.has(key)) { seen.add(key); slots.push(slot); }
-      });
-      return slots.length ? { type: 'weekly', slots } : null;
+      const list = Array.isArray(rule.days) ? [...new Set(rule.days.filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort() : [];
+      const from = Number.isInteger(rule.from) && rule.from >= 0 && rule.from <= 23 ? rule.from : null;
+      const to = Number.isInteger(rule.to) && rule.to >= 1 && rule.to <= 24 ? rule.to : null;
+      // «to» minore di «from» = fascia che passa la mezzanotte (es. 18 → 6): finisce il mattino dopo
+      if (!list.length || from === null || to === null || to === from) return null;
+      return { type: 'weekly', days: list, from, to };
     }
     if (rule.type === 'dates') {
       const ok = (v) => typeof v === 'string' && /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(v)
@@ -209,36 +189,13 @@
    * Una fascia che passa la mezzanotte (es. venerdì 18 → 6) appartiene al giorno in cui comincia:
    * le ore dopo mezzanotte contano se il giorno PRIMA è tra quelli scelti (sabato 0-6 per «venerdì»).
    */
-  function weeklyHour(slot, hour, dayIn, prevIn) {
-    if (slot.from < slot.to) return dayIn && hour >= slot.from && hour < slot.to;
-    return (dayIn && hour >= slot.from) || (prevIn && hour < slot.to);
-  }
-
-  /*
-   * Ore di accensione di una regola settimanale per ogni giorno della settimana: masks[iso] ha il bit h a 1 se in quel
-   * giorno all'ora h almeno una fascia è attiva (un'ora presa da due fasce conta una volta sola). Calcolato una volta.
-   */
-  const weekMaskCache = new WeakMap();
-  function weekMask(rule) {
-    let masks = weekMaskCache.get(rule);
-    if (masks) return masks;
-    masks = new Int32Array(8);
-    for (let iso = 1; iso <= 7; iso += 1) {
-      const prevIso = iso === 1 ? 7 : iso - 1;
-      let m = 0;
-      rule.slots.forEach((slot) => {
-        const dayIn = slot.days.includes(iso);
-        const prevIn = slot.days.includes(prevIso);
-        for (let h = 0; h < 24; h += 1) if (weeklyHour(slot, h, dayIn, prevIn)) m |= 1 << h;
-      });
-      masks[iso] = m;
-    }
-    weekMaskCache.set(rule, masks);
-    return masks;
+  function weeklyHour(rule, hour, dayIn, prevIn) {
+    if (rule.from < rule.to) return dayIn && hour >= rule.from && hour < rule.to;
+    return (dayIn && hour >= rule.from) || (prevIn && hour < rule.to);
   }
 
   function ruleMatches(rule, day, hour) {
-    if (rule.type === 'weekly') return ((weekMask(rule)[isoDay(day)] >>> hour) & 1) === 1;
+    if (rule.type === 'weekly') return weeklyHour(rule, hour, rule.days.includes(isoDay(day)), rule.days.includes(isoDay(day - 1)));
     return inDates(rule, monthDay(day));
   }
 
@@ -250,10 +207,9 @@
       return inside / n;
     }
     if (rule.type === 'weekly') {
-      // Parte dei giorni dello stesso tipo (feriali o fine settimana) in cui la regola è accesa a quest'ora
-      const masks = weekMask(rule);
-      const isos = weekend ? [6, 7] : [1, 2, 3, 4, 5];
-      return isos.filter((iso) => (masks[iso] >>> hour) & 1).length / isos.length;
+      if (!weeklyHour(rule, hour, true, true)) return 0;
+      const sameType = rule.days.filter((d) => (d >= 6) === Boolean(weekend)).length;
+      return sameType / (weekend ? 2 : 5);
     }
     // Periodo dell'anno: dipende solo dal mese, si calcola una volta per mese e regola
     const key = `${rule.from}|${rule.to}|${start}`;
@@ -340,9 +296,6 @@
       boost: BOOSTS.includes(raw.boost) ? raw.boost : 4,
       source: cleanSource(raw.source),
       edits,
-      // Contesto pronto (dalla base di PicSpeak): quale e in che lingua. Mai da un file importato
-      ...(typeof raw.builtin === 'string' && builtinDef(raw.builtin)
-        ? { builtin: raw.builtin, lang: raw.lang === 'it' ? 'it' : 'en' } : {}),
     };
   }
 
@@ -542,13 +495,13 @@
       if (rule && rule.type === 'range') datesOk = day >= rule.from && day <= rule.to;
       if (!datesOk) return;
       const weekly = rule && rule.type === 'weekly';
-      // Ore accese in questo giorno (le fasce che passano la mezzanotte sono già comprese)
-      const mask = weekly ? weekMask(rule)[isoDay(day)] : 0;
-      if (weekly && !mask) return;
+      const dayIn = weekly ? rule.days.includes(isoDay(day)) : true;
+      const prevIn = weekly && rule.from > rule.to ? rule.days.includes(isoDay(day - 1)) : false;
+      if (!dayIn && !prevIn) return;
       for (let i = 0; i < entries.length; i += 1) {
         const v = entries[i];
         const h = (v >>> 8) & 31;
-        if (weekly && !((mask >>> h) & 1)) continue;
+        if (weekly && !weeklyHour(rule, h, dayIn, prevIn)) continue;
         const n = v & 255;
         add(v >>> 14, n * dec * (timeOf ? timeOf(h, weekend) : 1), n);
       }
@@ -603,7 +556,13 @@
     const rule = ctx.rule;
     if (rule.type === 'weekly') {
       // Le ore di un giorno dipendono solo da quale giorno della settimana è (e da quello prima)
-      const week = weekMask(rule);
+      const week = [];
+      for (let iso = 1; iso <= 7; iso += 1) {
+        const prevIso = iso === 1 ? 7 : iso - 1;
+        let m = 0;
+        for (let h = 0; h < 24; h += 1) if (weeklyHour(rule, h, rule.days.includes(iso), rule.days.includes(prevIso))) m |= 1 << h;
+        week[iso] = m;
+      }
       for (let i = 0; i < 371; i += 1) masks[i] = week[isoDay(startDay + i)];
     } else {
       for (let i = 0; i < 371; i += 1) masks[i] = inDates(rule, monthDay(startDay + i)) ? ALL_HOURS : 0;
@@ -647,11 +606,10 @@
   }
 
   // Peso generale (senza preferenza per l'ora): per statistiche ed esportazione
-  // withStarter = false: senza la base di PicSpeak (le statistiche mostrano solo le abitudini vere del bambino)
-  function generalWeights(now = new Date(), withStarter = true) {
+  function generalWeights(now = new Date()) {
     const nowDay = localDay(now);
     const map = filteredWeights(null, HALF_LIFE_DAYS, nowDay, null);
-    base.filter((b) => !b.ctx && (withStarter || b.src !== STARTER)).forEach((b) => {
+    base.filter((b) => !b.ctx).forEach((b) => {
       const key = pairKey(b.prev, b.word);
       const value = b.weight * decay(nowDay - b.day, HALF_LIFE_DAYS);
       const item = map.get(key);
@@ -758,14 +716,14 @@
   }
 
   function stats() {
-    const weights = generalWeights(new Date(), false);
+    const weights = generalWeights();
     let uses = 0;
     let entries = 0;
     const count = (list) => { entries += list.length; list.forEach((v) => { uses += v & 255; }); };
     days.forEach((list, day) => { if (day !== today.day) count(list); });
     count(todayEntries());
     months.forEach(count);
-    base.forEach((b) => { if (!b.ctx && b.weight > 0 && b.src !== STARTER) uses += Math.round(b.weight); });
+    base.forEach((b) => { if (!b.ctx && b.weight > 0) uses += Math.round(b.weight); });
     const top = [...weights.values()].filter((item) => item.prev !== START && item.weight > 0)
       .sort((a, b) => b.weight - a.weight).slice(0, 5).map((item) => ({ from: item.prev, to: item.word, score: item.weight }));
     const dayCount = new Set([...days.keys(), ...(today.counts.size ? [today.day] : [])]).size;
@@ -776,20 +734,14 @@
     return { uses, pairs: weights.size, top, days: dayCount, months: months.size, bytes };
   }
 
-  /*
-   * Cancella lo storico e i pesi di partenza del profilo (i contesti e le loro modifiche restano).
-   * keepStarter: la base di partenza e i pesi dei contesti pronti restano (pulsante «Cancella le abitudini»);
-   * senza, si cancella tutto (Cancella tutto, Sostituisci da file).
-   */
-  async function clearAll({ keepStarter = false } = {}) {
+  // Cancella lo storico e i pesi di partenza del profilo (i contesti e le loro modifiche restano)
+  async function clearAll() {
     clearTimeout(saveTimer);
     const ids = [];
     const all = await storage.getAllRecords('usage');
     all.forEach((r) => { if (r && r.profileId === profileId) ids.push(r.id); });
-    const kept = keepStarter ? base.filter((b) => b.src === STARTER) : [];
     resetStateKeepContexts();
     await Promise.all(ids.map((id) => storage.deleteRecord('usage', id)));
-    if (kept.length) { base = kept; dirtyBase = true; await flush(); }
     rebuild();
   }
 
@@ -814,8 +766,6 @@
     if (!String(raw.name || '').trim()) throw new ContextError('name');
     if (!ctx) throw new ContextError('rule');
     const index = contexts.findIndex((c) => c.id === ctx.id);
-    // Un contesto pronto resta tale anche dopo le modifiche (si può riportare all'originale)
-    if (index >= 0 && contexts[index].builtin) { ctx.builtin = contexts[index].builtin; ctx.lang = contexts[index].lang; }
     const clash = contexts.find((c) => c.id !== ctx.id && c.name.toLowerCase() === ctx.name.toLowerCase());
     if (clash) throw new ContextError('duplicate');
     if (index < 0 && contexts.length >= MAX_CONTEXTS) throw new ContextError('full');
@@ -962,8 +912,7 @@
   async function importRows(rows, mode) {
     if (!profileId) return { imported: 0, unknown: 0 };
     if (mode === 'replace') {
-      // Restano solo i pesi dei contesti pronti (fanno parte del contesto, non delle abitudini)
-      base = base.filter((b) => b.ctx && b.src === STARTER);
+      base = [];
       dirtyBase = true;
       contexts.forEach((ctx) => { ctx.edits = []; });
     }
@@ -1152,18 +1101,10 @@
     }
     // Contesti
     const idByName = new Map(contexts.map((c) => [c.name.toLowerCase(), c.id]));
-    const fromFile = new Map(); // nome nel file → id su questo dispositivo
     for (const ctx of parsed.contexts) {
-      const fileName = ctx.name.toLowerCase();
-      let existing = idByName.get(fileName);
-      // Un contesto pronto non viene sostituito da uno importato: quello del file entra accanto, con un altro nome
-      if (existing && contexts.some((c) => c.id === existing && c.builtin)) {
-        ctx.name = freeName(ctx.name, idByName);
-        existing = null;
-      }
+      const existing = idByName.get(ctx.name.toLowerCase());
       if (existing) ctx.id = existing;
-      else if (contexts.length >= MAX_CONTEXTS) { fromFile.set(fileName, null); continue; } // non entra: i suoi pesi neanche
-      fromFile.set(fileName, ctx.id);
+      else if (contexts.length >= MAX_CONTEXTS) continue;
       const index = contexts.findIndex((c) => c.id === ctx.id);
       if (index >= 0) contexts[index] = ctx; else contexts.push(ctx);
       idByName.set(ctx.name.toLowerCase(), ctx.id);
@@ -1215,10 +1156,7 @@
     // Pesi di partenza
     const byKey = new Map(base.map((x) => [`${x.ctx || ''}\u0002${pairKey(x.prev, x.word)}`, x]));
     parsed.base.forEach((b) => {
-      const lower = b.ctxName ? b.ctxName.toLowerCase() : null;
-      const ctxId = lower ? (fromFile.has(lower) ? fromFile.get(lower) : idByName.get(lower)) : null;
-      // Mai pesi da un file su un contesto pronto
-      if (ctxId && contexts.some((c) => c.id === ctxId && c.builtin)) return;
+      const ctxId = b.ctxName ? idByName.get(b.ctxName.toLowerCase()) : null;
       if (b.ctxName && !ctxId) return;
       const key = `${ctxId || ''}\u0002${pairKey(b.prev, b.word)}`;
       if (!byKey.has(key) && byKey.size >= MAX_BASE) return;
@@ -1228,113 +1166,6 @@
     dirtyBase = true;
     await flush();
     rebuild();
-  }
-
-  // Nome libero per un contesto importato che ha lo stesso nome di un contesto pronto: «SCUOLA 2», «SCUOLA 3»…
-  function freeName(name, idByName) {
-    for (let n = 2; n < 100; n += 1) {
-      const candidate = `${name.slice(0, NAME_MAX - 3).trim()} ${n}`;
-      if (!idByName.has(candidate.toLowerCase())) return candidate;
-    }
-    return name;
-  }
-
-  // ---------- Base di partenza e contesti pronti (dati costanti in prediction-base.js) ----------
-
-  /*
-   * Base generale: combinazioni di parole di base con pesi bassi (2–4), salvate come pesi di partenza con il segno
-   * src: 'starter' e la data di oggi, così sbiadiscono come l'uso reale e si tolgono tutte insieme.
-   * Contesti pronti: contesti normali (modificabili, esportabili) con il campo builtin; le loro combinazioni sono pesi
-   * di partenza del contesto (sbiadiscono in un anno) e non modifiche dell'adulto, così l'uso reale le supera.
-   */
-  const baseData = () => window.PicSpeak.predictionBase || { general: {}, contexts: [] };
-  const baseLang = (lang) => (lang === 'it' ? 'it' : 'en');
-
-  function builtinDef(id) {
-    return baseData().contexts.find((c) => c.id === id) || null;
-  }
-
-  function starterBaseOn() {
-    return base.some((b) => !b.ctx && b.src === STARTER);
-  }
-
-  // Accende (con la data di oggi) o spegne la base generale. Un peso già messo dall'adulto per la stessa coppia resta
-  async function setStarterBase(on, lang) {
-    if (!profileId) return;
-    base = base.filter((b) => b.ctx || b.src !== STARTER);
-    if (on) {
-      const day = localDay(new Date());
-      const have = new Set(base.filter((b) => !b.ctx).map((b) => pairKey(b.prev, b.word)));
-      (baseData().general[baseLang(lang)] || []).forEach(([prev, word, weight]) => {
-        if (have.has(pairKey(prev, word)) || base.length >= MAX_BASE) return;
-        base.push({ prev, word, weight, day, ctx: null, src: STARTER });
-      });
-    }
-    dirtyBase = true;
-    await flush();
-    rebuild();
-  }
-
-  // Contesti pronti con lo stato su questo profilo: { id, name, rule, contextId (se aggiunto), clash (nome già usato) }
-  function builtinContexts(lang) {
-    const l = baseLang(lang);
-    return baseData().contexts.map((def) => {
-      const added = contexts.find((c) => c.builtin === def.id);
-      const name = def.name[l];
-      return {
-        id: def.id,
-        name,
-        rule: cleanRule(def.rule),
-        count: def.pairs[l].length,
-        contextId: added ? added.id : null,
-        clash: !added && contexts.some((c) => c.name.toLowerCase() === name.toLowerCase()),
-      };
-    });
-  }
-
-  function putBuiltinWeights(ctx, def) {
-    base = base.filter((b) => b.ctx !== ctx.id);
-    const day = localDay(new Date());
-    def.pairs[ctx.lang].forEach(([prev, word, weight]) => {
-      if (base.length < MAX_BASE) base.push({ prev, word, weight, day, ctx: ctx.id, src: STARTER });
-    });
-    dirtyBase = true;
-  }
-
-  // Aggiunge un contesto pronto, acceso secondo la sua regola di esempio. Lancia ContextError
-  async function addBuiltin(id, lang) {
-    const def = builtinDef(id);
-    if (!def || !profileId) throw new ContextError('rule');
-    const already = contexts.find((c) => c.builtin === id);
-    if (already) return already;
-    const l = baseLang(lang);
-    if (contexts.some((c) => c.name.toLowerCase() === def.name[l].toLowerCase())) throw new ContextError('duplicate');
-    if (contexts.length >= MAX_CONTEXTS) throw new ContextError('full');
-    const ctx = cleanContext({ name: def.name[l], rule: def.rule, mode: 'auto', boost: def.boost, builtin: id, lang: l, edits: [] });
-    if (!ctx) throw new ContextError('rule');
-    contexts.push(ctx);
-    await storage.putRecord('contexts', ctx);
-    putBuiltinWeights(ctx, def);
-    await flush();
-    rebuild();
-    return ctx;
-  }
-
-  // Riporta un contesto pronto com'era all'inizio: nome, regola, accensione, prevalenza, combinazioni e pesi
-  async function restoreBuiltin(id) {
-    const index = contexts.findIndex((c) => c.id === id);
-    const old = contexts[index];
-    const def = old && builtinDef(old.builtin);
-    if (!def) throw new ContextError('rule');
-    const original = def.name[old.lang];
-    const nameTaken = contexts.some((c) => c.id !== id && c.name.toLowerCase() === original.toLowerCase());
-    const ctx = cleanContext({ id, name: nameTaken ? old.name : original, rule: def.rule, mode: 'auto', boost: def.boost, builtin: old.builtin, lang: old.lang, edits: [] });
-    contexts[index] = ctx;
-    await storage.putRecord('contexts', ctx);
-    putBuiltinWeights(ctx, def);
-    await flush();
-    rebuild();
-    return ctx;
   }
 
   // ---------- Aspetto dei suggerimenti ----------
@@ -1417,12 +1248,6 @@
     deleteContext,
     contextPairs,
     sharedPairs,
-    starterBaseOn,
-    setStarterBase,
-    builtinContexts,
-    addBuiltin,
-    restoreBuiltin,
-    MAX_SLOTS,
     activeContexts: () => activeContexts().map((c) => c.name),
     cleanRule,
     cleanSource,

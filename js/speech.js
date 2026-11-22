@@ -69,11 +69,18 @@
     return pool.slice().sort((a, b) => score(b, locale) - score(a, locale))[0] || null;
   }
 
-  // options.onEnd: chiamata quando la lettura finisce (o viene interrotta)
-  function speak(text, locale, options = {}) {
-    if (!synth || !text) return false;
-    // Interrompe la frase precedente: il tocco più recente ha la priorità
-    synth.cancel();
+  /*
+   * Coda delle parole. Le parole delle tessere toccate di seguito si leggono una dopo l'altra, senza
+   * tagliare quella in corso. La coda è gestita qui (una sola frase alla volta passata al browser)
+   * invece che con la coda interna di speechSynthesis, che su Safari/iOS e Chrome a volte si blocca.
+   * Le letture «importanti» (frase intera, frasi rapide, prova della voce) interrompono e svuotano la coda.
+   */
+  const MAX_WAITING = 3; // parole in attesa al massimo: con tocchi a raffica si saltano le più vecchie
+  const queue = []; // { text, locale, options } in attesa
+  let current = null; // lettura in corso: { queued, utterance, done, finish }
+  let watchdog = 0;
+
+  function buildUtterance(text, locale) {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = locale;
     const voice = bestVoice(locale);
@@ -81,13 +88,79 @@
     utterance.rate = prefs.rate;
     utterance.pitch = prefs.pitch;
     utterance.volume = 1;
-    if (typeof options.onEnd === 'function') {
-      let called = false;
-      const end = () => { if (!called) { called = true; options.onEnd(); } };
-      utterance.addEventListener('end', end);
-      utterance.addEventListener('error', end);
-    }
+    return utterance;
+  }
+
+  function notifyEnd(job) {
+    if (job.options && typeof job.options.onEnd === 'function') job.options.onEnd();
+  }
+
+  // Avvia una lettura; quando finisce (o va in errore) passa alla parola successiva della coda
+  function start(job, queued) {
+    const utterance = buildUtterance(job.text, job.locale);
+    // Il riferimento all'utterance resta in «current»: su Safari, se si perde, l'evento di fine può non arrivare
+    const entry = { queued, utterance, done: false, late: false };
+    entry.finish = () => {
+      if (entry.done) return;
+      entry.done = true;
+      notifyEnd(job);
+      // Solo la lettura ancora attiva fa partire la successiva (una lettura interrotta no)
+      if (current === entry) {
+        current = null;
+        clearTimeout(watchdog);
+        next();
+      }
+    };
+    utterance.addEventListener('end', entry.finish);
+    utterance.addEventListener('error', entry.finish);
+    current = entry;
+    // Rete di sicurezza: se il browser non avvisa della fine (capita su Safari), si va avanti lo stesso
+    clearTimeout(watchdog);
+    const expected = 2500 + (job.text.length * 180) / (prefs.rate || 1);
+    const check = () => {
+      if (current !== entry) return;
+      // Se il browser sta ancora parlando si concede altro tempo, una volta sola
+      if (synth.speaking && !entry.late) { entry.late = true; watchdog = setTimeout(check, 4000); return; }
+      entry.finish();
+    };
+    watchdog = setTimeout(check, expected);
     synth.speak(utterance);
+  }
+
+  function next() {
+    const job = queue.shift();
+    if (job) start(job, true);
+  }
+
+  // Interrompe la lettura in corso e svuota la coda (chi aspettava la fine viene comunque avvisato)
+  function stop() {
+    if (!synth) return;
+    const interrupted = current;
+    const waiting = queue.splice(0);
+    current = null;
+    clearTimeout(watchdog);
+    synth.cancel();
+    if (interrupted) interrupted.finish();
+    waiting.forEach(notifyEnd);
+  }
+
+  /*
+   * options.onEnd: chiamata quando la lettura finisce (o viene interrotta).
+   * options.queue: true = parola di una tessera: si mette in coda dopo le altre parole senza tagliarle.
+   * Senza queue (frase intera, frasi rapide, prova della voce) la lettura interrompe tutto, come prima.
+   */
+  function speak(text, locale, options = {}) {
+    if (!synth || !text) return false;
+    const job = { text, locale, options };
+    // Si accoda solo dietro ad altre parole: una frase intera in corso si interrompe come prima
+    if (options.queue && current && current.queued) {
+      queue.push(job);
+      // Tocchi a raffica: si tengono le parole più recenti, così la voce non resta indietro
+      while (queue.length > MAX_WAITING) notifyEnd(queue.shift());
+      return true;
+    }
+    stop();
+    start(job, Boolean(options.queue));
     return true;
   }
 
@@ -101,6 +174,7 @@
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.speech = {
     speak,
+    stop,
     voicesFor,
     bestVoice,
     setPrefs,
