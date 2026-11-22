@@ -644,6 +644,8 @@
       ctxImportBtn: "Importa",
       ctxImported: "Contesto «{names}» importato.",
       ctxChip: "Contesto:",
+      ctxShowTag: "Mostra il contesto nella schermata del bambino",
+      ctxShowTagHelp: "Il nome del contesto acceso compare piccolo e chiaro accanto ai tre puntini, solo da leggere: non si tocca e non cambia nulla. Senza contesti accesi non compare niente.",
       ctxChipNone: "nessuno",
       secPredictHowTitle: 'Come funziona',
       predictHow: [
@@ -1380,6 +1382,8 @@
       ctxImportBtn: "Import",
       ctxImported: "Context “{names}” imported.",
       ctxChip: "Context:",
+      ctxShowTag: "Show the context on the child’s screen",
+      ctxShowTagHelp: "The name of the context that is on appears small and light next to the three dots, read-only: it cannot be touched and changes nothing. With no context on, nothing appears.",
       ctxChipNone: "none",
       secPredictHowTitle: 'How it works',
       predictHow: [

@@ -272,6 +272,11 @@
 
   function renderList(wrap) {
     statusBox(wrap);
+    // Nome del contesto acceso anche nella schermata del bambino (solo da leggere)
+    wrap.append(ui.settingRow('ctxShowTag', 'ctxShowTagHelp', ui.segmented(
+      [['off', 'valNo'], ['on', 'valYes']], predict.settings.showContext ? 'on' : 'off',
+      async (value) => { await predict.setSettings({ showContext: value === 'on' }); refresh(); },
+    )));
     const list = predict.listContexts();
     if (!list.length) wrap.append(el('p', 'settings-help', t('ctxNone')));
     else {

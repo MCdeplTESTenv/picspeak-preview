@@ -2065,3 +2065,17 @@ body > .adult-bar { order: 0; }
 @media (max-width: 440px) {
   .ctx-chip { display: none; }
 }
+
+/* Nome del contesto acceso accanto ai tre puntini (facoltativo): piccolo, chiaro, solo da leggere */
+.context-tag {
+  margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 30vw;
+  font-size: 14px; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none; -webkit-user-select: none; user-select: none;
+}
+.context-tag:not([hidden]) + .lock-btn { margin-left: 0; }
+/* Sfondo della pagina scelto dall'adulto (anche scuro): stesso colore del testo della pagina, un po' più tenue */
+[data-page-dark] .context-tag { color: var(--page-text); opacity: 0.75; }
+@media (max-width: 440px) {
+  .context-tag { max-width: 24vw; font-size: 12px; }
+}

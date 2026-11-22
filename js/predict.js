@@ -35,7 +35,7 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const MIN_SCORE = 1.5; // sotto questo valore (circa due usi recenti) non si suggerisce nulla
   const SETTINGS_KEY = 'prediction';
-  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', dim: false, dimLevel: 50, width: 'medium', color: 'blue' };
+  const DEFAULTS = { collect: true, suggest: false, count: 2, style: 'outline', dim: false, dimLevel: 50, width: 'medium', color: 'blue', showContext: false };
   const DIM_LEVEL = { min: 10, max: 90, step: 10 };
   const WIDTHS = ['thin', 'medium', 'thick'];
   const COLORS = ['blue', 'yellow', 'green', 'orange', 'purple'];
@@ -321,6 +321,7 @@
       ? settings.dimLevel : DEFAULTS.dimLevel;
     settings.width = WIDTHS.includes(settings.width) ? settings.width : DEFAULTS.width;
     settings.color = COLORS.includes(settings.color) ? settings.color : DEFAULTS.color;
+    settings.showContext = settings.showContext === true;
     applyLook();
 
     resetState();
@@ -555,6 +556,7 @@
     });
     table = next;
     tableHour = nowDay * 24 + hour;
+    updateContextTag(now);
   }
 
   // Ricalcolo allo scoccare di ogni ora (i contesti si accendono e si spengono da soli)
@@ -1083,9 +1085,22 @@
     document.documentElement.style.setProperty('--suggest-fade-opacity', String((100 - settings.dimLevel) / 100));
   }
 
+  /*
+   * Nome del contesto acceso nella barra della pagina, accanto ai tre puntini (facoltativo, spento all'inizio).
+   * Solo testo da leggere: non si tocca e non cambia nulla.
+   */
+  function updateContextTag(now = new Date()) {
+    const tag = document.getElementById('context-tag');
+    if (!tag) return;
+    const names = settings.showContext ? activeContexts(now).map((c) => c.name) : [];
+    tag.textContent = names.join(' · ');
+    tag.hidden = !names.length;
+  }
+
   async function setSettings(changes) {
     settings = { ...settings, ...changes };
     applyLook();
+    updateContextTag();
     await storage.set(SETTINGS_KEY, settings);
   }
 
