@@ -2105,180 +2105,25 @@ body > .adult-bar { order: 0; }
 .ctx-names-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-names-more { flex: none; white-space: nowrap; }
 
-/* Impostazioni avanzate: nascoste finché l'adulto non le mostra (i valori scelti continuano a valere) */
-.settings-panel.hide-advanced .is-advanced { display: none !important; }
-.advanced-toggle { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 4px 4px 12px; }
-.advanced-toggle-btn { min-height: 64px; }
-.advanced-toggle-btn::after { content: ' ▾'; }
-.advanced-toggle-btn[aria-expanded="true"]::after { content: ' ▴'; }
-/* =====================================================================
- * Giochi (js/games.js): casella «Giochi», schermata dei giochi, fascia sulle schede
- * Nessuna animazione: solo cambi di colore e contorni ben visibili.
- * ===================================================================== */
-.games-btn { margin-left: auto; border-color: #7a4fc9; color: #4b2a8a; background: #f3edfc; }
-.games-btn:not([hidden]) ~ .lock-btn, .games-btn:not([hidden]) ~ .context-tag { margin-left: 0; }
-.quick-bar:not([hidden]) ~ .games-btn { margin-left: 0; }
-[data-color-mode="full"] .games-btn { background: #6a3fb8 !important; color: #ffffff !important; }
-.mode-adult .games-btn { display: none !important; }
-@media (max-width: 640px) { .games-btn-text { display: none; } .games-btn { padding: 0; } }
-
-.games-screen {
-  position: fixed; inset: 0; z-index: 9; display: flex; flex-direction: column;
-  background: var(--bg); overflow: hidden;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+/* Sezioni richiudibili delle impostazioni: il titolo è un pulsante con la freccia, il contenuto si apre al tocco */
+.settings-section.is-collapsible > h3 { padding: 0; }
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 0 16px;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.games-open { overflow: hidden; }
-.games-header { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 2px solid var(--border); background: var(--surface); }
-.games-home {
-  display: inline-flex; align-items: center; gap: 10px; min-height: 72px; min-width: 120px; padding: 0 22px;
-  font-size: 22px; font-weight: 800; border-radius: var(--radius);
-  background: #1f6feb; color: #ffffff; border: 0;
-}
-.games-home.is-pressed, .games-home:active { background: #1550b0; }
-.games-back {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 72px; min-height: 72px;
-  border-radius: var(--radius); background: var(--surface); border: 2px solid var(--border);
-}
-.games-title { margin: 0; flex: 1; min-width: 0; font-size: clamp(20px, 3vw, 28px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.games-help { flex: none; }
-.games-body {
-  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center;
-  gap: 16px; padding: 16px;
-}
-
-.games-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; width: 100%; max-width: 980px; }
-.game-card {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  min-height: 170px; padding: 16px; background: var(--surface); border: 3px solid var(--border); border-radius: 18px;
-  font-size: 22px; font-weight: 800; color: var(--text);
-}
-.game-card-icon { font-size: 64px; line-height: 1; }
-.game-card:active, .game-card.is-pressed { background: var(--pressed); border-color: var(--focus); }
-
-.game-grid { display: grid; gap: 16px; width: 100%; max-width: 980px; }
-.game-grid-6 { grid-template-columns: repeat(3, 1fr); }
-.game-grid-3 { grid-template-columns: repeat(3, 1fr); }
-.game-grid-2 { grid-template-columns: repeat(2, 1fr); max-width: 760px; }
-.story-grid, .memory-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.memory-12 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 560px) {
-  .game-grid-6, .game-grid-3 { grid-template-columns: repeat(2, 1fr); }
-  .memory-12 { grid-template-columns: repeat(3, 1fr); }
-  .games-home { min-width: 0; padding: 0 16px; }
-}
-@media (orientation: landscape) and (max-height: 520px) {
-  .game-grid-6 { grid-template-columns: repeat(6, 1fr); }
-  .game-tile { min-height: 110px; }
-}
-
-.game-tile {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  min-height: 150px; padding: 12px 8px; background: #ffffff; border: 3px solid #e3e5e8; border-top: 10px solid var(--fz-noun);
-  border-radius: 16px; color: #1a1d24;
-}
-.game-tile:active, .game-tile.is-pressed { background: var(--pressed); }
-.game-image { display: flex; align-items: center; justify-content: center; width: 100%; height: 96px; }
-.game-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.game-emoji { font-size: 72px; line-height: 1; }
-.game-label { font-size: 22px; font-weight: 800; text-align: center; overflow-wrap: anywhere; }
-[data-label-case="upper"] .game-label { text-transform: uppercase; }
-[data-label-case="lower"] .game-label { text-transform: lowercase; }
-.game-tile.is-right { border-color: #1e7a3c; box-shadow: 0 0 0 5px #1e7a3c; }
-.game-tile.is-wrong { border-color: #b3261e; }
-.game-tile.is-dimmed { opacity: 0.35; }
-.game-tile-choice { min-height: 240px; }
-.game-tile-choice .game-image { height: 170px; }
-.game-tile-choice .game-emoji { font-size: 120px; }
-.story-tile { border-top-color: #7a4fc9; }
-.story-level { font-size: 16px; color: #7a4fc9; letter-spacing: 2px; }
-.memory-card { min-height: 130px; border-top-color: #7a4fc9; }
-.memory-card:not(.is-open) { background: #efe8fb; }
-.memory-back { font-size: 56px; font-weight: 800; color: #7a4fc9; }
-.memory-card.is-done { border-color: #1e7a3c; }
-.memory-card .game-image { height: 70px; }
-.memory-card .game-label { font-size: 18px; }
-
-.game-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-.game-action, .game-prompt {
-  display: inline-flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 22px;
-  font-size: 20px; font-weight: 700; border-radius: var(--radius); background: var(--surface); border: 2px solid var(--border); color: var(--text);
-}
-.game-action.is-primary { border-color: var(--focus); background: var(--pressed); }
-.game-action-icon { font-size: 26px; }
-.game-prompt { font-size: clamp(20px, 3vw, 28px); background: #f3edfc; border-color: #7a4fc9; }
-.game-cheer { margin: 0; font-size: 32px; font-weight: 800; color: #1e7a3c; }
-.game-empty { max-width: 560px; font-size: 20px; text-align: center; line-height: 1.4; }
-
-/* Parole e lettere */
-.spell-view { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
-.game-tile-big { width: min(340px, 80vw); min-height: 260px; }
-.game-tile-big .game-image { height: 180px; }
-.game-tile-big .game-emoji { font-size: 130px; }
-.game-tile-big .game-label { font-size: 34px; }
-.spell-letter { min-height: 1.1em; font-size: clamp(80px, 16vw, 150px); font-weight: 800; line-height: 1; color: #1f6feb; }
-.spell-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-height: 74px; }
-.spell-box {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 56px; height: 70px; padding: 0 6px;
-  font-size: 44px; font-weight: 800; background: #ffffff; border: 3px solid #d8dbe0; border-radius: 12px;
-}
-.spell-box.is-current { border-color: #1f6feb; background: #e8f0fe; }
-.spell-box.is-silent { color: #9aa0a8; }
-.spell-gap { width: 24px; }
-.spell-row.is-whole .spell-box { border-color: #1e7a3c; background: #e9f5ec; }
-
-/* Fascia dei giochi sulle schede vere: «Basta» grande e sempre visibile */
-.game-banner {
-  order: 3; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  margin: 6px var(--gap) 0; padding: 8px; border-radius: var(--radius);
-  background: #f3edfc; border: 3px solid #7a4fc9; color: #1a1d24;
-}
-.mode-adult .game-banner { background: #eef3fb; border-color: #1f6feb; }
-.banner-title { flex: 1 1 160px; min-width: 0; font-size: 20px; font-weight: 800; }
-.banner-help { font-size: 16px; font-weight: 600; line-height: 1.35; }
-.banner-btn {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 64px; min-width: 64px; padding: 0 18px;
-  font-size: 20px; font-weight: 800; border-radius: var(--radius); background: #ffffff; border: 2px solid #c9b8ea; color: #1a1d24;
-}
-.banner-btn-icon { font-size: 24px; line-height: 1; }
-.banner-stop { background: #b3261e; border-color: #b3261e; color: #ffffff; min-width: 120px; }
-.banner-done { background: #1e7a3c; border-color: #1e7a3c; color: #ffffff; }
-.banner-target { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; background: #ffffff; border-radius: 12px; border: 2px solid #c9b8ea; }
-.banner-target img { width: 52px; height: 52px; object-fit: contain; }
-.banner-target-word { font-size: 22px; font-weight: 800; }
-[data-label-case="upper"] .banner-target-word { text-transform: uppercase; }
-@media (max-width: 560px) { .banner-btn-text { display: none; } .banner-stop .banner-btn-text { display: inline; } }
-
-/* Tessera o pulsante che il gioco sta per «toccare» (Storie) o suggerisce (Trova la tessera) */
-.is-demo-target { outline: 6px solid #7a4fc9 !important; outline-offset: -3px; box-shadow: 0 0 0 4px #ffffff inset; }
-
-/* Impostazioni › Giochi */
-.story-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
-.story-item { flex-wrap: wrap; }
-.story-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.story-missing { color: #8a1c1c !important; font-weight: 600; }
-.story-item.is-incomplete { border-color: #e0a3a0; }
-.story-word.is-missing { color: #8a1c1c; text-decoration: underline wavy #b3261e; }
-/* Composizione di una storia: le tessere si scelgono come in comunicazione, senza segni di modifica */
-.mode-adult.is-board-game .symbol-cell::before { display: none; }
-/* Giochi su schermi piccoli: due colonne sul telefono, tutto visibile in orizzontale senza scorrere */
-@media (max-width: 560px) {
-  .games-dashboard { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .game-card { min-height: 130px; font-size: 18px; }
-  .game-card-icon { font-size: 48px; }
-  .game-tile-big { min-height: 200px; }
-  .game-tile-big .game-image { height: 130px; }
-}
-@media (max-height: 520px) and (orientation: landscape) {
-  .games-header { padding: 6px 10px; }
-  .games-home, .games-back { min-height: 64px; }
-  .games-dashboard { grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .game-card { min-height: 110px; flex-direction: row; font-size: 18px; }
-  .game-card-icon { font-size: 44px; }
-  .spell-view { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  .game-tile-big { width: 200px; min-height: 0; }
-  .game-tile-big .game-image { height: 100px; }
-  .game-tile-big .game-emoji { font-size: 80px; }
-  .game-tile-big .game-label { font-size: 24px; }
-  .spell-letter { font-size: 90px; min-width: 1ch; }
-  .spell-row { flex-basis: 100%; }
-}
+.section-arrow::before { content: '▾'; display: inline-block; width: 1em; font-size: 16px; color: var(--focus); }
+.settings-section.is-collapsed .section-arrow::before { content: '▸'; }
+.settings-section.is-collapsed > h3 { border-bottom: 0; }
+.settings-section.is-collapsed > :not(h3) { display: none !important; }

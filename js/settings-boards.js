@@ -239,7 +239,7 @@
   }
 
   async function renderMyTemplatesSection() {
-    const wrap = ui.section('secMyTplTitle', 'secMyTplHelp');
+    const wrap = ui.section('secMyTplTitle', 'secMyTplHelp', { collapsible: true });
     const tools = el('div', 'tpl-tools');
     tools.append(
       ui.button(t('tplSaveCurrent'), () => runSafely(async () => {
@@ -373,7 +373,7 @@
   }
 
   function renderObfSection() {
-    const wrap = ui.section('secObfTitle', 'secObfHelp', { advanced: true });
+    const wrap = ui.section('secObfTitle', 'secObfHelp', { collapsible: true });
     const tools = el('div', 'tpl-tools');
     const imp = ui.button(t('obfImport'), importObf, true);
     const all = ui.button(t('obfExportAll'), () => runSafely(() => exportObfFile('obz')));
@@ -430,7 +430,7 @@
   }
 
   function renderLegendSection() {
-    const wrap = ui.section('secLegendTitle', 'secLegendHelp', { advanced: true });
+    const wrap = ui.section('secLegendTitle', 'secLegendHelp', { collapsible: true });
     const legend = el('ul', 'type-legend');
     [...data.WORD_TYPES, 'folder'].forEach((type) => {
       const li = el('li', `type-${type}`);
@@ -534,23 +534,23 @@
           plus.disabled = s.dimLevel >= max;
           plus.addEventListener('click', () => changeSuggest({ dimLevel: s.dimLevel + step }));
           stepper.append(minus, value, plus);
-          wrap.append(ui.settingRow('optSuggestDimLevel', 'optSuggestDimLevelHelp', stepper, { advanced: true }));
+          wrap.append(ui.settingRow('optSuggestDimLevel', 'optSuggestDimLevelHelp', stepper));
         }
       }
       const widthKeys = { thin: 'widthThin', medium: 'widthMedium', thick: 'widthThick' };
       wrap.append(ui.settingRow('optSuggestWidth', 'optSuggestWidthHelp', ui.segmented(
         predict.WIDTHS.map((w) => [w, widthKeys[w]]), s.width, (width) => changeSuggest({ width }),
-      ), { advanced: true }));
+      )));
       const colorKeys = { blue: 'colorBlue', yellow: 'colorYellow', green: 'colorGreen', orange: 'colorOrange', purple: 'colorPurple' };
       const colors = ui.segmented(predict.COLORS.map((c) => [c, colorKeys[c]]), s.color, (color) => changeSuggest({ color }));
       // Un pallino del colore davanti a ogni nome
       colors.querySelectorAll('button').forEach((btn, i) => btn.prepend(el('span', `suggest-swatch suggest-swatch-${predict.COLORS[i]}`)));
-      wrap.append(ui.settingRow('optSuggestColor', 'optSuggestColorHelp', colors, { advanced: true }));
+      wrap.append(ui.settingRow('optSuggestColor', 'optSuggestColorHelp', colors));
       const counts = s.style === 'outline' ? ['1', '2', '3'] : ['3', '5', '10'];
       wrap.append(ui.settingRow('optSuggestCount', 'optSuggestCountHelp', ui.segmented(
         counts.map((n) => [n, `val${n}`]), String(s.count),
         (value) => changeSuggest({ count: Number(value) }),
-      ), { advanced: true }));
+      )));
     }
     // Esempio dell'aspetto con lo stile scelto: tre tessere, dalla più usata a una non suggerita
     const sample = el('div', 'suggest-sample');
@@ -660,7 +660,7 @@
     wrap.append(clear);
 
     // File CSV modificabile dal terapista
-    const file = ui.section('habitsFileTitle', 'habitsFileHelp', { advanced: true });
+    const file = ui.section('habitsFileTitle', 'habitsFileHelp', { collapsible: true });
     if (habitsNotice) {
       const box = el('p', `tpl-status${habitsNotice.error ? ' is-error' : ''}`, habitsNotice.text);
       box.setAttribute('role', 'status');
@@ -674,7 +674,7 @@
     file.append(tools);
 
     // Storico completo e contesti in un file a parte (lo stesso contenuto entrerà nel backup completo)
-    const history = ui.section('historyFileTitle', 'historyFileHelp', { advanced: true });
+    const history = ui.section('historyFileTitle', 'historyFileHelp', { collapsible: true });
     const ctxUi = window.PicSpeak.contextsUi;
     const htools = el('div', 'tpl-tools');
     const hexp = ui.button(t('historyExport'), () => ctxUi.exportHistory());
@@ -688,7 +688,7 @@
   }
 
   function renderHowSection() {
-    const wrap = ui.section('secPredictHowTitle');
+    const wrap = ui.section('secPredictHowTitle', null, { collapsible: true });
     wrap.append(ui.list(t('predictHow')));
   }
 

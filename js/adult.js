@@ -481,22 +481,47 @@
 
   // ---------- Impostazioni ----------
 
-  // Voci «avanzate»: restano nascoste finché l'adulto non tocca «Mostra impostazioni avanzate».
-  // Sono solo nascoste: i valori già scelti continuano a valere.
-  let showAdvanced = false;
+  // Sezioni richiudibili: il titolo resta sempre visibile, con una freccia che apre o chiude il contenuto.
+  // All'inizio sono chiuse; quelle aperte dall'adulto restano aperte (elenco salvato sul dispositivo).
+  // Chiudere una sezione non cambia nulla: i valori scelti continuano a valere.
+  let openSections = new Set();
 
-  function markAdvanced(node) {
-    node.classList.add('is-advanced');
-    return node;
+  function saveOpenSections() {
+    storage.set('openSections', [...openSections]);
   }
 
-  // options.advanced: true = sezione delle impostazioni avanzate
+  // options.collapsible: true = sezione richiudibile; options.key: nome con cui ricordarla (predefinito: il titolo)
   function section(titleKey, helpKey, options = {}) {
     const wrap = document.createElement('section');
     wrap.className = 'settings-section';
-    if (options.advanced) markAdvanced(wrap);
     const title = document.createElement('h3');
-    title.textContent = t(titleKey);
+    if (options.collapsible) {
+      const key = options.key || titleKey;
+      const open = openSections.has(key);
+      wrap.classList.add('is-collapsible');
+      wrap.classList.toggle('is-collapsed', !open);
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'section-toggle';
+      toggle.setAttribute('aria-expanded', String(open));
+      const arrow = document.createElement('span');
+      arrow.className = 'section-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.textContent = t(titleKey);
+      toggle.append(arrow, text);
+      // Si apre e si chiude senza ridisegnare la pagina: la posizione resta dov'era
+      toggle.addEventListener('click', () => {
+        const nowOpen = wrap.classList.contains('is-collapsed');
+        wrap.classList.toggle('is-collapsed', !nowOpen);
+        toggle.setAttribute('aria-expanded', String(nowOpen));
+        if (nowOpen) openSections.add(key); else openSections.delete(key);
+        saveOpenSections();
+      });
+      title.append(toggle);
+    } else {
+      title.textContent = t(titleKey);
+    }
     wrap.append(title);
     if (helpKey) {
       const help = document.createElement('p');
@@ -1037,9 +1062,9 @@
         values: [['color', 'valColor'], ['gray', 'valGray'], ['contrast', 'valContrast']] },
       { key: 'cellContent', labelKey: 'optCellContent', helpKey: 'optCellContentHelp',
         values: [['both', 'valBoth'], ['image', 'valImageOnly'], ['text', 'valTextOnly']] },
-      { key: 'labelPosition', advanced: true, labelKey: 'optLabelPosition',
+      { key: 'labelPosition', labelKey: 'optLabelPosition',
         values: [['below', 'valBelow'], ['above', 'valAbove']] },
-      { key: 'imageFrame', advanced: true, labelKey: 'optImageFrame', helpKey: 'optImageFrameHelp',
+      { key: 'imageFrame', labelKey: 'optImageFrame', helpKey: 'optImageFrameHelp',
         values: [['none', 'valNo'], ['frame', 'valYes']] },
     ] },
     { titleKey: 'grpText', options: [
@@ -1047,33 +1072,33 @@
         values: [['upper', 'caseUpper'], ['lower', 'caseLower'], ['as-is', 'caseAsIs']] },
       { key: 'textSize', labelKey: 'optTextSize',
         values: [['m', 'valMedium'], ['s', 'valSmall'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
-      { key: 'font', advanced: true, labelKey: 'optFont', helpKey: 'optFontHelp',
+      { key: 'font', labelKey: 'optFont', helpKey: 'optFontHelp',
         values: [['standard', 'valStandard'], ['readable', 'valReadable'], ['rounded', 'valRounded']] },
     ] },
     { titleKey: 'grpCells', options: [
-      { key: 'cellGap', advanced: true, labelKey: 'optCellGap',
+      { key: 'cellGap', labelKey: 'optCellGap',
         values: [['normal', 'valNormal'], ['tight', 'valTight'], ['wide', 'valWide']] },
-      { key: 'border', advanced: true, labelKey: 'optBorder',
+      { key: 'border', labelKey: 'optBorder',
         values: [['normal', 'valNormal'], ['thin', 'valThin'], ['thick', 'valThick']] },
-      { key: 'corners', advanced: true, labelKey: 'optCorners',
+      { key: 'corners', labelKey: 'optCorners',
         values: [['rounded', 'valRoundedCorners'], ['square', 'valSquare']] },
-      { key: 'cellOpacity', advanced: true, labelKey: 'optCellOpacity', helpKey: 'optCellOpacityHelp',
+      { key: 'cellOpacity', labelKey: 'optCellOpacity', helpKey: 'optCellOpacityHelp',
         values: [['solid', 'valSolid'], ['translucent', 'valTranslucent']] },
     ] },
     { titleKey: 'grpLayout', options: [
       { key: 'sentencePosition', labelKey: 'optSentencePosition',
         values: [['top', 'valTop'], ['bottom', 'valBottom']] },
-      { key: 'sentenceSize', advanced: true, labelKey: 'optSentenceSize', helpKey: 'optSentenceSizeHelp',
+      { key: 'sentenceSize', labelKey: 'optSentenceSize', helpKey: 'optSentenceSizeHelp',
         values: [['normal', 'valNormal'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
-      { key: 'controlsSide', advanced: true, labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
+      { key: 'controlsSide', labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
         values: [['right', 'valRight'], ['left', 'valLeft']] },
-      { key: 'pageTitle', advanced: true, labelKey: 'optPageTitle',
+      { key: 'pageTitle', labelKey: 'optPageTitle',
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
-      { key: 'touchFeedback', advanced: true, labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
+      { key: 'touchFeedback', labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
         values: [['on', 'valOn'], ['strong', 'valStrong'], ['off', 'valOff']] },
-      { key: 'shakeHome', advanced: true, labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
+      { key: 'shakeHome', labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
-      { key: 'swipeClear', advanced: true, labelKey: 'optSwipeClear', helpKey: 'optSwipeClearHelp',
+      { key: 'swipeClear', labelKey: 'optSwipeClear', helpKey: 'optSwipeClearHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
     ] },
   ];
@@ -1194,11 +1219,9 @@
     }
   }
 
-  // options.advanced: true = riga delle impostazioni avanzate
-  function settingRow(labelKey, helpKey, control, options = {}) {
+  function settingRow(labelKey, helpKey, control) {
     const row = document.createElement('div');
     row.className = 'setting-row';
-    if (options.advanced) markAdvanced(row);
     const text = document.createElement('div');
     text.className = 'setting-text';
     const label = document.createElement('strong');
@@ -1357,7 +1380,7 @@
 
   function renderAppearanceGroups() {
     APPEARANCE_GROUPS.forEach((group) => {
-      const wrap = section(group.titleKey);
+      const wrap = section(group.titleKey, null, { collapsible: true });
       if (group.titleKey === 'grpCells') wrap.append(tileZoomRow());
       group.options.forEach((opt) => {
         const current = appearance[opt.key] || opt.values[0][0];
@@ -1375,7 +1398,7 @@
           applyAppearance();
           await storage.set('appearance', appearance);
           renderSettings();
-        }), { advanced: opt.advanced }));
+        })));
       });
     });
   }
@@ -1496,35 +1519,11 @@
     panel.append(title, intro);
     currentPanel = panel;
     category.render.forEach((fn) => fn());
-    // Se la categoria ha voci avanzate, in fondo c'è il pulsante per mostrarle o nasconderle
-    panel.classList.toggle('hide-advanced', !showAdvanced);
-    if (panel.querySelector('.is-advanced')) panel.append(advancedToggle());
 
     layout.append(nav, panel);
     el.settingsBody.replaceChildren(layout);
   }
 
-  function advancedToggle() {
-    const box = document.createElement('div');
-    box.className = 'advanced-toggle';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'dlg-btn advanced-toggle-btn';
-    btn.setAttribute('aria-expanded', String(showAdvanced));
-    btn.textContent = t(showAdvanced ? 'advancedHide' : 'advancedShow');
-    btn.addEventListener('click', async () => {
-      showAdvanced = !showAdvanced;
-      await storage.set('showAdvanced', showAdvanced);
-      renderSettings();
-      const again = el.settingsBody.querySelector('.advanced-toggle-btn');
-      if (again) again.focus();
-    });
-    const help = document.createElement('p');
-    help.className = 'settings-help';
-    help.textContent = t(showAdvanced ? 'advancedHideHelp' : 'advancedShowHelp');
-    box.append(btn, help);
-    return box;
-  }
 
   // categoryId (facoltativo): apre direttamente quella categoria (es. 'prediction' dal pulsante del contesto)
   function openSettings(categoryId) {
@@ -1627,8 +1626,14 @@
     applyAppearance();
   }
 
-  async function restoreShowAdvanced() {
-    showAdvanced = (await storage.get('showAdvanced')) === true;
+  // Sezioni richiudibili aperte dall'adulto (solo nomi di testo plausibili).
+  // La vecchia preferenza «Mostra impostazioni avanzate» non esiste più e si toglie.
+  async function restoreOpenSections() {
+    const saved = await storage.get('openSections');
+    if (Array.isArray(saved)) {
+      openSections = new Set(saved.filter((key) => typeof key === 'string' && key.length <= 60).slice(0, 100));
+    }
+    if ((await storage.get('showAdvanced')) !== undefined) await storage.remove('showAdvanced');
   }
 
   async function restoreOnlineSearch() {
@@ -1641,7 +1646,6 @@
   // Strumenti condivisi con le altre pagine delle impostazioni (schede pronte, previsione)
   window.PicSpeak.settingsUi = {
     section: (titleKey, helpKey, options) => section(titleKey, helpKey, options),
-    advanced: markAdvanced,
     settingRow,
     segmented,
     button,
@@ -1659,7 +1663,7 @@
   };
 
   bindEvents();
-  restoreShowAdvanced();
+  restoreOpenSections();
   restoreOnlineSearch();
   restorePageBackground();
   restoreAppearance();
