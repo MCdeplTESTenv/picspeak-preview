@@ -1617,6 +1617,12 @@ body > .adult-bar { order: 0; }
 .suggest-sample-tile.is-suggested {
   outline: var(--suggest-width) solid rgb(var(--suggest-rgb) / var(--suggest-alpha, 1));
   outline-offset: 2px;
+  /* In primo piano: il contorno sta nello spazio tra le tessere e senza questo le tessere vicine
+   * (cartelle, tessere rese trasparenti) lo coprivano. Il contorno resta fuori dalla tessera e non
+   * arriva alle immagini e alle parole delle vicine (spazio + bordo + margine interno), quindi copre
+   * al massimo il loro bordo. */
+  position: relative;
+  z-index: 1;
 }
 /* Su sfondo scuro il blu si vede poco: si usa un giallo chiaro (gli altri colori restano quelli scelti) */
 :root[data-page-dark="true"]:not([data-suggest-color]) .symbol-cell.is-suggested,
@@ -2053,6 +2059,13 @@ body > .adult-bar { order: 0; }
 .ctx-day { min-width: 52px; min-height: 44px; text-transform: capitalize; }
 .ctx-day[aria-pressed="true"] { border-color: var(--focus); background: var(--pressed); font-weight: 700; }
 .settings-section > :is(.ctx-list, .ctx-pairs) { margin-top: 12px; }
+/* Fasce orarie di un contesto: con più fasce ognuna sta in un riquadro con il suo titolo */
+.settings-section > .ctx-slot { width: calc(100% - 32px); display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.ctx-slot:not(.is-single) { padding: 10px 12px; border: 1px solid #d8dbe0; border-radius: 10px; background: #ffffff; box-sizing: border-box; }
+.ctx-slot > .ctx-field, .ctx-slot > .ctx-pair-fields { width: 100%; }
+.ctx-slot > .dlg-btn { align-self: flex-start; min-height: 44px; }
+.ctx-slot-title { margin: 0; font-weight: 700; font-size: 15px; }
+.ctx-builtin-tag { font-weight: 600; }
 .settings-section > .ctx-list:last-child, .settings-section > .ctx-pairs:last-child { margin-bottom: 16px; }
 
 /* Pulsante del contesto nella barra della modalità adulto */

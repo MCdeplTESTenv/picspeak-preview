@@ -89,8 +89,11 @@
 
   function cleanQuiet(list) {
     if (!Array.isArray(list)) return [];
-    return list.slice(0, 8).map((slot) => predict.cleanRule({ type: 'weekly', ...(slot || {}) }))
-      .filter(Boolean).map(({ days, from, to }) => ({ days, from, to }));
+    // Stesse regole delle fasce settimanali dei contesti (predict.cleanRule), una fascia per voce
+    return list.slice(0, 8).map((slot) => {
+      const rule = predict.cleanRule({ type: 'weekly', slots: [slot || {}] });
+      return rule && rule.slots && rule.slots[0] ? rule.slots[0] : null;
+    }).filter(Boolean).map(({ days, from, to }) => ({ days, from, to }));
   }
 
   function cleanSettings(raw) {
