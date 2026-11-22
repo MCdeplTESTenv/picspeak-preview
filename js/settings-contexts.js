@@ -156,9 +156,11 @@
       });
       bar.insertBefore(chip, settingsBtn);
     }
-    const active = list.filter((c) => c.activeNow).map((c) => c.name);
+    const active = predict.activeContexts();
     chip.hidden = false;
-    chip.replaceChildren(el('span', 'ctx-chip-label', t('ctxChip')), el('span', 'ctx-chip-name', active.length ? active.join(', ') : t('ctxChipNone')));
+    const name = el('span', 'ctx-chip-name');
+    if (active.length) name.append(...predict.contextNameNodes(active)); else name.textContent = t('ctxChipNone');
+    chip.replaceChildren(el('span', 'ctx-chip-label', t('ctxChip')), name);
     chip.setAttribute('aria-label', `${t('ctxChip')} ${active.length ? active.join(', ') : t('ctxChipNone')}`);
   }
 
@@ -533,7 +535,17 @@
     name.value = draft.name;
     name.placeholder = t('ctxNamePlaceholder');
     name.autocomplete = 'off';
-    name.addEventListener('input', () => { draft.name = name.value; });
+    // Il nome si scrive sempre in MAIUSCOLO, già mentre si digita (il cursore resta dov'era)
+    name.autocapitalize = 'characters';
+    name.addEventListener('input', () => {
+      const upper = name.value.toUpperCase();
+      if (upper !== name.value) {
+        const { selectionStart: start, selectionEnd: end } = name;
+        name.value = upper;
+        if (upper.length === name.value.length) name.setSelectionRange(start, end);
+      }
+      draft.name = name.value;
+    });
     head.append(field('ctxName', name));
 
     const when = ui.section('ctxWhenTitle', 'ctxWhenHelp');

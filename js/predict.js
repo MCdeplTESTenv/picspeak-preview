@@ -229,9 +229,11 @@
     return ruleMatches(ctx.rule, day, hour);
   }
 
+  // Contesti accesi adesso, dal più forte (prevalenza più alta) e poi per nome
   function activeContexts(when = new Date()) {
     const day = localDay(when);
-    return contexts.filter((ctx) => isActive(ctx, day, when.getHours()));
+    return contexts.filter((ctx) => isActive(ctx, day, when.getHours()))
+      .sort((a, b) => (b.boost - a.boost) || a.name.localeCompare(b.name));
   }
 
   // ---------- Caricamento e conversione dal formato precedente ----------
@@ -267,7 +269,8 @@
 
   function cleanContext(raw) {
     if (!raw || typeof raw !== 'object') return null;
-    const name = String(raw.name || '').replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, NAME_MAX);
+    // Nomi sempre in MAIUSCOLO (anche quelli salvati prima o importati da file)
+    const name = String(raw.name || '').replace(/[\p{Cc}\p{Cf}]/gu, '').trim().toUpperCase().slice(0, NAME_MAX);
     const rule = cleanRule(raw.rule);
     if (!name || !rule) return null;
     const edits = [];
@@ -1106,8 +1109,22 @@
     const tag = document.getElementById('context-tag');
     if (!tag) return;
     const names = settings.showContext ? activeContexts(now).map((c) => c.name) : [];
-    tag.textContent = names.join(' · ');
+    tag.replaceChildren(...contextNameNodes(names));
     tag.hidden = !names.length;
+  }
+
+  /*
+   * Più contesti accesi insieme: elenco completo «CASA · SCUOLA» dove c'è spazio, forma breve «CASA +1» sugli schermi
+   * stretti (il CSS sceglie quale mostrare). Il primo è quello con la prevalenza più alta.
+   */
+  function contextNameNodes(names) {
+    const full = document.createElement('span');
+    full.className = 'ctx-names-full';
+    full.textContent = names.join(' · ');
+    const short = document.createElement('span');
+    short.className = 'ctx-names-short';
+    short.textContent = names.length > 1 ? `${names[0]} +${names.length - 1}` : (names[0] || '');
+    return [full, short];
   }
 
   async function setSettings(changes) {
@@ -1158,6 +1175,7 @@
     DIM_LEVEL,
     WIDTHS,
     COLORS,
+    contextNameNodes,
     get settings() { return { ...settings }; },
     get ready() { return ready; },
   };
