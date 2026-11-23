@@ -439,7 +439,7 @@
   }
 
   async function renderProfilesSection() {
-    const wrap = ui.section('secProfilesTitle', 'secProfilesHelp', { open: true });
+    const wrap = ui.section('secProfilesTitle', 'secProfilesHelp');
     const listBox = el('div', 'profile-list');
     const add = el('div', 'choice-group profile-add');
     wrap.append(listBox, add);
