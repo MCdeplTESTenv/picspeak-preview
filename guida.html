@@ -769,8 +769,8 @@
           bambino.</li>
       </ul>
       <h4>Preparare le parole prioritarie (per il terapista)</h4>
-      <p>Le sezioni <strong>Esporta e importa le abitudini</strong> e <strong>Storico e contesti in un file</strong>
-        si aprono toccando il loro titolo (con la freccia <strong>▸</strong>).</p>
+      <p>La sezione <strong>Esporta e importa le abitudini</strong> si apre toccando il suo titolo (con la freccia
+        <strong>▸</strong>).</p>
       <ol class="steps">
         <li>In <strong>Esporta e importa le abitudini</strong> toccate <strong>Esporta le abitudini (CSV)</strong>: si
           scarica un file che si apre con Excel, Numbers o Fogli Google.</li>
@@ -789,14 +789,37 @@
       <p class="tip">Le parole si scrivono come sulle tessere (maiuscole e minuscole non contano). Anche i pesi importati
         si affievoliscono col tempo come le abitudini vere, se il bambino non usa quelle parole.</p>
       <p class="warn">Il file contiene le abitudini del bambino: condividetelo solo con persone di fiducia.</p>
-      <h4>Spostare lo storico e i contesti su un altro dispositivo</h4>
-      <ol class="steps">
-        <li>In <strong>Storico e contesti in un file</strong> toccate <strong>Esporta storico e contesti</strong>: si
-          scarica un file con tutto lo storico d’uso, i contesti e le loro modifiche.</li>
-        <li>Sull’altro dispositivo toccate <strong>Importa storico e contesti</strong> e scegliete
-          <strong>Unisci</strong> (gli usi si sommano: non importate due volte lo stesso file) oppure
-          <strong>Sostituisci</strong>.</li>
-      </ol>
+      <h4>Spostare le abitudini e i contesti su un altro dispositivo</h4>
+      <p>Abitudini d’uso e contesti viaggiano con il <a href="#backup">backup completo</a>, insieme alle schede. Sul
+        nuovo dispositivo aprite il backup con <strong>Apri backup…</strong>; se volete riportare solo questa parte,
+        scegliete <strong>Scegli cosa ripristinare</strong> e tenete solo <strong>Abitudini d’uso e contesti</strong>. Con
+        <strong>Apri backup…</strong> si aprono anche i file «storico e contesti» salvati con le versioni precedenti di
+        PicSpeak.</p>
+      <h4 id="previsione-esempi">Come funziona, con qualche esempio</h4>
+      <p>PicSpeak tiene un solo archivio delle <strong>abitudini</strong>: per ogni giorno e per ogni ora, quante volte
+        ogni coppia di parole è stata usata. Da lì nascono i suggerimenti. I <a href="#contesti">contesti</a> non hanno
+        un archivio loro: sono un filtro su queste stesse abitudini, che fa salire le parole di un certo momento.</p>
+      <ul>
+        <li><strong>Le abitudini da sole.</strong> Ogni mattina verso le 8 il bambino compone «voglio → latte». Dopo un
+          paio di giorni, quando a quell’ora tocca «voglio», <strong>Latte</strong> viene suggerito per primo. Il
+          pomeriggio compone «voglio → giocare»: la stessa tessera «voglio» porta a un suggerimento diverso secondo
+          l’ora. Se un’abitudine si perde, per esempio non chiede più il biberon, pesa sempre meno e sparisce dai
+          suggerimenti.</li>
+        <li><strong>Un contesto settimanale.</strong> Create «SCUOLA» dal lunedì al venerdì dalle 8 alle 13, accensione
+          automatica. In quegli orari si accende da solo e fa salire le combinazioni che il bambino usa a scuola, come
+          «andare → bagno» o «finito → merenda», comprese quelle dell’anno scorso. Non c’è niente da insegnargli: impara
+          da ciò che il bambino dice in quegli orari.</li>
+        <li><strong>Un periodo dell’anno.</strong> Create «MARE» come periodo dal 1° luglio al 31 agosto e, in
+          <strong>Storico usato</strong>, scegliete il periodo preciso delle due settimane di mare dell’anno scorso.
+          Tornati in spiaggia riaffiorano «voglio → secchiello» o «andiamo → acqua», parole che a casa non si usano.</li>
+        <li><strong>Una parola nuova.</strong> «Compagni» non è ancora nelle abitudini: aggiungetela a mano a SCUOLA con
+          <strong>Aggiungi una combinazione</strong> e un peso più alto, e verrà suggerita da subito. Quando il bambino
+          comincerà a usarla davvero, il suo uso prenderà il sopravvento.</li>
+        <li><strong>Un contesto preparato da altri.</strong> La logopedista crea «TERAPIA», aggiunge le combinazioni su
+          cui sta lavorando e tocca <strong>Esporta questo contesto</strong>. A casa lo importate: prima di confermare
+          vedete nome, orari, prevalenza e le combinazioni preparate (vedi
+          <a href="#contesto-condiviso">Dare un contesto a un’altra persona</a>).</li>
+      </ul>
       <p class="tip">Tutto viene calcolato su questo dispositivo, anche senza internet: nessun dato viene inviato.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
@@ -857,7 +880,7 @@
         <li>Come le combinazioni di base, sono pensati per le schede pronte <strong>Parole di base</strong>.</li>
         <li>Se avete già un contesto con lo stesso nome, per aggiungere quello pronto rinominate il vostro.</li>
         <li>Eliminato un contesto pronto, lo potete aggiungere di nuovo dall’elenco: riparte com’era all’inizio.</li>
-        <li>Se spostate storico e contesti su un altro dispositivo con <strong>Sostituisci</strong>, i contesti pronti
+        <li>Se riportate le abitudini e i contesti da un <a href="#backup">backup</a>, i contesti pronti
           arrivano come contesti normali (senza <strong>Riporta all’originale</strong>) e le combinazioni di base come
           pesi normali. Se vi servono di nuovo come pronti, aggiungeteli dall’elenco.</li>
       </ul>
@@ -910,14 +933,27 @@
         (all’inizio è spento). Il nome compare piccolo e chiaro
         accanto ai tre puntini, solo da leggere: toccarlo non fa nulla e il bambino non può cambiare il contesto. Se non
         c’è nessun contesto acceso non compare niente; sui telefoni il nome lungo viene accorciato con i puntini.</p>
-      <h4>Dare un contesto a un’altra persona</h4>
-      <p>Nella pagina del contesto toccate <strong>Esporta questo contesto</strong>: il file contiene la regola, le date e
-        le correzioni fatte a mano, non lo storico. Sull’altro dispositivo toccate <strong>Importa un contesto da
-        file</strong>; se esiste già un contesto con lo stesso nome viene sostituito. Un contesto pronto invece non viene
-        mai sostituito: quello del file si aggiunge accanto con un numero dopo il nome (per esempio «SCUOLA 2»), così
-        potete tenere sia l’originale sia la versione personalizzata. Tutti i contesti, insieme allo
-        storico, si esportano anche da <span class="where"><span>Previsione</span><span>Esporta storico e
-        contesti</span></span>.</p>
+      <h4 id="contesto-condiviso">Dare un contesto a un’altra persona</h4>
+      <p>Un contesto si può passare da casa a scuola, dalla logopedista alla famiglia o tra due famiglie. Il file contiene
+        solo la regola, le date, la prevalenza e le combinazioni preparate a mano: <strong>mai lo storico del
+        bambino</strong> di chi l’ha creato.</p>
+      <ol class="steps">
+        <li>Nella pagina del contesto toccate <strong>Esporta questo contesto</strong> e mandate il file.</li>
+        <li>Sull’altro dispositivo, in <span class="where"><span>Previsione</span><span>Contesti</span></span>, toccate
+          <strong>Importa un contesto da file</strong>.</li>
+        <li>Prima di importare vedete cosa c’è nel file: il nome, quando vale, la prevalenza, quante combinazioni sono
+          state preparate e le più importanti. Se non ce n’è nessuna, il contesto prenderà le parole dalle abitudini già
+          registrate su quel dispositivo.</li>
+        <li>Se non avete un contesto con lo stesso nome toccate <strong>Importa</strong>. Se invece c’è già, scegliete
+          <strong>Sostituisci</strong> (il vostro prende la versione del file) oppure <strong>Tieni entrambi</strong>
+          (quello del file arriva con un numero dopo il nome, per esempio «SCUOLA 2»: potete confrontarli e poi eliminare
+          quello che non serve).</li>
+      </ol>
+      <p>Un contesto pronto non viene mai sostituito: quello del file si aggiunge accanto con un numero dopo il nome, così
+        potete tenere sia l’originale sia la versione personalizzata. Le abitudini registrate non cambiano con
+        l’importazione. Per spostare <strong>tutti</strong> i contesti insieme alle abitudini usate il
+        <a href="#backup">backup completo</a>; se scegliete per sbaglio un file di backup o un vecchio file «storico e
+        contesti», PicSpeak vi ricorda di aprirlo da <strong>Apri backup…</strong>.</p>
       <p class="tip">Eliminare un contesto non cancella lo storico d’uso del bambino.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>

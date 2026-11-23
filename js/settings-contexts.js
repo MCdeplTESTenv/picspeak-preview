@@ -197,10 +197,6 @@
 
   const stamp = () => new Date().toISOString().slice(0, 10);
 
-  function exportHistory() {
-    download(predict.exportJson(), `PicSpeak-${i18n.language === 'it' ? 'storico' : 'history'}-${stamp()}.json`, 'application/json');
-  }
-
   function exportOne(id, name) {
     const text = predict.exportContextJson(id);
     if (text) download(text, `PicSpeak-${i18n.language === 'it' ? 'contesto' : 'context'}-${safeName(name)}-${stamp()}.json`, 'application/json');
@@ -231,7 +227,75 @@
     return t(key) === key ? t('historyError_format') : t(key);
   }
 
-  // Importa un file dello storico o di un solo contesto. Il risultato appare come avviso nella sezione
+  // Combinazioni preparate in un contesto del file (modifiche dell'adulto e pesi di partenza), le più forti prima
+  function filePairs(ctx, parsed) {
+    const map = new Map();
+    parsed.base.filter((b) => b.ctxName && b.ctxName.toLowerCase() === ctx.name.toLowerCase())
+      .forEach((b) => map.set(`${b.prev}|${b.word}`, { prev: b.prev, word: b.word, weight: b.weight }));
+    ctx.edits.forEach((e) => map.set(`${e.prev}|${e.word}`, { prev: e.prev, word: e.word, weight: e.weight }));
+    return [...map.values()].filter((p) => p.weight > 0).sort((x, y) => y.weight - x.weight);
+  }
+
+  // Nome libero per «Tieni entrambi»: SCUOLA → SCUOLA 2, SCUOLA 3…
+  function freeContextName(name, taken) {
+    for (let n = 2; ; n += 1) {
+      const suffix = ` ${n}`;
+      const candidate = `${name.slice(0, predict.NAME_MAX - suffix.length)}${suffix}`;
+      if (!taken.has(candidate.toLowerCase())) return candidate;
+    }
+  }
+
+  /*
+   * Anteprima di un file con uno o più contesti: nome, quando vale, prevalenza, combinazioni preparate con qualche
+   * esempio. Se c'è già un contesto con lo stesso nome si sceglie se sostituirlo o tenerli entrambi.
+   * Risolve 'add', 'replace', 'both' oppure null.
+   */
+  function previewContexts(parsed) {
+    const existing = new Set(predict.listContexts().filter((c) => !c.builtin).map((c) => c.name.toLowerCase()));
+    const clash = parsed.contexts.some((c) => existing.has(c.name.toLowerCase()));
+    return ui.runPanelDialog({
+      title: t('ctxPreviewTitle'),
+      help: t('ctxPreviewHelp'),
+      className: 'choice-dialog',
+      build(close) {
+        const box = el('div', 'backup-summary');
+        parsed.contexts.forEach((ctx) => {
+          const card = el('div', 'ctx-preview');
+          card.append(el('strong', 'ctx-name', ctx.name), el('small', null, ruleText(ctx.rule)));
+          const boostKey = { 2: 'ctxBoostLow', 4: 'ctxBoostMedium', 8: 'ctxBoostHigh' }[ctx.boost];
+          if (boostKey) card.append(el('small', null, `${t('ctxBoost')}: ${t(boostKey)}`));
+          const pairs = filePairs(ctx, parsed);
+          if (pairs.length) {
+            card.append(el('small', null, format('ctxPreviewPairs', { n: pairs.length })));
+            const list = el('ul', 'settings-list');
+            pairs.slice(0, 6).forEach((p) => list.append(el('li', null, pairLabel(p))));
+            card.append(list);
+          } else {
+            card.append(el('small', null, t('ctxPreviewNoPairs')));
+          }
+          if (existing.has(ctx.name.toLowerCase())) card.append(el('p', 'tpl-status', format('ctxPreviewClash', { name: ctx.name })));
+          box.append(card);
+        });
+        const options = el('div', 'choice-options');
+        const choices = clash
+          ? [{ value: 'replace', label: t('ctxImportReplace'), help: t('ctxImportReplaceHelp') },
+            { value: 'both', label: t('ctxImportBoth'), help: t('ctxImportBothHelp'), primary: true }]
+          : [{ value: 'add', label: t('ctxImportBtn'), help: t('ctxImportAddHelp'), primary: true }];
+        choices.forEach((opt) => {
+          const btn = el('button', `choice-option${opt.primary ? ' is-primary' : ''}`);
+          btn.type = 'button';
+          btn.append(el('strong', null, opt.label), el('small', null, opt.help));
+          btn.addEventListener('click', () => close(opt.value));
+          options.append(btn);
+        });
+        box.append(options);
+        return box;
+      },
+    });
+  }
+
+  // Importa un file con uno o più contesti (preparati da un'altra famiglia, dalla scuola, dal terapista).
+  // Lo storico completo del bambino invece viaggia con il backup. Il risultato appare come avviso nella sezione
   function importFile(onDone) {
     const input = el('input');
     input.type = 'file';
@@ -241,22 +305,27 @@
       if (!file) return;
       let message;
       try {
-        const { parsed, summary } = await predict.readHistoryFile(file);
-        if (summary.kind === 'contexts') {
-          const ok = await choose(format('ctxImportTitle', { names: summary.names.join(', ') }), t('ctxImportHelp'), [
-            { value: 'merge', label: t('ctxImportBtn'), primary: true },
-          ]);
-          if (ok !== 'merge') return;
-          await predict.importData(parsed, 'merge');
-          message = { text: format('ctxImported', { names: summary.names.join(', ') }) };
+        const { parsed } = await predict.readHistoryFile(file);
+        if (parsed.kind !== 'contexts') {
+          message = { text: t('ctxImportIsHistory'), error: true };
         } else {
-          const mode = await choose(format('historyImportTitle', { days: summary.days, contexts: summary.contexts }), t('historyImportHelp'), [
-            { value: 'merge', label: t('historyImportMerge'), help: t('historyImportMergeHelp'), primary: true },
-            { value: 'replace', label: t('historyImportReplace'), help: t('historyImportReplaceHelp'), danger: true },
-          ]);
-          if (mode !== 'merge' && mode !== 'replace') return;
-          await predict.importData(parsed, mode);
-          message = { text: t('historyImported') };
+          // Due contesti con lo stesso nome nello stesso file: si tiene il primo (le combinazioni sono legate al nome)
+          const seen = new Set();
+          parsed.contexts = parsed.contexts.filter((c) => !seen.has(c.name.toLowerCase()) && seen.add(c.name.toLowerCase()));
+          const choice = await previewContexts(parsed);
+          if (!choice) return;
+          if (choice === 'both') {
+            const taken = new Set(predict.listContexts().map((c) => c.name.toLowerCase()));
+            parsed.contexts.forEach((ctx) => {
+              if (!taken.has(ctx.name.toLowerCase())) { taken.add(ctx.name.toLowerCase()); return; }
+              const oldName = ctx.name.toLowerCase();
+              ctx.name = freeContextName(ctx.name, taken);
+              taken.add(ctx.name.toLowerCase());
+              parsed.base.forEach((b) => { if (b.ctxName && b.ctxName.toLowerCase() === oldName) b.ctxName = ctx.name; });
+            });
+          }
+          await predict.importData(parsed, 'merge');
+          message = { text: format('ctxImported', { names: parsed.contexts.map((c) => c.name).join(', ') }) };
         }
       } catch (error) {
         message = { text: historyError(error), error: true };
@@ -687,7 +756,6 @@
 
   window.PicSpeak.contextsUi = {
     render,
-    exportHistory,
     importFile,
     updateChip,
     get editing() { return Boolean(draft); },

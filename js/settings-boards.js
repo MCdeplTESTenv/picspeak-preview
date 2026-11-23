@@ -672,15 +672,6 @@
     exp.disabled = !stats.pairs;
     tools.append(exp, ui.button(t('habitsImport'), importHabits));
     file.append(tools);
-
-    // Storico completo e contesti in un file a parte (lo stesso contenuto entrerà nel backup completo)
-    const history = ui.section('historyFileTitle', 'historyFileHelp');
-    const ctxUi = window.PicSpeak.contextsUi;
-    const htools = el('div', 'tpl-tools');
-    const hexp = ui.button(t('historyExport'), () => ctxUi.exportHistory());
-    hexp.disabled = !stats.days && !stats.months && !stats.pairs && !predict.listContexts().length;
-    htools.append(hexp, ui.button(t('historyImport'), () => ctxUi.importFile((m) => { habitsNotice = m; ui.render(); })));
-    history.append(htools);
   }
 
   function contextEditing() {
@@ -690,6 +681,7 @@
   function renderHowSection() {
     const wrap = ui.section('secPredictHowTitle', null);
     wrap.append(ui.list(t('predictHow')));
+    wrap.append(el('h4', null, t('predictExamplesTitle')), ui.list(t('predictExamples')));
   }
 
   // ---------- Registrazione delle categorie ----------

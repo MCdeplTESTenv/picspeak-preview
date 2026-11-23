@@ -1173,6 +1173,9 @@
     const idByName = new Map(contexts.map((c) => [c.name.toLowerCase(), c.id]));
     const fromFile = new Map(); // nome nel file → id su questo dispositivo
     for (const ctx of parsed.contexts) {
+      // Il file può essere stato letto mentre era attivo un altro profilo (ripristino in un profilo nuovo):
+      // il contesto appartiene sempre al profilo in cui entra
+      ctx.profileId = profileId;
       const fileName = ctx.name.toLowerCase();
       let existing = idByName.get(fileName);
       // Un contesto pronto non viene sostituito da uno importato: quello del file entra accanto, con un altro nome
@@ -1443,6 +1446,7 @@
     addBuiltin,
     restoreBuiltin,
     MAX_SLOTS,
+    HISTORY_FORMAT_VERSION,
     activeContexts: () => activeContexts().map((c) => c.name),
     cleanRule,
     cleanSource,

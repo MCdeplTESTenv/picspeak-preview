@@ -248,7 +248,8 @@
    */
   async function askTarget(info, parts) {
     const profiles = window.PicSpeak.profiles;
-    if (!profiles || !(await profiles.canAddProfile())) return 'current';
+    // Un vecchio file «storico e contesti» ha solo le abitudini, senza nome né schede: va nel profilo in uso
+    if (info.legacy || !profiles || !(await profiles.canAddProfile())) return 'current';
     const here = profiles.displayName(data.profile);
     const same = Boolean(info.name && data.profile && data.profile.name
       && info.name.toLocaleLowerCase() === data.profile.name.toLocaleLowerCase());

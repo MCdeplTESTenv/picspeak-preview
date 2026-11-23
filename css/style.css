@@ -2135,6 +2135,10 @@ body > .adult-bar { order: 0; }
 .backup-profile-name.is-empty { font-weight: 400; color: var(--text-muted); }
 .backup-last { padding-top: 4px; }
 .backup-summary { display: flex; flex-direction: column; gap: 12px; }
+.ctx-preview { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.ctx-preview small { color: var(--text-muted); font-size: 14px; line-height: 1.4; }
+.ctx-preview .settings-list { font-size: 15px; }
+.ctx-preview .tpl-status { margin: 4px 0 0; }
 .backup-parts { display: flex; flex-direction: column; gap: 14px; }
 .backup-part { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #eef0f3; }
 .backup-part-text { display: flex; flex-direction: column; gap: 3px; }

@@ -378,11 +378,46 @@
    * Apre il file e ne legge solo la descrizione (manifest). Restituisce { info, archive }.
    * Le parti si leggono dopo, con read() (e la password, se il backup è protetto).
    */
+  /*
+   * Vecchio file «Storico e contesti» (.json, kind «habits», dalla sezione tolta il 23/11/2026): si apre come un
+   * backup che contiene solo abitudini e contesti, così i file salvati prima non vanno persi.
+   */
+  async function openHistoryFile(file) {
+    if (file.size > PART_MAX_BYTES['habits.json']) throw new BackupError('size');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let raw;
+    try {
+      raw = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (error) {
+      throw new BackupError('format');
+    }
+    if (!raw || raw.format !== FORMAT || raw.kind !== 'habits') throw new BackupError('format');
+    // Storico salvato da una versione più recente: si chiede di aggiornare l'app, come per il backup
+    if (predict && Number(raw.formatVersion) > predict.HISTORY_FORMAT_VERSION) throw new BackupError('version');
+    const created = typeof raw.createdAt === 'string' && raw.createdAt.length <= 40 ? new Date(raw.createdAt) : null;
+    const archive = {
+      names: ['habits.json'],
+      has: (name) => name === 'habits.json',
+      async read(name, max) {
+        if (name !== 'habits.json') throw new BackupError('damaged');
+        if (max && bytes.length > max) throw new BackupError('size');
+        return bytes;
+      },
+    };
+    return {
+      info: {
+        createdAt: created && !Number.isNaN(created.getTime()) ? created : null,
+        profileId: null, name: '', device: '', encryption: null, legacy: true,
+      },
+      archive,
+    };
+  }
+
   async function open(file) {
     if (!file || file.size > MAX_FILE_BYTES) throw new BackupError('size');
     let archive;
     try {
-      if (!(await zip.isZip(file))) throw new BackupError('format');
+      if (!(await zip.isZip(file))) return await openHistoryFile(file);
       archive = await zip.open(file, ZIP_LIMITS);
     } catch (error) {
       throw zipProblem(error);
