@@ -157,7 +157,7 @@
     if (!busy && !notice) return;
     const box = el('p', `tpl-status${notice && notice.error ? ' is-error' : ''}`, busy ? busy.text : notice.text);
     box.setAttribute('role', 'status');
-    ui.section('secTplStatusTitle').append(box);
+    ui.section('secTplStatusTitle', null, { collapsible: false }).append(box);
   }
 
   // Anteprima colorata della Home del modello (righe di tipi di parola)
@@ -239,7 +239,7 @@
   }
 
   async function renderMyTemplatesSection() {
-    const wrap = ui.section('secMyTplTitle', 'secMyTplHelp', { collapsible: true });
+    const wrap = ui.section('secMyTplTitle', 'secMyTplHelp');
     const tools = el('div', 'tpl-tools');
     tools.append(
       ui.button(t('tplSaveCurrent'), () => runSafely(async () => {
@@ -373,7 +373,7 @@
   }
 
   function renderObfSection() {
-    const wrap = ui.section('secObfTitle', 'secObfHelp', { collapsible: true });
+    const wrap = ui.section('secObfTitle', 'secObfHelp');
     const tools = el('div', 'tpl-tools');
     const imp = ui.button(t('obfImport'), importObf, true);
     const all = ui.button(t('obfExportAll'), () => runSafely(() => exportObfFile('obz')));
@@ -430,7 +430,7 @@
   }
 
   function renderLegendSection() {
-    const wrap = ui.section('secLegendTitle', 'secLegendHelp', { collapsible: true });
+    const wrap = ui.section('secLegendTitle', 'secLegendHelp');
     const legend = el('ul', 'type-legend');
     [...data.WORD_TYPES, 'folder'].forEach((type) => {
       const li = el('li', `type-${type}`);
@@ -660,7 +660,7 @@
     wrap.append(clear);
 
     // File CSV modificabile dal terapista
-    const file = ui.section('habitsFileTitle', 'habitsFileHelp', { collapsible: true });
+    const file = ui.section('habitsFileTitle', 'habitsFileHelp');
     if (habitsNotice) {
       const box = el('p', `tpl-status${habitsNotice.error ? ' is-error' : ''}`, habitsNotice.text);
       box.setAttribute('role', 'status');
@@ -674,7 +674,7 @@
     file.append(tools);
 
     // Storico completo e contesti in un file a parte (lo stesso contenuto entrerà nel backup completo)
-    const history = ui.section('historyFileTitle', 'historyFileHelp', { collapsible: true });
+    const history = ui.section('historyFileTitle', 'historyFileHelp');
     const ctxUi = window.PicSpeak.contextsUi;
     const htools = el('div', 'tpl-tools');
     const hexp = ui.button(t('historyExport'), () => ctxUi.exportHistory());
@@ -688,7 +688,7 @@
   }
 
   function renderHowSection() {
-    const wrap = ui.section('secPredictHowTitle', null, { collapsible: true });
+    const wrap = ui.section('secPredictHowTitle', null);
     wrap.append(ui.list(t('predictHow')));
   }
 
