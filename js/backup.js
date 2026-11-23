@@ -4,9 +4,10 @@
  * Il file «.picspeak» è un archivio zip (scritto e letto da zip.js, senza librerie):
  *   manifest.json   { format: 'picspeak', kind: 'backup', formatVersion: 1, app, createdAt,
  *                     profile: { id, name }, device, parts: [...], encryption: null | {…} }
- *   boards.json     schede del profilo nel formato dei modelli, con immagini e foto dentro
+ *   boards.json     schede del profilo nel formato dei modelli; ogni immagine indica il suo file in images/
+ *   images/N.ext    immagini e foto (PNG, JPEG o WebP), ognuna salvata una volta sola anche se la usano schede e modelli
  *   habits.json     abitudini d'uso, pesi di partenza e contesti (stesso formato di «Esporta storico e contesti»)
- *   templates.json  i modelli salvati dall'adulto («I miei modelli»), con le immagini dentro
+ *   templates.json  i modelli salvati dall'adulto («I miei modelli»), immagini come in boards.json
  *   appearance.json aspetto: stile, colori, sfondo, zoom
  *   settings.json   altre impostazioni: voce, lingua, tocco e frase, previsione, stampa, simboli, schermo
  * Con la password facoltativa gli ultimi cinque file stanno in un secondo zip, cifrato con AES-GCM
@@ -33,7 +34,7 @@
   const MAX_FILE_BYTES = 100 * MB;
   // Un solo tetto per tutto ciò che si decomprime, archivio esterno e interno (cifrato) insieme
   const MAX_TOTAL_BYTES = 150 * MB;
-  const ZIP_LIMITS = { maxEntries: 50, maxEntryBytes: 80 * MB, maxTotalBytes: MAX_TOTAL_BYTES };
+  const ZIP_LIMITS = { maxEntries: 8000, maxEntryBytes: 80 * MB, maxTotalBytes: MAX_TOTAL_BYTES };
   // Dimensione massima di ogni parte, controllata prima di leggerla come JSON
   const PART_MAX_BYTES = {
     'manifest.json': 64 * 1024,
@@ -211,6 +212,23 @@
     const now = new Date();
     const files = [];
     const parts = [];
+    // Immagini in comune: ogni immagine diversa diventa un file images/N.ext, schede e modelli lo richiamano
+    const imagePaths = new Map(); // contenuto in base64 → percorso nel file
+    const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+    const shareImages = (template) => {
+      Object.values(template.images).forEach((entry) => {
+        if (!entry.data) return;
+        let path = imagePaths.get(entry.data);
+        if (!path) {
+          path = `images/${imagePaths.size + 1}.${EXT[entry.mime] || 'png'}`;
+          imagePaths.set(entry.data, path);
+          files.push({ name: path, data: base64ToBytes(entry.data), compress: false });
+        }
+        entry.file = path;
+        delete entry.data;
+      });
+      return template;
+    };
     const addPart = (part, value) => {
       parts.push(part);
       files.push({ name: `${part}.json`, data: JSON.stringify(value), compress: true });
@@ -219,7 +237,7 @@
     // Schede: stesso formato dei modelli, immagini e foto dentro il file
     if (data.profilePages().length) {
       const boards = await templates.fromCurrentPages(profileName || 'PicSpeak', { embed: true });
-      addPart('boards', boards);
+      addPart('boards', shareImages(boards));
     }
     if (predict && typeof predict.exportData === 'function') addPart('habits', predict.exportData());
     const userTemplates = await templates.userTemplates();
@@ -227,7 +245,7 @@
     for (const entry of userTemplates) {
       if (!entry || !entry.template) continue;
       try {
-        templateList.push({ id: entry.id, savedAt: entry.savedAt, template: await templates.embedImages(entry.template) });
+        templateList.push({ id: entry.id, savedAt: entry.savedAt, template: shareImages(await templates.embedImages(entry.template)) });
       } catch (error) {
         // Modello illeggibile: si salta
       }
@@ -356,7 +374,8 @@
     } catch (error) {
       throw zipProblem(error);
     }
-    if (bytes.length > (PART_MAX_BYTES[name] || MB)) throw new BackupError('size');
+    const max = PART_MAX_BYTES[name] || (name.startsWith('images/') ? 3 * MB : MB);
+    if (bytes.length > max) throw new BackupError('size');
     return bytes;
   }
 
@@ -399,6 +418,23 @@
     }
   }
 
+  /*
+   * Rimette dentro un modello letto dal file le immagini salvate a parte (images/N.ext), nella forma che
+   * templates.validate conosce (base64). Un riferimento sbagliato o mancante lascia la tessera con la sola parola.
+   */
+  async function attachImages(archive, raw, cache) {
+    if (!raw || typeof raw !== 'object' || !raw.images || typeof raw.images !== 'object') return raw;
+    for (const entry of Object.values(raw.images)) {
+      if (!entry || typeof entry !== 'object' || typeof entry.file !== 'string') continue;
+      const path = entry.file;
+      delete entry.file;
+      if (!/^images\/\d{1,6}\.(png|jpg|webp)$/.test(path) || !archive.has(path)) continue;
+      if (!cache.has(path)) cache.set(path, bytesToBase64(await readPart(archive, path)));
+      entry.data = cache.get(path);
+    }
+    return raw;
+  }
+
   // Immagini dentro un modello: si tengono solo quelle con la firma reale di PNG, JPEG o WebP
   async function checkTemplateImages(template) {
     for (const entry of Object.values(template.images)) {
@@ -424,8 +460,9 @@
     const archive = await unlock(opened, password);
     const parts = {};
     const summary = {};
+    const imageCache = new Map(); // percorso → base64, per leggere una sola volta le immagini in comune
 
-    const boardsRaw = await readJson(archive, 'boards.json');
+    const boardsRaw = await attachImages(archive, await readJson(archive, 'boards.json'), imageCache);
     if (boardsRaw !== undefined) {
       try {
         parts.boards = templates.validate(boardsRaw, { fromFile: true });
@@ -454,6 +491,7 @@
       for (const entry of templatesRaw.slice(0, MAX_TEMPLATES * 2)) {
         if (!entry || typeof entry !== 'object') continue;
         try {
+          await attachImages(archive, entry.template, imageCache);
           const template = await checkTemplateImages(templates.validate(entry.template, { fromFile: true }));
           const id = typeof entry.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(entry.id) ? entry.id : data.newId('tpl');
           const savedAt = typeof entry.savedAt === 'string' && !Number.isNaN(Date.parse(entry.savedAt))
