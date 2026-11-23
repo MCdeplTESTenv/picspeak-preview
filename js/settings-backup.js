@@ -121,8 +121,9 @@
       showNotice(format('backupSaved', { file: file.name }), false, where);
       return true;
     } catch (error) {
-      const unsupported = error instanceof backup.BackupError && error.message === 'unsupported';
-      showNotice(t(unsupported ? 'backupOpenError_unsupported' : 'backupSaveFailed'), true, where);
+      const code = error instanceof backup.BackupError ? error.message : '';
+      const key = { unsupported: 'backupOpenError_unsupported', verify: 'backupVerifyFailed' }[code] || 'backupSaveFailed';
+      showNotice(t(key), true, where);
       return false;
     }
   }
@@ -191,12 +192,13 @@
     return lines;
   }
 
-  function summaryTexts(info) {
+  function summaryTexts(info, issues) {
     const texts = [];
     if (info.createdAt) {
       const values = { date: dateText(info.createdAt), time: timeText(info.createdAt), device: info.device };
       texts.push(format(info.device ? 'backupSummaryWhenDevice' : 'backupSummaryWhen', values));
     }
+    if (issues && (issues.images || issues.parts.length)) texts.push(t('backupSummaryIssues'));
     const here = data.profile && data.profile.name;
     if (here && info.name && here.toLocaleLowerCase() !== info.name.toLocaleLowerCase()) {
       texts.push(format('backupSummaryOther', { name: here }));
@@ -211,7 +213,7 @@
       className: 'choice-dialog',
       build(close) {
         const box = el('div', 'backup-summary');
-        summaryTexts(info).forEach((text, index) => box.append(el('p', index ? 'tpl-status' : 'dialog-help', text)));
+        summaryTexts(info, parts.issues).forEach((text, index) => box.append(el('p', index ? 'tpl-status' : 'dialog-help', text)));
         const list = el('ul', 'settings-list');
         partLines(parts).forEach(([, text]) => list.append(el('li', null, text)));
         box.append(list);
@@ -415,6 +417,10 @@
     if (report.missing) notes.push(format('backupRestoredMissing', { n: report.missing }));
     if (report.packs.length) notes.push(format('backupRestoredPacks', { names: report.packs.join(', ') }));
     if (report.templatesFull) notes.push(format('backupRestoredFull', { n: backup.MAX_TEMPLATES }));
+    if (report.lostParts.length) {
+      notes.push(format('backupRestoredLostParts', { parts: report.lostParts.map((part) => t(`backupPartName_${part}`)).join(', ') }));
+    }
+    if (report.lostImages) notes.push(format('backupRestoredLostImages', { n: report.lostImages }));
     await ui.runDialog({ title: t('backupRestoredTitle'), help: notes.join(' '), primary: t('close') });
     if (channel) channel.postMessage('restored');
     location.reload();

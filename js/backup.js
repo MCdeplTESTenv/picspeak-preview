@@ -203,7 +203,17 @@
    * Crea il file del backup e lo restituisce come { blob, name }.
    * options: { name (nome del profilo), password (facoltativa, '' = nessuna), fallbackName }
    */
-  async function create({ name, password, fallbackName }) {
+  async function create(options) {
+    // Se la prova del file appena creato non riesce, lo si rifà da capo una volta, senza disturbare l'adulto
+    try {
+      return await build(options);
+    } catch (error) {
+      if (!(error instanceof BackupError) || error.message !== 'verify') throw error;
+      return build(options);
+    }
+  }
+
+  async function build({ name, password, fallbackName }) {
     const profileName = cleanName(name);
     if (password && !cryptoAvailable()) throw new BackupError('unsupported');
     await setProfileName(profileName);
@@ -283,8 +293,28 @@
     archiveFiles.unshift({ name: 'manifest.json', data: JSON.stringify(manifest, null, 2), compress: true });
     const zipped = await zip.create(archiveFiles);
     const blob = new Blob([zipped], { type: 'application/octet-stream' });
+    await verify(blob, password, { pages: data.profilePages().length, templates: templateList.length, images: imagePaths.size });
     await storage.set(LAST_KEY, { at: manifest.createdAt, name: profileName });
     return { blob, name: fileName(profileName, now, fallbackName || 'backup') };
+  }
+
+  /*
+   * Prova del file appena creato, prima di consegnarlo: lo si riapre esattamente come al ripristino (password
+   * compresa) e si controlla che ci siano tutte le schede, tutti i modelli e tutte le immagini, leggibili.
+   */
+  async function verify(blob, password, expected) {
+    let parts;
+    try {
+      parts = await read(await open(blob), password);
+    } catch (error) {
+      throw new BackupError('verify');
+    }
+    const pages = parts.boards ? parts.boards.pages.length : 0;
+    const templateCount = parts.templates ? parts.templates.length : 0;
+    if (parts.issues.images || parts.issues.parts.length || pages !== expected.pages
+      || templateCount !== expected.templates || parts.imageCount !== expected.images) {
+      throw new BackupError('verify');
+    }
   }
 
   // Salva il file (cartella Download, o app File su iPad e iPhone)
@@ -408,43 +438,66 @@
     }
   }
 
+  // Parte JSON: undefined se non c'è, null se c'è ma non si riesce a leggere
   async function readJson(archive, name) {
     if (!archive.has(name)) return undefined;
-    const bytes = await readPart(archive, name);
     try {
-      return JSON.parse(new TextDecoder().decode(bytes));
+      return JSON.parse(new TextDecoder().decode(await readPart(archive, name)));
     } catch (error) {
-      return undefined;
+      return null;
     }
   }
 
   /*
    * Rimette dentro un modello letto dal file le immagini salvate a parte (images/N.ext), nella forma che
-   * templates.validate conosce (base64). Un riferimento sbagliato o mancante lascia la tessera con la sola parola.
+   * templates.validate conosce (base64). Il ripristino non si blocca mai: un'immagine che manca o non si legge
+   * si conta in issues e la tessera resta con la parola.
    */
-  async function attachImages(archive, raw, cache) {
+  async function attachImages(archive, raw, cache, issues) {
     if (!raw || typeof raw !== 'object' || !raw.images || typeof raw.images !== 'object') return raw;
     for (const entry of Object.values(raw.images)) {
       if (!entry || typeof entry !== 'object' || typeof entry.file !== 'string') continue;
       const path = entry.file;
       delete entry.file;
-      if (!/^images\/\d{1,6}\.(png|jpg|webp)$/.test(path) || !archive.has(path)) continue;
-      if (!cache.has(path)) cache.set(path, bytesToBase64(await readPart(archive, path)));
-      entry.data = cache.get(path);
+      if (!cache.has(path)) {
+        let value = null;
+        if (/^images\/\d{1,6}\.(png|jpg|webp)$/.test(path) && archive.has(path)) {
+          try {
+            value = bytesToBase64(await readPart(archive, path));
+          } catch (error) {
+            value = null;
+          }
+        }
+        if (!value) issues.images += 1;
+        cache.set(path, value);
+      }
+      if (cache.get(path)) entry.data = cache.get(path);
+      else delete entry.mime;
     }
     return raw;
   }
 
-  // Immagini dentro un modello: si tengono solo quelle con la firma reale di PNG, JPEG o WebP
-  async function checkTemplateImages(template) {
+  /*
+   * Controlla che ogni immagine contenuta in un modello si possa davvero usare: firma reale PNG, JPEG o WebP,
+   * misure ammesse e decodifica riuscita. Un'immagine rovinata si toglie (la tessera resta con la parola) e si conta.
+   */
+  async function checkTemplateImages(template, checked, issues) {
     for (const entry of Object.values(template.images)) {
       if (!entry.data) continue;
-      try {
-        const binary = atob(entry.data);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        await symbols.checkImage(new Blob([bytes], { type: entry.mime }));
-      } catch (error) {
+      if (!checked.has(entry.data)) {
+        let ok = true;
+        try {
+          const blob = new Blob([base64ToBytes(entry.data)], { type: entry.mime });
+          await symbols.checkImage(blob);
+          const bitmap = await createImageBitmap(blob);
+          if (bitmap.close) bitmap.close();
+        } catch (error) {
+          ok = false;
+          issues.images += 1;
+        }
+        checked.set(entry.data, ok);
+      }
+      if (!checked.get(entry.data)) {
         delete entry.data;
         delete entry.mime;
       }
@@ -460,61 +513,69 @@
     const archive = await unlock(opened, password);
     const parts = {};
     const summary = {};
-    const imageCache = new Map(); // percorso → base64, per leggere una sola volta le immagini in comune
+    // Il ripristino recupera sempre tutto quello che può: le parti o le immagini rovinate si contano e si dicono
+    // all'adulto alla fine, senza fermare il resto
+    const issues = { images: 0, parts: [] };
+    const imageCache = new Map(); // percorso → base64 (null se illeggibile), per leggere una volta le immagini in comune
+    const checked = new Map(); // immagine → true se usabile
 
-    const boardsRaw = await attachImages(archive, await readJson(archive, 'boards.json'), imageCache);
-    if (boardsRaw !== undefined) {
+    if (archive.has('boards.json')) {
       try {
-        parts.boards = templates.validate(boardsRaw, { fromFile: true });
+        const raw = await attachImages(archive, await readJson(archive, 'boards.json'), imageCache, issues);
+        parts.boards = await checkTemplateImages(templates.validate(raw, { fromFile: true }), checked, issues);
         summary.boards = { pages: parts.boards.pages.length };
       } catch (error) {
-        // Schede non valide: la parte non si offre
+        delete parts.boards;
+        issues.parts.push('boards');
       }
     }
 
-    const habitsRaw = archive.has('habits.json') ? await readPart(archive, 'habits.json') : null;
-    if (habitsRaw && predict && typeof predict.readHistoryFile === 'function') {
+    if (archive.has('habits.json') && predict && typeof predict.readHistoryFile === 'function') {
       try {
-        const { parsed, summary: s } = await predict.readHistoryFile(new Blob([habitsRaw]));
-        if (parsed.kind === 'habits') {
-          parts.habits = parsed;
-          summary.habits = { days: s.days, contexts: s.contexts };
-        }
+        const result = await predict.readHistoryFile(new Blob([await readPart(archive, 'habits.json')]));
+        if (result.parsed.kind !== 'habits') throw new BackupError('damaged');
+        parts.habits = result.parsed;
+        summary.habits = { days: result.summary.days, contexts: result.summary.contexts };
       } catch (error) {
-        // Storico non valido: la parte non si offre
+        issues.parts.push('habits');
       }
     }
 
-    const templatesRaw = await readJson(archive, 'templates.json');
-    if (Array.isArray(templatesRaw)) {
+    if (archive.has('templates.json')) {
+      const raw = await readJson(archive, 'templates.json');
       const list = [];
-      for (const entry of templatesRaw.slice(0, MAX_TEMPLATES * 2)) {
-        if (!entry || typeof entry !== 'object') continue;
+      let lost = !Array.isArray(raw);
+      for (const entry of (Array.isArray(raw) ? raw.slice(0, MAX_TEMPLATES * 2) : [])) {
         try {
-          await attachImages(archive, entry.template, imageCache);
-          const template = await checkTemplateImages(templates.validate(entry.template, { fromFile: true }));
+          if (!entry || typeof entry !== 'object') throw new BackupError('damaged');
+          await attachImages(archive, entry.template, imageCache, issues);
+          const template = await checkTemplateImages(templates.validate(entry.template, { fromFile: true }), checked, issues);
           const id = typeof entry.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(entry.id) ? entry.id : data.newId('tpl');
           const savedAt = typeof entry.savedAt === 'string' && !Number.isNaN(Date.parse(entry.savedAt))
             ? new Date(entry.savedAt).toISOString() : new Date().toISOString();
           if (!list.some((item) => item.id === id)) list.push({ id, savedAt, template });
         } catch (error) {
-          // Modello non valido: si salta
+          lost = true;
         }
       }
+      if (lost) issues.parts.push('templates');
       parts.templates = list;
       summary.templates = { n: list.length };
     }
 
     for (const group of ['appearance', 'settings']) {
+      if (!archive.has(`${group}.json`)) continue;
       const clean = cleanGroup(await readJson(archive, `${group}.json`), group);
-      if (clean) {
-        parts[group] = clean;
-        summary[group] = { keys: Object.keys(clean).length };
-      }
+      if (!clean) { issues.parts.push(group); continue; }
+      parts[group] = clean;
+      summary[group] = { keys: Object.keys(clean).length };
     }
     parts.summary = summary;
+    parts.issues = issues;
+    parts.imageCount = [...imageCache.values()].filter(Boolean).length;
     return parts;
   }
+
 
   // ---------- Ripristinare ----------
 
@@ -525,7 +586,8 @@
    * Restituisce un resoconto per l'adulto.
    */
   async function restore(parts, choice, info, { folderName, all = false } = {}) {
-    const report = { missing: 0, packs: [], templatesFull: false };
+    const issues = parts.issues || { images: 0, parts: [] };
+    const report = { missing: 0, packs: [], templatesFull: false, lostImages: issues.images, lostParts: issues.parts };
 
     if (choice.boards && parts.boards) {
       if (choice.boards === 'add' && folderName) parts.boards.name = folderName;
