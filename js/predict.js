@@ -483,9 +483,17 @@
     saveTimer = setTimeout(flush, 1500);
   }
 
+  // true dopo freeze(): un'altra scheda sta ripristinando un backup, questa non deve più scrivere nell'archivio
+  let frozen = false;
+
+  function freeze() {
+    frozen = true;
+    clearTimeout(saveTimer);
+  }
+
   async function flush() {
     clearTimeout(saveTimer);
-    if (!profileId) return;
+    if (!profileId || frozen) return;
     const records = [];
     dirtyPages.forEach((page) => {
       records.push({ id: pageId(page), profileId, kind: 'combos', page, list: combos.slice(page * COMBO_PAGE, (page + 1) * COMBO_PAGE) });
@@ -1427,6 +1435,7 @@
     cleanRule,
     cleanSource,
     flush,
+    freeze,
     CsvError,
     ContextError,
     HistoryError,

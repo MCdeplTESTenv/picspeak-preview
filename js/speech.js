@@ -166,9 +166,16 @@
 
   function setPrefs(next) {
     if (!next) return;
-    if (next.voiceByLang) prefs.voiceByLang = { ...next.voiceByLang };
-    if (typeof next.rate === 'number') prefs.rate = next.rate;
-    if (typeof next.pitch === 'number') prefs.pitch = next.pitch;
+    // Valori controllati: arrivano anche da un backup ripristinato
+    if (next.voiceByLang && typeof next.voiceByLang === 'object') {
+      const voices = {};
+      Object.entries(next.voiceByLang).slice(0, 20).forEach(([lang, name]) => {
+        if (/^[a-z]{2}$/.test(lang) && typeof name === 'string' && name.length <= 200) voices[lang] = name;
+      });
+      prefs.voiceByLang = voices;
+    }
+    if (typeof next.rate === 'number' && Number.isFinite(next.rate)) prefs.rate = Math.min(1.5, Math.max(0.5, next.rate));
+    if (typeof next.pitch === 'number' && Number.isFinite(next.pitch)) prefs.pitch = Math.min(1.5, Math.max(0.5, next.pitch));
   }
 
   window.PicSpeak = window.PicSpeak || {};
