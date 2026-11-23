@@ -900,7 +900,7 @@
   renderSentence();
 
   // Caricamento dei dati salvati sul dispositivo (al primo avvio: schede di prova)
-  data.load().then(async () => {
+  const ready = data.load().then(async () => {
     if (window.PicSpeak.predict) await window.PicSpeak.predict.load(data.profile.id);
     state.ready = true;
     state.pageId = data.homePageId;
@@ -908,6 +908,7 @@
   });
 
   window.PicSpeak.app = {
+    ready,
     setMode,
     refreshTexts,
     layoutGrid,

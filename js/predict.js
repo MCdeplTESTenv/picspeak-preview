@@ -138,6 +138,18 @@
   const pageId = (page) => `uc_${profileId}_${page}`;
   const baseId = () => `ub_${profileId}`;
 
+  /*
+   * Abitudini salvate di un profilo: si leggono solo i suoi record (gli id iniziano con il codice del profilo),
+   * così con più profili sullo stesso dispositivo l'avvio non legge le abitudini degli altri.
+   * «u_» è il formato più vecchio, recuperato da migrateOld.
+   */
+  async function usageRecordsOf(id) {
+    if (!id) return [];
+    const prefixes = ['uc_', 'ud_', 'um_', 'u_'].map((kind) => `${kind}${id}_`).concat(`ub_${id}`);
+    const records = await storage.getRecordsByPrefix('usage', prefixes);
+    return records.filter((r) => r && r.profileId === id);
+  }
+
   // ---------- Regole dei contesti ----------
 
   // Una fascia settimanale valida o null: giorni ISO 1-7, ore intere da/a (a escluso)
@@ -386,7 +398,7 @@
     applyLook();
 
     resetState();
-    const all = (await storage.getAllRecords('usage')).filter((r) => r && r.profileId === profileId);
+    const all = await usageRecordsOf(profileId);
     const pages = [];
     const old = [];
     all.forEach((r) => {
@@ -792,8 +804,7 @@
   async function clearAll({ keepStarter = false } = {}) {
     clearTimeout(saveTimer);
     const ids = [];
-    const all = await storage.getAllRecords('usage');
-    all.forEach((r) => { if (r && r.profileId === profileId) ids.push(r.id); });
+    (await usageRecordsOf(profileId)).forEach((r) => ids.push(r.id));
     const kept = keepStarter ? base.filter((b) => b.src === STARTER) : [];
     resetStateKeepContexts();
     await Promise.all(ids.map((id) => storage.deleteRecord('usage', id)));
@@ -951,7 +962,7 @@
       const next = strip(entries);
       if (next.length !== entries.length) {
         months.set(start, next);
-        if (next.length) storage.putRecord('usage', { id: monthId(start), profileId, kind: 'month', day: start, entries: next });
+        if (next.length && !frozen) storage.putRecord('usage', { id: monthId(start), profileId, kind: 'month', day: start, entries: next });
         else deletedIds.add(monthId(start));
       }
     });
@@ -1406,6 +1417,7 @@
 
   window.PicSpeak.predict = {
     load,
+    usageRecordsOf,
     record,
     candidates,
     wordKey,

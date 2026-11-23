@@ -430,6 +430,7 @@
 
   function enterAdult() {
     app.setMode('adult');
+    if (window.PicSpeak.profiles) window.PicSpeak.profiles.showProfileInBar();
     storage.requestPersistence();
     setTimeout(updateZoomLabel, 0);
     el.adultBar.hidden = false;
@@ -1561,6 +1562,38 @@
     if (kiosk.autoFullscreen()) kiosk.enterFullscreen();
   }
 
+  // ---------- Riapertura dopo il cambio di profilo ----------
+
+  // Il cambio di profilo ricarica la pagina: per non chiedere di nuovo il PIN all'adulto che lo ha appena
+  // inserito, si lascia un segno valido una sola volta e per pochi secondi, solo in questa scheda del browser.
+  const REOPEN_KEY = 'picspeak-anteprima-reopen';
+  const REOPEN_MS = 20000;
+
+  function reopenAfterReload(categoryId) {
+    try {
+      sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ at: Date.now(), category: String(categoryId) }));
+    } catch (error) {
+      // Senza sessionStorage si riapre sulla comunicazione: l'adulto rientra con il PIN
+    }
+    location.reload();
+  }
+
+  function resumeAfterReload() {
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(REOPEN_KEY) || 'null');
+      sessionStorage.removeItem(REOPEN_KEY);
+    } catch (error) {
+      return;
+    }
+    if (!saved || typeof saved.at !== 'number' || typeof saved.category !== 'string') return;
+    const age = Date.now() - saved.at;
+    if (age < 0 || age > REOPEN_MS) return;
+    if (window.top !== window.self) return;
+    enterAdult();
+    openSettings(saved.category);
+  }
+
   // ---------- Avvio ----------
 
   function bindEvents() {
@@ -1682,6 +1715,7 @@
     render: () => { if (!el.settings.hidden) renderSettings(); },
     closeSettings,
     openSettings,
+    reopenAfterReload,
     // Nuova categoria nel menu delle impostazioni, dopo quella indicata
     addCategory(category, afterId) {
       const index = CATEGORIES.findIndex((cat) => cat.id === afterId);
@@ -1697,4 +1731,9 @@
   restoreLanguage();
   restoreVoice();
   restoreColorMode();
+  // Dopo il cambio di profilo: si torna nelle impostazioni quando le schede del nuovo profilo sono pronte
+  // (e quando tutti gli script sono caricati, compresa la pagina «Profili»)
+  const pageLoaded = document.readyState === 'complete'
+    ? Promise.resolve() : new Promise((resolve) => window.addEventListener('load', resolve, { once: true }));
+  if (app.ready) Promise.all([app.ready, pageLoaded]).then(resumeAfterReload);
 })();

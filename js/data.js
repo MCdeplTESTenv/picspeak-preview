@@ -49,9 +49,9 @@
     };
   }
 
-  async function seedDefaultProfile() {
+  // Crea un profilo con le schede di prova (prima apertura o «Aggiungi un profilo»), senza renderlo attivo
+  async function seedDefaultProfile(profileId, name = '') {
     const lang = i18n.language;
-    const profileId = newId('p');
     const images = new Map();
     const pageIds = {};
     Object.keys(sampleData.pages).forEach((key) => { pageIds[key] = newId('pg'); });
@@ -95,7 +95,7 @@
 
     const profile = {
       id: profileId,
-      name: '',
+      name,
       kind: 'child',
       language: lang,
       homePageId: pageIds[sampleData.homePage],
@@ -107,17 +107,16 @@
     await storage.putRecords('images', [...images.values()]);
     await storage.putRecords('pages', pages);
     await storage.putRecord('profiles', profile);
-    await storage.set('activeProfileId', profileId);
     return profile;
   }
 
   // ---------- Caricamento ----------
 
   async function load() {
-    let profileId = await storage.get('activeProfileId');
-    let profile = profileId ? await storage.getRecord('profiles', profileId) : null;
-    if (!profile) profile = await seedDefaultProfile();
-    profileId = profile.id;
+    // Si carica solo il profilo in uso; alla prima apertura si crea con l'id già preparato dall'archivio
+    const profileId = await storage.activeProfileId();
+    let profile = await storage.getRecord('profiles', profileId);
+    if (!profile) profile = await seedDefaultProfile(profileId);
     const [pages, images] = await Promise.all([
       storage.getAllRecords('pages'),
       storage.getAllRecords('images'),
@@ -520,6 +519,7 @@
     canMoveCellTo,
     moveCellToPage,
     profilePages,
+    seedDefaultProfile,
     snapshotPages,
     previousPages,
     replacePages,

@@ -28,6 +28,8 @@
   <!-- Barra della modalità adulto (nascosta in modalità bambino) -->
   <div class="adult-bar" id="adult-bar" hidden>
     <span class="adult-badge" data-i18n-label="adultMode"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 7.5-1.9"/></svg> <span class="adult-badge-text" data-i18n="adultMode"></span><span class="adult-preview-text" data-i18n="zoomPreview"></span></span>
+    <!-- Nome del profilo in uso (solo se sul dispositivo ci sono più profili) -->
+    <span class="adult-profile" id="adult-profile" hidden></span>
     <!-- Zoom delle tessere: visibile solo con le impostazioni sbloccate; mentre si regola, la pagina è in anteprima
          (identica a quella del bambino) fino al primo tocco fuori da questi pulsanti -->
     <div class="zoom-control" role="group" data-i18n-label="zoomTiles">
@@ -148,6 +150,7 @@
   <script src="js/communication.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/settings-backup.js"></script>
+  <script src="js/profiles.js"></script>
   <script src="js/print.js"></script>
   <script src="js/symbol-search.js"></script>
   <script src="js/editor.js"></script>
