@@ -477,5 +477,29 @@
     }
   }
 
-  window.PicSpeak.profiles = { cleanName, displayName, showProfileInBar };
+  /*
+   * Per «Ripristina un backup» in un profilo nuovo: crea il profilo e lo rende quello in uso subito, senza
+   * ricaricare la pagina (il ripristino scrive poi schede, abitudini e scelte in questo profilo; alla fine la pagina
+   * si ricarica comunque). Se il nome c'è già si aggiunge un numero: «Nome (2)».
+   * Restituisce false se si è già al numero massimo di profili.
+   */
+  async function canAddProfile() {
+    return (await storage.getAllRecords('profiles')).length < MAX_PROFILES;
+  }
+
+  async function startRestoredProfile(wanted) {
+    const list = await listProfiles();
+    if (list.length >= MAX_PROFILES) return false;
+    const base = cleanName(wanted) || t('backupRestoredProfileName');
+    let name = base;
+    for (let n = 2; nameTaken(list, name); n += 1) name = cleanName(`${base.slice(0, NAME_MAX - 5)} (${n})`);
+    if (predict) await predict.flush();
+    const id = await createStarter(name);
+    await storage.setActiveProfileId(id);
+    await data.load();
+    if (predict) await predict.load(id);
+    return true;
+  }
+
+  window.PicSpeak.profiles = { cleanName, displayName, showProfileInBar, canAddProfile, startRestoredProfile };
 })();

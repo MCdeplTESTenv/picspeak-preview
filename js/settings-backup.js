@@ -242,6 +242,45 @@
     });
   }
 
+  /*
+   * Prima domanda del ripristino: in un profilo nuovo o nel profilo in uso. Se il backup è di un'altra persona
+   * (nome diverso) la scelta evidenziata è il profilo nuovo. Risolve 'new', 'current' o null.
+   */
+  async function askTarget(info, parts) {
+    const profiles = window.PicSpeak.profiles;
+    if (!profiles || !(await profiles.canAddProfile())) return 'current';
+    const here = profiles.displayName(data.profile);
+    const same = Boolean(info.name && data.profile && data.profile.name
+      && info.name.toLocaleLowerCase() === data.profile.name.toLocaleLowerCase());
+    return ui.runPanelDialog({
+      title: info.name ? format('backupSummaryTitle', { name: info.name }) : t('backupSummaryNoName'),
+      className: 'choice-dialog',
+      build(close) {
+        const box = el('div', 'backup-summary');
+        summaryTexts({ ...info, name: null }, parts.issues).forEach((text, index) => box.append(el('p', index ? 'tpl-status' : 'dialog-help', text)));
+        const list = el('ul', 'settings-list');
+        partLines(parts).forEach(([, text]) => list.append(el('li', null, text)));
+        box.append(list, el('p', 'dialog-help', t('backupTargetAsk')));
+        const options = el('div', 'choice-options');
+        const newName = info.name || t('backupRestoredProfileName');
+        const choices = [
+          { value: 'new', label: format('backupTargetNew', { name: newName }), help: format('backupTargetNewHelp', { current: here }), className: same ? '' : 'is-primary' },
+          { value: 'current', label: format('backupTargetCurrent', { current: here }), help: format('backupTargetCurrentHelp', { current: here }), className: same ? 'is-primary' : '' },
+        ];
+        if (same) choices.reverse();
+        choices.forEach((opt) => {
+          const btn = el('button', `choice-option ${opt.className}`.trim());
+          btn.type = 'button';
+          btn.append(el('strong', null, opt.label), el('small', null, opt.help));
+          btn.addEventListener('click', () => close(opt.value));
+          options.append(btn);
+        });
+        box.append(options);
+        return box;
+      },
+    });
+  }
+
   // Modi possibili per ogni parte (il primo, «No», lascia la parte com'è)
   const PART_MODES = {
     boards: [['', 'valNo'], ['replace', 'backupModeReplace'], ['add', 'backupModeAdd']],
@@ -388,10 +427,25 @@
       return;
     }
 
-    const mode = await askSummary(opened.info, parts);
-    if (!mode) return;
+    // Profilo di destinazione: uno nuovo (il profilo in uso resta com'è) oppure quello in uso
+    const target = await askTarget(opened.info, parts);
+    if (!target) return;
+    let mode;
+    if (target === 'new') {
+      if (!(await window.PicSpeak.profiles.startRestoredProfile(opened.info.name))) {
+        await showError(new backup.BackupError('damaged'));
+        return;
+      }
+      mode = 'all';
+    } else {
+      mode = await askSummary(opened.info, parts);
+      if (!mode) return;
+    }
     let choice;
-    if (mode === 'all') {
+    if (target === 'new') {
+      // Profilo nuovo: entra tutto il backup; i modelli salvati, che sono del dispositivo, si aggiungono
+      choice = Object.fromEntries(Object.keys(parts.summary).map((part) => [part, part === 'templates' ? 'add' : 'replace']));
+    } else if (mode === 'all') {
       if (!(await confirmAll())) return;
       // Tutte le parti del file, anche quelle vuote (es. nessun modello): «tutto» vuol dire diventare uguali al backup
       choice = Object.fromEntries(Object.keys(parts.summary).map((part) => [part, 'replace']));
