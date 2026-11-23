@@ -481,25 +481,23 @@
 
   // ---------- Impostazioni ----------
 
-  // Sezioni richiudibili: ogni sezione ha il titolo sempre visibile, con una freccia che apre o chiude il contenuto.
-  // All'inizio è aperta solo la prima sezione di ogni categoria; quelle che l'adulto apre o chiude restano così
-  // (stato salvato sul dispositivo). Chiudere una sezione non cambia nulla: i valori scelti continuano a valere.
-  let sectionState = {};
+  // Sezioni richiudibili: il titolo resta sempre visibile, con una freccia che apre o chiude il contenuto.
+  // All'inizio sono chiuse; quelle aperte dall'adulto restano aperte (elenco salvato sul dispositivo).
+  // Chiudere una sezione non cambia nulla: i valori scelti continuano a valere.
+  let openSections = new Set();
 
-  function saveSectionState() {
-    storage.set('sectionState', sectionState);
+  function saveOpenSections() {
+    storage.set('openSections', [...openSections]);
   }
 
-  // options.collapsible: false = sezione sempre aperta, senza freccia (avvisi, pulsanti di salvataggio)
-  // options.open: true = aperta all'inizio anche se non è la prima; options.key: nome con cui ricordarla
+  // options.collapsible: true = sezione richiudibile; options.key: nome con cui ricordarla (predefinito: il titolo)
   function section(titleKey, helpKey, options = {}) {
     const wrap = document.createElement('section');
     wrap.className = 'settings-section';
     const title = document.createElement('h3');
-    if (options.collapsible !== false) {
+    if (options.collapsible) {
       const key = options.key || titleKey;
-      const first = !currentPanel.querySelector('.settings-section.is-collapsible');
-      const open = typeof sectionState[key] === 'boolean' ? sectionState[key] : Boolean(first || options.open);
+      const open = openSections.has(key);
       wrap.classList.add('is-collapsible');
       wrap.classList.toggle('is-collapsed', !open);
       const toggle = document.createElement('button');
@@ -517,8 +515,8 @@
         const nowOpen = wrap.classList.contains('is-collapsed');
         wrap.classList.toggle('is-collapsed', !nowOpen);
         toggle.setAttribute('aria-expanded', String(nowOpen));
-        sectionState[key] = nowOpen;
-        saveSectionState();
+        if (nowOpen) openSections.add(key); else openSections.delete(key);
+        saveOpenSections();
       });
       title.append(toggle);
     } else {
@@ -1382,7 +1380,7 @@
 
   function renderAppearanceGroups() {
     APPEARANCE_GROUPS.forEach((group) => {
-      const wrap = section(group.titleKey);
+      const wrap = section(group.titleKey, null, { collapsible: true });
       if (group.titleKey === 'grpCells') wrap.append(tileZoomRow());
       group.options.forEach((opt) => {
         const current = appearance[opt.key] || opt.values[0][0];
@@ -1628,26 +1626,14 @@
     applyAppearance();
   }
 
-  // Sezioni aperte o chiuse dall'adulto (solo nomi brevi e valori sì/no).
-  // Recupero dei formati precedenti: «openSections» (elenco delle sole sezioni aperte) e «showAdvanced» (tolto).
-  async function restoreSectionState() {
-    const saved = await storage.get('sectionState');
-    const clean = {};
-    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
-      Object.keys(saved).slice(0, 200).forEach((key) => {
-        if (key.length <= 60 && typeof saved[key] === 'boolean') clean[key] = saved[key];
-      });
+  // Sezioni richiudibili aperte dall'adulto (solo nomi di testo plausibili).
+  // La vecchia preferenza «Mostra impostazioni avanzate» non esiste più e si toglie.
+  async function restoreOpenSections() {
+    const saved = await storage.get('openSections');
+    if (Array.isArray(saved)) {
+      openSections = new Set(saved.filter((key) => typeof key === 'string' && key.length <= 60).slice(0, 100));
     }
-    const legacy = await storage.get('openSections');
-    if (Array.isArray(legacy)) {
-      legacy.slice(0, 100).forEach((key) => {
-        if (typeof key === 'string' && key.length <= 60 && !(key in clean)) clean[key] = true;
-      });
-      await storage.set('sectionState', clean);
-    }
-    if (legacy !== undefined) await storage.remove('openSections');
     if ((await storage.get('showAdvanced')) !== undefined) await storage.remove('showAdvanced');
-    sectionState = clean;
   }
 
   async function restoreOnlineSearch() {
@@ -1677,7 +1663,7 @@
   };
 
   bindEvents();
-  restoreSectionState();
+  restoreOpenSections();
   restoreOnlineSearch();
   restorePageBackground();
   restoreAppearance();

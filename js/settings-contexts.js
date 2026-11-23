@@ -154,10 +154,7 @@
         ui.openSettings('prediction');
         setTimeout(() => {
           const target = document.getElementById('ctx-section');
-          if (!target) return;
-          // Dal pulsante del contesto si arriva all'elenco dei contesti già aperto
-          if (target.classList.contains('is-collapsed')) target.querySelector(':scope > h3 > .section-toggle').click();
-          target.scrollIntoView({ block: 'start' });
+          if (target) target.scrollIntoView({ block: 'start' });
         }, 0);
       });
       bar.insertBefore(chip, settingsBtn);
@@ -320,7 +317,7 @@
 
   // Contesti pronti di PicSpeak: si aggiungono uno per uno, poi si modificano come gli altri
   function renderBuiltins() {
-    const wrap = ui.section('ctxBuiltinTitle', 'ctxBuiltinHelp');
+    const wrap = ui.section('ctxBuiltinTitle', 'ctxBuiltinHelp', { collapsible: true });
     const ul = el('ul', 'ctx-list');
     predict.builtinContexts(i18n.language).forEach((item) => {
       const li = el('li', 'ctx-item');
@@ -644,24 +641,24 @@
     head.append(field('ctxName', name));
     if (draft.builtin) head.append(el('p', 'settings-help', t('ctxBuiltinNote')));
 
-    const when = ui.section('ctxWhenTitle', 'ctxWhenHelp', { open: true });
+    const when = ui.section('ctxWhenTitle', 'ctxWhenHelp');
     renderWhen(when);
     when.append(ui.settingRow('ctxMode', 'ctxModeHelp', ui.segmented(
       [['auto', 'ctxModeAuto'], ['on', 'ctxModeOn'], ['off', 'ctxModeOff']], draft.mode,
       (value) => { draft.mode = value; refresh(); },
     )));
 
-    const data = ui.section('ctxDataTitle', 'ctxDataHelp');
+    const data = ui.section('ctxDataTitle', 'ctxDataHelp', { collapsible: true });
     renderSource(data);
     data.append(ui.settingRow('ctxBoost', 'ctxBoostHelp', ui.segmented(
       [['2', 'ctxBoostLow'], ['4', 'ctxBoostMedium'], ['8', 'ctxBoostHigh']], String(draft.boost),
       (value) => { draft.boost = Number(value); refresh(); },
     )));
 
-    const pairs = ui.section('ctxPairsTitle', 'ctxPairsHelp', { open: true });
+    const pairs = ui.section('ctxPairsTitle', 'ctxPairsHelp');
     renderPairs(pairs);
 
-    const actions = ui.section('ctxActionsTitle', null, { collapsible: false });
+    const actions = ui.section('ctxActionsTitle');
     const tools = el('div', 'tpl-tools');
     tools.append(
       ui.button(t('ctxSave'), save, true),
