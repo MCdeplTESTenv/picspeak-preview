@@ -1001,7 +1001,7 @@
     }
     // Immagini arrivate da schede di altre app (Open Board Format): autore e licenza dichiarati nel file
     const others = new Map();
-    data.allImages().forEach((image) => {
+    data.searchableImages().forEach((image) => { // solo quelle di questo profilo
       if (image.source !== 'other' || !(image.author || image.license)) return;
       const key = `${image.author || ''}|${image.license || ''}|${image.licenseUrl || ''}`;
       if (!others.has(key)) others.set(key, image);
