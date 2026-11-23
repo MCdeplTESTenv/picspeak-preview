@@ -1566,12 +1566,13 @@
 
   // Il cambio di profilo ricarica la pagina: per non chiedere di nuovo il PIN all'adulto che lo ha appena
   // inserito, si lascia un segno valido una sola volta e per pochi secondi, solo in questa scheda del browser.
-  const REOPEN_KEY = 'picspeak-anteprima-reopen';
+  // Chiave diversa per ogni copia dell'app sullo stesso sito (sito pubblico e anteprima)
+  const REOPEN_KEY = `${storage.name}-reopen`;
   const REOPEN_MS = 20000;
 
   function reopenAfterReload(categoryId) {
     try {
-      sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ at: Date.now(), category: String(categoryId) }));
+      sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ at: Date.now(), category: String(categoryId), path: location.pathname }));
     } catch (error) {
       // Senza sessionStorage si riapre sulla comunicazione: l'adulto rientra con il PIN
     }
@@ -1588,7 +1589,7 @@
     }
     if (!saved || typeof saved.at !== 'number' || typeof saved.category !== 'string') return;
     const age = Date.now() - saved.at;
-    if (age < 0 || age > REOPEN_MS) return;
+    if (age < 0 || age > REOPEN_MS || saved.path !== location.pathname) return;
     if (window.top !== window.self) return;
     enterAdult();
     openSettings(saved.category);

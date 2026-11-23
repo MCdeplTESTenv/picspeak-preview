@@ -414,7 +414,7 @@
           if (m) { contentType = m[1]; bytes = base64ToBytes(m[2].replace(/\s/g, '')); }
         }
         if (!bytes && typeof img.path === 'string' && archive && archive.has(img.path)) {
-          bytes = await archive.read(img.path);
+          bytes = await archive.read(img.path, MAX_IMAGE_BYTES);
         }
       } catch (error) {
         bytes = null;
@@ -473,7 +473,7 @@
 
   async function readText(archive, path) {
     try {
-      const bytes = await archive.read(path);
+      const bytes = await archive.read(path, MAX_BOARD_BYTES);
       if (bytes.length > MAX_BOARD_BYTES) throw new ObfError('size');
       return new TextDecoder('utf-8').decode(bytes);
     } catch (error) {

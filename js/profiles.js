@@ -190,6 +190,13 @@
       const snapshot = await storage.get(`previousPages:${other.id}`);
       if (snapshot && Array.isArray(snapshot.pages)) collect(snapshot.pages);
     }
+    // «I miei modelli» sono del dispositivo, non del profilo: le immagini a cui rimandano restano
+    const saved = await storage.get('userTemplates');
+    (Array.isArray(saved) ? saved : []).forEach((entry) => {
+      const images = entry && entry.template && entry.template.images;
+      if (!images || typeof images !== 'object') return;
+      Object.values(images).forEach((img) => { if (img && typeof img.localId === 'string') used.add(img.localId); });
+    });
     // Candidate: le immagini delle sue schede attuali e della sua copia delle schede di prima
     const candidates = new Set();
     const addCandidates = (list) => list.forEach((p) => (p && Array.isArray(p.cells) ? p.cells : [])
@@ -316,7 +323,7 @@
   async function quickBackup() {
     const { backup } = window.PicSpeak;
     try {
-      const file = await backup.create({ name: displayName(data.profile), password: '', fallbackName: t('backupFileWord') });
+      const file = await backup.create({ name: cleanName(data.profile.name), password: '', fallbackName: t('backupFileWord') });
       backup.save(file.blob, file.name);
       await ui.runDialog({ title: t('profileBackupDone'), help: file.name, primary: t('close') });
     } catch (error) {

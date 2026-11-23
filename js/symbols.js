@@ -189,7 +189,8 @@
   async function activeSources() {
     const saved = (await storage.get('symbolSources')) || {};
     const out = {};
-    Object.keys(SOURCE_DEFAULTS).forEach((id) => { out[id] = saved[id] ?? SOURCE_DEFAULTS[id]; });
+    // Solo sì/no: un valore diverso (per esempio da un file) vale come la scelta iniziale
+    Object.keys(SOURCE_DEFAULTS).forEach((id) => { out[id] = typeof saved[id] === 'boolean' ? saved[id] : SOURCE_DEFAULTS[id]; });
     return out;
   }
 

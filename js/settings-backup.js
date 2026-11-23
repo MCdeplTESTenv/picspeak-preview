@@ -76,13 +76,21 @@
   // ---------- Backup locale ----------
 
   async function changeProfileName() {
+    // Nomi degli altri profili: due profili con lo stesso nome non si distinguerebbero
+    const others = (await storage.getAllRecords('profiles'))
+      .filter((p) => p && data.profile && p.id !== data.profile.id && typeof p.name === 'string')
+      .map((p) => p.name.trim().toLocaleLowerCase());
     const values = await ui.runDialog({
       title: t('backupProfileTitle'),
       help: t('backupProfileHelp'),
       fields: [{ id: 'name', label: t('backupProfileTitle'), plain: true, value: (data.profile && data.profile.name) || '', maxLength: 40 }],
       primary: t('backupProfileSave'),
       secondary: t('cancel'),
-      onSubmit: (v) => (v.name ? v : t('backupNameMissing')),
+      onSubmit: (v) => {
+        if (!v.name) return t('backupNameMissing');
+        if (others.includes(v.name.trim().toLocaleLowerCase())) return t('profileNameTaken');
+        return v;
+      },
     });
     if (!values) return;
     await backup.setProfileName(values.name);
@@ -416,6 +424,7 @@
     const notes = [t('backupRestoredHelp')];
     if (report.missing) notes.push(format('backupRestoredMissing', { n: report.missing }));
     if (report.packs.length) notes.push(format('backupRestoredPacks', { names: report.packs.join(', ') }));
+    if (report.online && report.online.length) notes.push(format('backupRestoredOnline', { names: report.online.join(', ') }));
     if (report.templatesFull) notes.push(format('backupRestoredFull', { n: backup.MAX_TEMPLATES }));
     if (report.lostParts.length) {
       notes.push(format('backupRestoredLostParts', { parts: report.lostParts.map((part) => t(`backupPartName_${part}`)).join(', ') }));

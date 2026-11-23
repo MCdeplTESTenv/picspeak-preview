@@ -59,6 +59,7 @@
       'keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState'],
   };
   const PACK_NAMES = { mulberry: 'Mulberry', openmoji: 'OpenMoji' };
+  const ONLINE_SOURCES = { twemoji: 'Twemoji' };
   const RESERVED_KEYS = ['__proto__', 'constructor', 'prototype'];
 
   class BackupError extends Error {}
@@ -398,13 +399,14 @@
 
   // Byte di una parte, con il suo limite di dimensione
   async function readPart(archive, name) {
+    // Il limite della parte vale già durante la decompressione: niente lavoro inutile oltre quella misura
+    const max = PART_MAX_BYTES[name] || (name.startsWith('images/') ? 3 * MB : MB);
     let bytes;
     try {
-      bytes = await archive.read(name);
+      bytes = await archive.read(name, max);
     } catch (error) {
       throw zipProblem(error);
     }
-    const max = PART_MAX_BYTES[name] || (name.startsWith('images/') ? 3 * MB : MB);
     if (bytes.length > max) throw new BackupError('size');
     return bytes;
   }
@@ -610,6 +612,21 @@
       await storage.set('userTemplates', list);
     }
 
+    // Fonti online (Twemoji, scaricata da un sito esterno): un backup non le accende da solo su questo dispositivo;
+    // restano come sono qui e l'adulto è avvisato, così decide lui se attivarle
+    report.online = [];
+    if (choice.settings === 'replace' && parts.settings && parts.settings.symbolSources
+      && typeof parts.settings.symbolSources === 'object') {
+      const here = (await storage.get('symbolSources')) || {};
+      const incoming = { ...parts.settings.symbolSources };
+      Object.keys(ONLINE_SOURCES).forEach((id) => {
+        if (incoming[id] === true && here[id] !== true) report.online.push(ONLINE_SOURCES[id]);
+        if (typeof here[id] === 'boolean') incoming[id] = here[id];
+        else delete incoming[id];
+      });
+      parts.settings.symbolSources = incoming;
+    }
+
     for (const group of ['appearance', 'settings']) {
       if (choice[group] !== 'replace' || !parts[group]) continue;
       // «Sostituisci»: le impostazioni diventano identiche a quelle del backup (le chiavi assenti tornano iniziali)
@@ -620,7 +637,13 @@
     }
 
     // Nome del profilo: con «Ripristina tutto» si prende quello del backup, altrimenti solo se qui manca
-    if (info.name && data.profile && (all || !data.profile.name)) await setProfileName(info.name);
+    // (mai un nome già usato da un altro profilo di questo dispositivo: i profili si riconoscono dal nome)
+    if (info.name && data.profile && (all || !data.profile.name)) {
+      const key = info.name.toLocaleLowerCase();
+      const others = await storage.getAllRecords('profiles');
+      const taken = others.some((p) => p && p.id !== data.profile.id && cleanName(p.name).toLocaleLowerCase() === key);
+      if (!taken) await setProfileName(info.name);
+    }
 
     // Pacchetti di simboli attivi nel backup ma non scaricati su questo dispositivo
     const sources = choice.settings === 'replace' && parts.settings ? parts.settings.symbolSources : null;

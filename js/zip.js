@@ -54,7 +54,7 @@
 
   // ---------- Lettura ----------
 
-  async function inflate(bytes, limit) {
+  async function inflate(bytes, limit, onWork) {
     if (typeof DecompressionStream !== 'function') throw new ZipError('unsupported');
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
     const reader = stream.getReader();
@@ -65,6 +65,8 @@
       const { done, value } = await reader.read();
       if (done) break;
       size += value.length;
+      // Anche il lavoro di una lettura interrotta conta nel tetto complessivo (file ripetuti oltre il limite)
+      if (onWork) onWork(value.length);
       if (size > limit) {
         reader.cancel().catch(() => {});
         throw new ZipError('too-big');
@@ -124,10 +126,12 @@
     }
 
     let totalRead = 0;
-    async function read(name) {
+    // maxBytes (facoltativo): limite più stretto per questa lettura, per esempio per una singola immagine
+    async function read(name, maxBytes) {
       const entry = entries.get(normalizePath(name));
       if (!entry) throw new ZipError('missing');
-      if (entry.size > lim.maxEntryBytes) throw new ZipError('too-big');
+      const entryLimit = Number.isFinite(maxBytes) ? Math.min(lim.maxEntryBytes, maxBytes) : lim.maxEntryBytes;
+      if (entry.size > entryLimit) throw new ZipError('too-big');
       const h = entry.localOffset;
       if (h + 30 > buffer.length || view.getUint32(h, true) !== 0x04034b50) throw new ZipError('format');
       const start = h + 30 + view.getUint16(h + 26, true) + view.getUint16(h + 28, true);
@@ -135,17 +139,17 @@
       if (end > buffer.length) throw new ZipError('format');
       const raw = buffer.subarray(start, end);
       const remaining = Math.max(0, lim.maxTotalBytes - totalRead);
-      const limit = Math.min(lim.maxEntryBytes, remaining);
+      const limit = Math.min(entryLimit, remaining);
       let data;
       if (entry.method === 0) {
         if (raw.length > limit) throw new ZipError('too-big');
         data = raw.slice();
+        totalRead += data.length;
       } else {
-        data = await inflate(raw, limit);
+        data = await inflate(raw, limit, (n) => { totalRead += n; });
       }
       // Archivio danneggiato: il contenuto non corrisponde al controllo CRC-32
       if (crc32(data) !== entry.crc) throw new ZipError('format');
-      totalRead += data.length;
       return data;
     }
 
