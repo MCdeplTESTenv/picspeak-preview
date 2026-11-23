@@ -6,7 +6,7 @@
  *
  * L'app si apre sempre sull'ultimo profilo usato, senza schermate di scelta: il bambino non può cambiarlo.
  * Il cambio si fa solo nelle Impostazioni (protette dal PIN), categoria «Profili»: usa, aggiungi (con le schede
- * di partenza o come copia del profilo in uso), rinomina, elimina. Per cambiare profilo la pagina si ricarica:
+ * di partenza), duplica (anche un profilo non in uso), rinomina, elimina. Per cambiare profilo la pagina si ricarica:
  * ogni parte dell'app riparte pulita con le scelte del nuovo profilo, e si torna in questa pagina.
  * Tutto il testo entra nel DOM con textContent/createElement (mai innerHTML con dati).
  */
@@ -87,13 +87,16 @@
   }
 
   /*
-   * Copia identica del profilo in uso: schede (tessere negli stessi posti, cartelle che puntano alle nuove
-   * schede), contesti, abitudini d'uso e scelte. Le immagini restano in comune.
+   * Copia identica di un profilo qualsiasi, in uso o no: schede (tessere negli stessi posti, cartelle che puntano
+   * alle nuove schede), contesti, abitudini d'uso e scelte. Le immagini restano in comune.
    */
-  async function duplicateCurrent(name) {
-    const source = data.profile;
+  async function duplicateProfile(sourceId, name) {
+    const isCurrent = sourceId === data.profile.id;
+    const source = isCurrent ? data.profile : await storage.getRecord('profiles', sourceId);
+    if (!source) throw new Error('profile-missing');
     const id = storage.newProfileId();
-    if (predict) await predict.flush();
+    // Per il profilo in uso si salvano prima le abitudini ancora in memoria
+    if (isCurrent && predict) await predict.flush();
 
     const [allPages, allContexts, usage, settings] = await Promise.all([
       storage.getAllRecords('pages'),
@@ -252,45 +255,43 @@
       await ui.runDialog({ title: fmt('profileTooMany', { n: MAX_PROFILES }), primary: t('close') });
       return;
     }
-    // 1. Come inizia: schede di partenza oppure copia del profilo in uso
-    const choice = await ui.runPanelDialog({
-      title: t('profileAddTitle'),
-      help: t('profileAddHelp'),
-      className: 'profile-add-dialog',
-      build: (close) => {
-        const box = el('div', 'profile-choices');
-        const option = (titleText, helpText, value) => {
-          const btn = el('button', 'profile-choice');
-          btn.type = 'button';
-          btn.append(el('strong', '', titleText), el('span', '', helpText));
-          btn.addEventListener('click', () => close(value));
-          return btn;
-        };
-        box.append(
-          option(t('profileAddStart'), t('profileAddStartHelp'), 'start'),
-          option(fmt('profileAddCopy', { name: displayName(data.profile) }), t('profileAddCopyHelp'), 'copy'),
-        );
-        return box;
-      },
-    });
-    if (choice !== 'start' && choice !== 'copy') return;
-
-    // 2. Nome
-    const suggested = choice === 'copy' ? cleanName(fmt('profileCopyName', { name: displayName(data.profile) })) : '';
     const name = await askName({
       title: t('profileAddTitle'),
-      help: t('profileNameHelp'),
-      value: nameTaken(list, suggested) ? '' : suggested,
+      help: t('profileAddHelp'),
+      value: '',
       primary: t('profileCreateBtn'),
       list,
     });
     if (!name) return;
     try {
-      const id = choice === 'copy' ? await duplicateCurrent(name) : await createStarter(name);
-      await switchTo(id);
+      await switchTo(await createStarter(name));
     } catch (error) {
       await failed();
     }
+  }
+
+  // Duplica: il nuovo profilo compare nell'elenco, quello in uso resta lo stesso
+  async function duplicate(entry, list) {
+    if (list.length >= MAX_PROFILES) {
+      await ui.runDialog({ title: fmt('profileTooMany', { n: MAX_PROFILES }), primary: t('close') });
+      return;
+    }
+    const sourceName = displayName(entry.profile);
+    const suggested = cleanName(fmt('profileCopyName', { name: sourceName }));
+    const name = await askName({
+      title: fmt('profileDuplicateTitle', { name: sourceName }),
+      help: fmt('profileDuplicateHelp', { name: sourceName }),
+      value: nameTaken(list, suggested) ? '' : suggested,
+      primary: t('profileDuplicateBtn'),
+      list,
+    });
+    if (!name) return;
+    try {
+      await duplicateProfile(entry.profile.id, name);
+    } catch (error) {
+      await failed();
+    }
+    ui.render();
   }
 
   async function renameProfile(entry, list) {
@@ -417,7 +418,10 @@
         try { await switchTo(profile.id); } catch (error) { await failed(); }
       }, true));
     }
-    actions.append(ui.button(t('profileRename'), () => renameProfile(entry, list), false));
+    actions.append(
+      ui.button(t('profileDuplicate'), () => duplicate(entry, list), false),
+      ui.button(t('profileRename'), () => renameProfile(entry, list), false),
+    );
     if (list.length > 1) {
       const del = ui.button(t('profileDelete'), () => deleteProfile(entry, list), false);
       del.classList.add('dlg-btn-danger');
