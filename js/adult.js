@@ -323,10 +323,6 @@
     window.location.assign('guida.html');
   }
 
-  function lockedMessage(seconds) {
-    return t('pinLocked').replace('{s}', String(seconds));
-  }
-
   // ---------- Flussi del PIN ----------
 
   async function createPinFlow() {
@@ -363,7 +359,7 @@
       onSubmit: async (values) => {
         const res = await security.verifyRecovery(values.code);
         if (res.ok) return true;
-        return res.waitSeconds ? lockedMessage(res.waitSeconds) : t('recoveryWrong');
+        return t('recoveryWrong');
       },
     });
     // Codice corretto: si crea un nuovo PIN (e un nuovo codice di recupero)
@@ -384,7 +380,7 @@
         if (!security.isValidPin(values.pin)) return t('pinInvalid');
         if (values.pin !== values.pin2) return t('pinMismatch');
         const res = await security.verifyPin(values.current);
-        if (!res.ok) return res.waitSeconds ? lockedMessage(res.waitSeconds) : t('pinWrong');
+        if (!res.ok) return t('pinWrong');
         // Il codice di recupero esistente resta valido
         await security.setPin(values.pin, { newRecovery: false });
         return true;
@@ -416,7 +412,7 @@
       onSubmit: async (values) => {
         const res = await security.verifyPin(values.pin);
         if (res.ok) return true;
-        return res.waitSeconds ? lockedMessage(res.waitSeconds) : t('pinWrong');
+        return t('pinWrong');
       },
     });
     if (result === true) {

@@ -376,7 +376,7 @@
         }
         if (needPin) {
           const res = await security.verifyPin(values.pin);
-          if (!res.ok) return res.waitSeconds ? t('pinLocked').replace('{s}', res.waitSeconds) : t('pinWrong');
+          if (!res.ok) return t('pinWrong');
         }
         return true;
       },

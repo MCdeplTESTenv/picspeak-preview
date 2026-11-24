@@ -1,7 +1,8 @@
 /*
  * PIN dell'adulto e codice di recupero.
  * Il PIN non viene mai salvato: si conserva solo un'impronta (PBKDF2-SHA256 con sale casuale).
- * Dopo 3 tentativi sbagliati l'attesa cresce (30 s, 60 s, 120 s… fino a 15 minuti).
+ * Nessun limite di tentativi e nessuna attesa: un bambino che prova più volte il PIN non deve mai bloccare
+ * l'app, perché la comunicazione viene prima della riservatezza (vedi DECISIONI, 24/11/2026).
  * Limite: senza server la protezione ferma il bambino e l'adulto non autorizzato,
  * non chi ha competenze tecniche e il dispositivo in mano.
  */
@@ -11,9 +12,8 @@
   const { storage } = window.PicSpeak;
 
   const ITERATIONS = 150000;
-  const FREE_ATTEMPTS = 3;
-  const BASE_LOCK_SECONDS = 30;
-  const MAX_LOCK_SECONDS = 15 * 60;
+  // Chiave delle vecchie versioni (contatore dei tentativi e attesa): non si usa più e si cancella
+  const OLD_ATTEMPTS_KEY = 'securityAttempts';
   // Alfabeto senza caratteri ambigui (0/O, 1/I/L)
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -79,40 +79,19 @@
       data.recoveryHash = await derive(normalizeCode(recoveryCode), data.recoverySalt, ITERATIONS);
     }
     await storage.set('security', data);
-    await storage.set('securityAttempts', { fails: 0, lockUntil: 0 });
+    await storage.remove(OLD_ATTEMPTS_KEY);
     return recoveryCode;
   }
 
-  async function lockStatus() {
-    const attempts = (await storage.get('securityAttempts')) || { fails: 0, lockUntil: 0 };
-    const waitSeconds = Math.ceil((attempts.lockUntil - Date.now()) / 1000);
-    return { attempts, waitSeconds: waitSeconds > 0 ? waitSeconds : 0 };
-  }
-
-  async function registerResult(ok, attempts) {
-    if (ok) {
-      await storage.set('securityAttempts', { fails: 0, lockUntil: 0 });
-      return 0;
-    }
-    const fails = attempts.fails + 1;
-    let lockUntil = 0;
-    if (fails >= FREE_ATTEMPTS) {
-      const seconds = Math.min(BASE_LOCK_SECONDS * 2 ** (fails - FREE_ATTEMPTS), MAX_LOCK_SECONDS);
-      lockUntil = Date.now() + seconds * 1000;
-    }
-    await storage.set('securityAttempts', { fails, lockUntil });
-    return lockUntil ? Math.ceil((lockUntil - Date.now()) / 1000) : 0;
-  }
-
+  // Confronta il segreto con l'impronta salvata. Si può riprovare subito, senza limiti.
   async function check(secret, saltKey, hashKey) {
-    const { attempts, waitSeconds } = await lockStatus();
-    if (waitSeconds) return { ok: false, waitSeconds };
     const data = await storage.get('security');
-    if (!data || !data[hashKey]) return { ok: false, waitSeconds: 0 };
+    if (!data || !data[hashKey]) return { ok: false };
     const hash = await derive(secret, data[saltKey], data.iterations || ITERATIONS);
     const ok = hash === data[hashKey];
-    const wait = await registerResult(ok, attempts);
-    return { ok, waitSeconds: wait };
+    // Le versioni precedenti potevano aver salvato un'attesa: dopo un accesso riuscito non resta traccia
+    if (ok) await storage.remove(OLD_ATTEMPTS_KEY);
+    return { ok };
   }
 
   function verifyPin(pin) {

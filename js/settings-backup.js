@@ -17,7 +17,7 @@
   const t = i18n.t;
 
   // Chiavi dell'archivio "settings" che contengono solo scelte delle impostazioni.
-  // Restano fuori, di proposito: security e securityAttempts (PIN), activeProfileId, previousPages:*,
+  // Restano fuori, di proposito: security (PIN), activeProfileId, previousPages:*,
   // userTemplates (modelli salvati), symbolPacks (pacchetti già scaricati), lastBackup e onlineSearch: una scelta
   // di privacy sull'uso di internet non deve tornare «Attiva» senza che l'adulto se ne accorga.
   const SETTINGS_KEYS = [
@@ -550,9 +550,7 @@
         }
         if (needPin) {
           const res = await security.verifyPin(values.pin);
-          if (!res.ok) {
-            return res.waitSeconds ? t('pinLocked').replace('{s}', res.waitSeconds) : t('pinWrong');
-          }
+          if (!res.ok) return t('pinWrong');
         }
         return true;
       },
