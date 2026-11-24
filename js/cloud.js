@@ -61,11 +61,21 @@
     photo: /^foto-\d{4}-\d{2}-\d{2}-\d{6}(-[a-z0-9-]{1,30})?\.picspeak$/,
     profile: /^profilo\.json$/,
     names: /^fotografie\.json$/,
+    // Abitudini di un solo dispositivo (sincronizzazione): ognuno scrive solo le sue
+    device: /^abitudini-d[0-9a-f]{12}\.picspeak$/,
   };
+  const LAYERS_PREFIX = 'syncLayers:'; // + id del profilo: abitudini degli altri dispositivi, per l'uso senza rete
+  const MAX_DEVICES = 10;
+  const MAX_HABITS_DOWNLOAD = 20 * 1024 * 1024; // file delle abitudini di un altro dispositivo
+  const PULL_MS = 3 * 60 * 1000; // ogni quanto si guarda se altri dispositivi hanno inviato qualcosa
+  const APPLY_AT_START_MS = 20 * 1000; // schede arrivate da un altro dispositivo: si applicano solo appena aperta l'app
 
   // Cosa cambia nell'archivio e quale file online va aggiornato
-  const HABIT_STORES = new Set(['usage', 'contexts']);
-  const FULL_STORES = new Set(['pages', 'images', 'profiles', 'audio']);
+  // Conteggi dei tocchi → file delle abitudini; contesti e pesi di partenza (scelte dell'adulto) → file completo
+  const HABIT_STORES = new Set(['usage']);
+  const FULL_STORES = new Set(['pages', 'images', 'profiles', 'audio', 'contexts']);
+  // Scelte che restano di ogni dispositivo anche quando un profilo è sincronizzato
+  const DEVICE_ONLY_KEYS = ['keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState'];
   const FULL_KEYS = new Set(['colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase', 'language', 'voice',
     'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources', 'keepScreenOn', 'autoFullscreen',
     'openSections', 'sectionState', 'userTemplates']);
@@ -79,7 +89,7 @@
   let lastChangeAt = 0;
   let lastSyncAt = 0;
   let running = null;
-  let suppress = 0; // > 0 mentre il tool stesso prepara una copia (le sue scritture non contano come modifiche)
+  let suppress = 0; // > 0 mentre si applicano le schede arrivate da un altro dispositivo (non sono modifiche da rimandare)
   let ready = false;
   const watchers = new Set();
 
@@ -226,7 +236,11 @@
     options.headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` };
     const outcome = await request(url, options, async (res) => {
       if (res.status === 401) return { retry: true };
-      if (res.status === 409) throw new CloudError('not-found');
+      if (res.status === 409) {
+        let text = '';
+        try { text = await (await readLimited(res, 64 * 1024)).text(); } catch (error) { text = ''; }
+        throw new CloudError(/conflict/.test(text) ? 'conflict' : 'not-found');
+      }
       if (res.status === 429 || res.status >= 500) throw new CloudError('busy');
       if (!res.ok) throw new CloudError('server');
       return { value: await read(res) };
@@ -249,17 +263,24 @@
     });
   }
 
-  async function upload(path, blob) {
+  /*
+   * Invia un file. mode: 'overwrite' (predefinito), 'add' (solo se non c'è ancora) oppure { '.tag': 'update', update: rev }
+   * (solo se su Dropbox c'è ancora la versione rev: altrimenti errore 'conflict'). Restituisce la descrizione del file
+   * su Dropbox (con rev).
+   */
+  async function upload(path, blob, mode = 'overwrite') {
     // Un minuto più un minuto ogni 2 MB: una copia con molte foto ha il tempo di partire anche su una rete lenta
     const timeoutMs = TIMEOUT_MS + Math.ceil(blob.size / (2 * 1024 * 1024)) * TIMEOUT_MS;
-    await call(`${CONTENT}files/upload`, () => ({
+    return call(`${CONTENT}files/upload`, () => ({
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': JSON.stringify({ path, mode: 'overwrite', mute: true }),
+        'Dropbox-API-Arg': JSON.stringify({ path, mode, mute: true }),
       },
       body: blob,
-    }), async () => null, timeoutMs);
+    }), async (res) => {
+      try { return JSON.parse(await (await readLimited(res, 64 * 1024)).text()); } catch (error) { return null; }
+    }, timeoutMs);
   }
 
   async function download(path, max = MAX_DOWNLOAD) {
@@ -304,6 +325,34 @@
     return data.profile && PROFILE_ID.test(data.profile.id) ? data.profile.id : null;
   }
 
+  // Cartella su Dropbox del profilo: la sua, oppure quella del profilo seguito da un altro dispositivo
+  function folderOf(localId) {
+    const mapped = link && link.folders && typeof link.folders === 'object' ? link.folders[localId] : null;
+    return typeof mapped === 'string' && PROFILE_ID.test(mapped) ? mapped : localId;
+  }
+
+  /*
+   * Codice casuale di questo dispositivo per il profilo in uso (solo per dare un nome al file delle sue abitudini).
+   * Uno per profilo: due profili dello stesso dispositivo che seguono la stessa cartella non si sovrascrivono.
+   */
+  function deviceId() {
+    const id = currentProfileId();
+    if (!link || !id) return null;
+    const devices = link.devices && typeof link.devices === 'object' && !Array.isArray(link.devices) ? link.devices : {};
+    if (typeof devices[id] !== 'string' || !/^d[0-9a-f]{12}$/.test(devices[id])) {
+      devices[id] = `d${Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+      link.devices = devices;
+      storage.set(LINK_KEY, link).catch(() => {});
+    }
+    return devices[id];
+  }
+
+  // Il profilo in uso segue la cartella di un altro dispositivo, o un altro dispositivo segue la sua?
+  function isSynced() {
+    const id = currentProfileId();
+    return Boolean(id && enabledHere() && (folderOf(id) !== id || (predict && predict.remoteDevices().length)));
+  }
+
   // Il backup online è attivo per il profilo in uso?
   function enabledHere() {
     const id = currentProfileId();
@@ -332,6 +381,7 @@
 
   function classify(storeName, key) {
     if (storeName !== 'settings') {
+      if (storeName === 'usage' && String(key).startsWith('ub_')) return 'full';
       if (HABIT_STORES.has(storeName)) return 'habits';
       if (FULL_STORES.has(storeName)) return 'full';
       return null;
@@ -351,8 +401,8 @@
     st[flag] = true;
     if (!st.firstDirtyAt) st.firstDirtyAt = now;
     // Si salva solo quando il segno cambia: le modifiche restano da inviare anche dopo una ricarica della pagina
-    suppress += 1;
-    saveState().finally(() => { suppress -= 1; });
+    // (lo stato stesso non conta come modifica: classify lo ignora)
+    saveState().catch(() => {});
   }
 
   function onStorageChange(storeName, key) {
@@ -369,10 +419,11 @@
     const id = currentProfileId();
     if (!id || !enabledHere() || running) return false;
     const st = profileState(id);
-    const needFirst = !st.lastFullAt;
+    const needFirst = (!st.lastFullAt && !st.conflictRev) || !st.legacyClean;
     if (!st.dirtyFull && !st.dirtyHabits && !needFirst) return false;
     if (!hasNetwork() || cellularOnly()) { setStatus('waiting'); return false; }
     if (status === 'reconnect') return false;
+    if (st.conflictRev && !st.dirtyHabits) return false;
     if (force || needFirst) return true;
     const now = Date.now();
     if (now - lastSyncAt < MIN_GAP_MS) return false;
@@ -381,13 +432,9 @@
 
   // ---------- Copie ----------
 
+  // Prepara la copia senza scrivere nulla (quiet). Le modifiche fatte intanto dall'adulto restano segnate da inviare
   async function buildFile(only) {
-    suppress += 1;
-    try {
-      return await backup.create({ name: (data.profile && data.profile.name) || '', password: '', only, quiet: true });
-    } finally {
-      suppress -= 1;
-    }
+    return backup.create({ name: (data.profile && data.profile.name) || '', password: '', only, quiet: true });
   }
 
   async function uploadProfileInfo(profileId, at) {
@@ -406,52 +453,330 @@
     for (const name of names.slice(0, Math.max(0, names.length - keep))) await remove(profileId, name);
   }
 
+  // File completo del profilo: si invia solo se su Dropbox c'è ancora la versione vista l'ultima volta
+  async function uploadFull(profileId, folder, st, blob) {
+    const mode = st.fullRev ? { '.tag': 'update', update: st.fullRev } : 'add';
+    const meta = await upload(checkPath(folder, 'attuale-completo.picspeak'), blob, mode);
+    if (meta && typeof meta.rev === 'string') st.fullRev = meta.rev;
+  }
+
   async function syncNow() {
     const profileId = currentProfileId();
     if (!profileId || !enabledHere()) return;
+    const folder = folderOf(profileId);
     const st = profileState(profileId);
-    const full = Boolean(st.dirtyFull || !st.lastFullAt);
-    const habits = Boolean(st.dirtyHabits);
+    // In attesa che l'adulto scelga tra le due versioni delle schede: si inviano solo le abitudini
+    const blocked = Boolean(st.conflictRev);
+    const full = Boolean(!blocked && (st.dirtyFull || !st.lastFullAt));
+    // Anche al primo invio dopo l'aggiornamento (legacyClean): gli altri dispositivi leggono solo i file per dispositivo
+    const habits = Boolean(st.dirtyHabits || !st.lastHabitsAt || !st.legacyClean);
     // Si tolgono i segni prima di preparare la copia: una modifica fatta nel frattempo li rimette
-    st.dirtyFull = false;
+    if (full) st.dirtyFull = false;
     st.dirtyHabits = false;
     st.firstDirtyAt = 0;
     setStatus('syncing');
     try {
       const now = new Date();
       const today = dayStamp(now);
+      // Anche mentre si aspetta la scelta dell'adulto: la copia del giorno è di questo dispositivo, non sovrascrive nulla
       const needDaily = st.lastDaily !== today;
       if (full || needDaily) {
         const file = await buildFile(null);
-        await upload(checkPath(profileId, 'attuale-completo.picspeak'), file.blob);
+        if (full) await uploadFull(profileId, folder, st, file.blob);
         if (needDaily) {
-          await upload(checkPath(profileId, `giorno-${today}.picspeak`), file.blob);
+          await upload(checkPath(folder, `giorno-${today}.picspeak`), file.blob);
           st.lastDaily = today;
-          await rotate(profileId, 'daily', KEEP_DAILY);
+          await rotate(folder, 'daily', KEEP_DAILY);
         }
-        st.lastFullAt = now.toISOString();
-        st.lastHabitsAt = now.toISOString();
-        await uploadProfileInfo(profileId, now);
-      } else if (habits) {
+        if (full) {
+          st.lastFullAt = now.toISOString();
+          await uploadProfileInfo(folder, now);
+        }
+      }
+      if (habits) {
+        // Solo i tocchi fatti su questo dispositivo, nel suo file: gli altri dispositivi li sommano una volta sola
         const file = await buildFile(['habits']);
-        await upload(checkPath(profileId, 'attuale-abitudini.picspeak'), file.blob);
+        await upload(checkPath(folder, `abitudini-${deviceId()}.picspeak`), file.blob);
         st.lastHabitsAt = now.toISOString();
+        if (!st.legacyClean) {
+          // Vecchio file unico delle abitudini (prima della sincronizzazione), scritto da questo profilo: ora c'è il suo
+          try { await remove(folder, 'attuale-abitudini.picspeak'); } catch (error) { /* non c'era */ }
+          st.legacyClean = true;
+        }
       }
       st.lastError = null;
-      setStatus('idle');
+      setStatus(st.conflictRev ? 'conflict' : 'idle');
     } catch (error) {
       // Si riprova più tardi: i segni tornano com'erano
       if (full) st.dirtyFull = true;
       if (habits) st.dirtyHabits = true;
       if (!st.firstDirtyAt) st.firstDirtyAt = Date.now();
       const code = error instanceof CloudError ? error.message : 'server';
+      if (code === 'conflict') {
+        // Un altro dispositivo ha cambiato le schede nel frattempo: lo si scopre leggendo la cartella
+        st.lastError = null;
+        lastSyncAt = Date.now();
+        await saveStateQuiet();
+        try {
+          await pullNow({ apply: false });
+          if (status === 'syncing') setStatus('idle');
+        } catch (pullError) {
+          const pullCode = pullError instanceof CloudError ? pullError.message : 'server';
+          setStatus(pullCode === 'auth' ? 'reconnect' : (pullCode === 'network' ? 'waiting' : 'error'));
+        }
+        return;
+      }
       st.lastError = code;
       setStatus(code === 'auth' ? 'reconnect' : (code === 'network' ? 'waiting' : 'error'));
     } finally {
       lastSyncAt = Date.now();
-      suppress += 1;
-      try { await saveState(); } finally { suppress -= 1; }
+      await saveStateQuiet();
     }
+  }
+
+  // Stato e livelli sono chiavi che classify ignora: salvarli non segna modifiche (e non ne nasconde altre)
+  async function saveStateQuiet() {
+    await saveState();
+  }
+
+  // ---------- Sincronizzazione: cosa arriva dagli altri dispositivi ----------
+
+  async function loadLayers(profileId) {
+    const saved = await storage.get(LAYERS_PREFIX + profileId);
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  }
+
+  // Abitudini degli altri dispositivi salvate qui (per l'uso senza rete), passate alla previsione
+  async function restoreLayers() {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere() || !predict || typeof predict.setRemoteLayer !== 'function') return;
+    const layers = await loadLayers(profileId);
+    const mine = deviceId();
+    Object.keys(layers).slice(0, MAX_DEVICES).forEach((dev) => {
+      if (dev !== mine && layers[dev] && layers[dev].parsed) predict.setRemoteLayer(dev, layers[dev].parsed);
+    });
+  }
+
+  // Scarica un file dello stesso profilo e lo apre come backup (dati non affidabili: stesse verifiche dei file)
+  async function openRemote(folder, name, max = MAX_DOWNLOAD) {
+    const opened = await backup.open(await download(checkPath(folder, name), max));
+    if (opened.info.encryption) throw new CloudError('server');
+    return { opened, parts: await backup.read(opened) };
+  }
+
+  /*
+   * Schede, foto, impostazioni del profilo e definizioni dei contesti arrivate da un altro dispositivo: prendono il
+   * posto di quelle di qui. Restano di questo dispositivo i conteggi dei tocchi e le scelte dello schermo.
+   */
+  async function applyRemoteFull(parts, info) {
+    suppress += 1;
+    try {
+      const keep = {};
+      for (const key of DEVICE_ONLY_KEYS) keep[key] = await storage.get(key);
+      const choice = { boards: parts.boards ? 'replace' : null, appearance: parts.appearance ? 'replace' : null, settings: parts.settings ? 'replace' : null };
+      await backup.restore(parts, choice, info, {});
+      for (const key of DEVICE_ONLY_KEYS) {
+        if (keep[key] === undefined) await storage.remove(key); else await storage.set(key, keep[key]);
+      }
+      if (parts.habits && predict && typeof predict.replaceDefinitions === 'function') await predict.replaceDefinitions(parts.habits);
+      if (info && info.name && data.profile && data.profile.name !== info.name) await backup.setProfileName(info.name);
+    } finally {
+      suppress -= 1;
+    }
+  }
+
+  const startedAt = Date.now();
+  let reloadNeeded = false;
+
+  /*
+   * Guarda la cartella del profilo su Dropbox: abitudini nuove degli altri dispositivi (subito, cambiano solo i
+   * suggerimenti) e schede cambiate altrove (solo con apply: all'apertura o all'uscita dalla modalità adulto).
+   */
+  async function pullNow({ apply }) {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere()) return;
+    const folder = folderOf(profileId);
+    const st = profileState(profileId);
+    let entries;
+    try {
+      entries = (await listFolder(`/${folder}`)).filter((e) => e['.tag'] === 'file');
+    } catch (error) {
+      if (error instanceof CloudError && error.message === 'not-found') return;
+      throw error;
+    }
+    const mine = deviceId();
+    // 1. Abitudini degli altri dispositivi: ogni file sostituisce il livello di quel dispositivo
+    const layers = await loadLayers(profileId);
+    let layersChanged = false;
+    const present = new Set();
+    const deviceEntries = entries.filter((x) => FILE_NAMES.device.test(x.name)).sort((x, y) => (x.name < y.name ? -1 : 1));
+    deviceEntries.forEach((e) => present.add(e.name.slice('abitudini-'.length, -'.picspeak'.length)));
+    for (const e of deviceEntries.slice(0, MAX_DEVICES + 1)) {
+      const dev = e.name.slice('abitudini-'.length, -'.picspeak'.length);
+      if (dev === mine) continue;
+      present.add(dev);
+      if (layers[dev] && layers[dev].rev === e.rev) continue;
+      try {
+        if (typeof e.size === 'number' && e.size > MAX_HABITS_DOWNLOAD) continue;
+        const { parts } = await openRemote(folder, e.name, MAX_HABITS_DOWNLOAD);
+        if (!parts.habits) continue;
+        const parsed = { pairs: parts.habits.pairs, days: parts.habits.days, months: parts.habits.months };
+        layers[dev] = { rev: e.rev, parsed };
+        predict.setRemoteLayer(dev, parsed);
+        layersChanged = true;
+      } catch (error) {
+        // File illeggibile: resta il livello di prima
+      }
+    }
+    Object.keys(layers).forEach((dev) => {
+      if (!present.has(dev)) { delete layers[dev]; predict.setRemoteLayer(dev, null); layersChanged = true; }
+    });
+    if (layersChanged) {
+      await storage.set(LAYERS_PREFIX + profileId, layers);
+    }
+    // 2. Schede e impostazioni cambiate su un altro dispositivo
+    const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
+    if (fullEntry && typeof fullEntry.rev === 'string' && fullEntry.rev !== st.fullRev) {
+      const remoteAt = Date.parse(fullEntry.server_modified || '');
+      const ownCopy = !st.fullRev && st.lastFullAt && folder === profileId
+        && !(remoteAt > Date.parse(st.lastFullAt) + 60 * 1000);
+      if (ownCopy) {
+        // Copia scritta da questo profilo prima della sincronizzazione: è già la sua
+        st.fullRev = fullEntry.rev;
+      } else if (st.dirtyFull || st.conflictRev) {
+        // Cambiate qui e là: decide l'adulto (nessuna delle due si perde)
+        st.conflictRev = fullEntry.rev;
+        setStatus('conflict');
+      } else if (apply) {
+        const { opened, parts } = await openRemote(folder, fullEntry.name);
+        await applyRemoteFull(parts, opened.info);
+        st.fullRev = fullEntry.rev;
+        st.lastFullAt = new Date().toISOString();
+        st.pendingApply = false;
+        reloadNeeded = true;
+      } else {
+        st.pendingApply = true;
+      }
+      await saveStateQuiet();
+    }
+  }
+
+  // Ricontrolla e, se sono arrivate schede nuove, ricarica la pagina (mai mentre il bambino le sta usando)
+  async function pullAndApply(apply) {
+    if (!enabledHere() || !hasNetwork() || cellularOnly() || status === 'reconnect') return;
+    if (running) await running.catch(() => {});
+    try {
+      await pullNow({ apply: apply && !isAdult() });
+    } catch (error) {
+      return;
+    }
+    if (reloadNeeded && typeof window.PicSpeak.onCloudReload === 'function') window.PicSpeak.onCloudReload();
+    else if (reloadNeeded) location.reload();
+  }
+
+  /*
+   * Due versioni delle schede (qui e su un altro dispositivo). 'mine': si tengono quelle di qui; 'theirs': quelle
+   * dell'altro dispositivo. In tutti e due i casi l'altra versione resta come copia «prima-…» su Dropbox.
+   */
+  async function resolveConflict(which) {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere()) throw new CloudError('auth');
+    const folder = folderOf(profileId);
+    const st = profileState(profileId);
+    if (!st.conflictRev) return;
+    const now = new Date();
+    const beforeName = `prima-${timeStamp(now)}.picspeak`;
+    if (which === 'mine') {
+      // Si conserva la versione dell'altro dispositivo, poi si invia la propria
+      await rpc('files/copy_v2', { from_path: checkPath(folder, 'attuale-completo.picspeak'), to_path: checkPath(folder, beforeName), autorename: true });
+      const file = await buildFile(null);
+      // Solo se su Dropbox c'è ancora la versione vista: se un terzo dispositivo ha inviato nel frattempo, si richiede
+      let meta;
+      try {
+        meta = await upload(checkPath(folder, 'attuale-completo.picspeak'), file.blob, { '.tag': 'update', update: st.conflictRev });
+      } catch (error) {
+        if (error instanceof CloudError && error.message === 'conflict') {
+          // Un'altra versione ancora, arrivata proprio ora: la domanda si ripete su quella
+          const latest = (await listFolder(`/${folder}`)).find((e) => FILE_NAMES.full.test(e.name));
+          if (latest && latest.rev) st.conflictRev = latest.rev;
+          await saveStateQuiet();
+        }
+        throw error;
+      }
+      if (meta && typeof meta.rev === 'string') st.fullRev = meta.rev;
+      st.dirtyFull = false;
+      st.lastFullAt = now.toISOString();
+    } else {
+      // Si conserva la propria versione, poi si prendono le schede dell'altro dispositivo
+      const file = await buildFile(null);
+      await upload(checkPath(folder, beforeName), file.blob);
+      const entries = await listFolder(`/${folder}`);
+      const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
+      const { opened, parts } = await openRemote(folder, 'attuale-completo.picspeak');
+      await applyRemoteFull(parts, opened.info);
+      st.fullRev = fullEntry && fullEntry.rev ? fullEntry.rev : st.conflictRev;
+      st.dirtyFull = false;
+      st.lastFullAt = now.toISOString();
+      reloadNeeded = true;
+    }
+    st.conflictRev = null;
+    await rotate(folder, 'before', KEEP_BEFORE);
+    await saveStateQuiet();
+    setStatus('idle');
+    return which === 'theirs';
+  }
+
+  // Da dove viene l'altra versione (per la domanda all'adulto): quando e da che tipo di dispositivo
+  async function conflictInfo() {
+    const profileId = currentProfileId();
+    const out = { here: backup.deviceLabel(), there: null, thereAt: null };
+    if (!profileId) return out;
+    try {
+      const blob = await download(checkPath(folderOf(profileId), 'profilo.json'), 4 * 1024);
+      const info = JSON.parse(await blob.text());
+      if (info && typeof info === 'object') {
+        out.there = cleanText(info.device, 60) || null;
+        if (typeof info.updatedAt === 'string' && !Number.isNaN(Date.parse(info.updatedAt))) out.thereAt = new Date(info.updatedAt);
+      }
+    } catch (error) {
+      // Senza queste informazioni la domanda resta valida
+    }
+    return out;
+  }
+
+  function hasConflict() {
+    const id = currentProfileId();
+    return Boolean(id && state[id] && state[id].conflictRev && enabledHere());
+  }
+
+  /*
+   * Il profilo in uso (appena creato vuoto) segue la cartella di un altro profilo su Dropbox: schede, foto,
+   * impostazioni e contesti arrivano da lì; i conteggi degli altri dispositivi restano a parte (livelli).
+   */
+  async function follow(folder) {
+    const profileId = currentProfileId();
+    if (!profileId || !link || !PROFILE_ID.test(folder)) throw new CloudError('path');
+    const entries = await listFolder(`/${folder}`);
+    const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
+    if (!fullEntry) throw new CloudError('not-found');
+    // Copia di sicurezza di com'era questo profilo, nella cartella scelta: se non riesce, non si cambia nulla
+    const before = await buildFile(null);
+    await upload(checkPath(folder, `prima-${timeStamp(new Date())}.picspeak`), before.blob, 'add');
+    if (!Array.isArray(link.profileIds)) link.profileIds = [];
+    if (!link.profileIds.includes(profileId)) link.profileIds.push(profileId);
+    link.folders = { ...(link.folders && typeof link.folders === 'object' ? link.folders : {}), [profileId]: folder };
+    deviceId();
+    await storage.set(LINK_KEY, link);
+    const st = profileState(profileId);
+    Object.assign(st, { dirtyFull: false, dirtyHabits: false, firstDirtyAt: 0, conflictRev: null, legacyClean: true });
+    const { opened, parts } = await openRemote(folder, fullEntry.name);
+    await applyRemoteFull(parts, opened.info);
+    st.fullRev = fullEntry.rev;
+    st.lastFullAt = new Date().toISOString();
+    st.lastDaily = dayStamp(new Date());
+    await saveStateQuiet();
+    reloadNeeded = false;
+    await pullNow({ apply: false });
   }
 
   function runSync() {
@@ -485,19 +810,20 @@
     const profileId = currentProfileId();
     if (!profileId || !enabledHere()) throw new CloudError('auth');
     if (running) await running.catch(() => {});
+    const folder = folderOf(profileId);
     const now = new Date();
     const extra = kind === 'photo' && slug(label) ? `-${slug(label)}` : '';
     const name = `${kind === 'photo' ? 'foto' : 'prima'}-${timeStamp(now)}${extra}.picspeak`;
     const file = await buildFile(null);
-    await upload(checkPath(profileId, name), file.blob);
-    if (kind === 'before') await rotate(profileId, 'before', KEEP_BEFORE);
+    await upload(checkPath(folder, name), file.blob);
+    if (kind === 'before') await rotate(folder, 'before', KEEP_BEFORE);
     const typed = kind === 'photo' ? cleanText(label, 40) : '';
     if (typed) {
       // Il nome scritto dall'adulto, con maiuscole e accenti, si ritrova uguale nell'elenco del ripristino
       try {
-        const names = await readPhotoNames(profileId);
+        const names = await readPhotoNames(folder);
         names[name] = typed;
-        await upload(checkPath(profileId, 'fotografie.json'), new Blob([JSON.stringify(names)], { type: 'application/json' }));
+        await upload(checkPath(folder, 'fotografie.json'), new Blob([JSON.stringify(names)], { type: 'application/json' }));
       } catch (error) {
         // Resta il nome semplificato nel nome del file
       }
@@ -537,7 +863,8 @@
     }
     if (typeof body.refresh_token !== 'string' || !body.refresh_token) throw new CloudError('code');
     // Il backup online parte solo per il profilo in uso: gli altri si attivano uno per uno
-    link = { refreshToken: body.refresh_token, connectedAt: new Date().toISOString(), profileIds: [currentProfileId()].filter(Boolean) };
+    link = { refreshToken: body.refresh_token, connectedAt: new Date().toISOString(), profileIds: [currentProfileId()].filter(Boolean), folders: {} };
+    deviceId();
     keepAccess(body);
     // Di proposito non si chiede nulla dell'account Dropbox (nome, email): al tool serve solo la sua cartella
     await storage.set(LINK_KEY, link);
@@ -555,10 +882,26 @@
         // Senza rete il permesso resta valido su Dropbox ma si cancella comunque da qui
       }
     }
+    // Le abitudini degli altri dispositivi scaricate per i profili collegati si cancellano da qui
+    const ids = had ? [...new Set([...(Array.isArray(had.profileIds) ? had.profileIds : []), ...Object.keys(had.devices || {})])] : [];
+    for (const id of ids) if (PROFILE_ID.test(id)) await storage.remove(LAYERS_PREFIX + id);
+    if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
     link = null;
     access = null;
     await storage.remove(LINK_KEY);
     setStatus('off');
+  }
+
+  // Profilo eliminato da questo dispositivo: si dimenticano il suo collegamento, il suo stato e i dati scaricati
+  async function forgetProfile(profileId) {
+    if (!PROFILE_ID.test(String(profileId))) return;
+    await storage.remove(LAYERS_PREFIX + profileId);
+    if (state[profileId]) { delete state[profileId]; await saveState(); }
+    if (!link) return;
+    if (Array.isArray(link.profileIds)) link.profileIds = link.profileIds.filter((id) => id !== profileId);
+    if (link.folders) delete link.folders[profileId];
+    if (link.devices) delete link.devices[profileId];
+    await storage.set(LINK_KEY, link);
   }
 
   // ---------- Ripristino da Dropbox ----------
@@ -605,8 +948,8 @@
     const copies = [];
     const fullEntry = files.find((e) => FILE_NAMES.full.test(e.name));
     if (fullEntry) {
-      const habitsEntry = files.find((e) => FILE_NAMES.habits.test(e.name));
-      const times = [fullEntry, habitsEntry].filter(Boolean).map((e) => Date.parse(e.server_modified)).filter(Number.isFinite);
+      const habitsEntries = files.filter((e) => FILE_NAMES.habits.test(e.name) || FILE_NAMES.device.test(e.name));
+      const times = [fullEntry, ...habitsEntries].map((e) => Date.parse(e.server_modified)).filter(Number.isFinite);
       copies.push({ kind: 'latest', name: fullEntry.name, date: times.length ? new Date(Math.max(...times)) : null, label: '' });
     }
     let typedNames = {};
@@ -634,7 +977,29 @@
     if (opened.info.encryption) return { opened, parts: null };
     let parts = await backup.read(opened);
     let info = opened.info;
-    if (copy.kind === 'latest') {
+    const deviceFiles = copy.kind === 'latest'
+      ? (await listFolder(`/${profileId}`)).filter((e) => e['.tag'] === 'file' && FILE_NAMES.device.test(e.name)).slice(0, MAX_DEVICES)
+      : [];
+    if (deviceFiles.length && parts.habits) {
+      /*
+       * Profilo usato su più dispositivi: i contesti vengono dal file completo, i conteggi dai file dei dispositivi,
+       * ognuno una volta sola (quelli del file completo sono già nel file del dispositivo che l'ha scritto)
+       */
+      parts.habits = { ...parts.habits, days: [], months: [] };
+      parts.habitsExtra = [];
+      parts.habitsFolder = profileId;
+      for (const e of deviceFiles) {
+        try {
+          const { opened: devOpened, parts: devParts } = await openRemote(profileId, e.name);
+          if (!devParts.habits) continue;
+          parts.habitsExtra.push({ ...devParts.habits, contexts: [], base: [], deviceId: e.name.slice('abitudini-'.length, -'.picspeak'.length) });
+          if (devOpened.info.createdAt && (!info.createdAt || devOpened.info.createdAt > info.createdAt)) info = { ...info, createdAt: devOpened.info.createdAt };
+        } catch (error) {
+          // File di un dispositivo illeggibile: si salta
+        }
+      }
+      parts.summary.habits = { ...parts.summary.habits, days: new Set(parts.habitsExtra.flatMap((h) => h.days.map((d) => d[0]))).size };
+    } else if (copy.kind === 'latest') {
       try {
         const habitsOpened = await backup.open(await download(checkPath(profileId, 'attuale-abitudini.picspeak')));
         if (!habitsOpened.info.encryption) {
@@ -666,8 +1031,34 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden' && pending()) tick(true);
     });
-    document.addEventListener('picspeak:adult-exit', () => { if (pending()) tick(true); });
+    document.addEventListener('picspeak:adult-exit', async () => {
+      // Prima si inviano le modifiche dell'adulto, poi si prendono quelle arrivate dagli altri dispositivi
+      if (pending()) await tick(true);
+      pullAndApply(true);
+    });
     setTimeout(() => tick(false), 5000);
+    if (!link) return;
+    // Abitudini degli altri dispositivi già scaricate: valgono subito, anche senza rete
+    await restoreLayers().catch(() => {});
+    // Appena aperta l'app si possono applicare le schede arrivate da altri dispositivi (poi solo all'uscita dall'adulto)
+    setTimeout(() => pullAndApply(Date.now() - startedAt < APPLY_AT_START_MS && !isAdult()), 2000);
+    setInterval(() => {
+      if (document.visibilityState === 'visible' && !running) pullAndApply(false);
+    }, PULL_MS);
+    document.addEventListener('visibilitychange', () => {
+      // Il bambino riapre l'app dopo una pausa: è come un'apertura
+      if (document.visibilityState === 'visible') pullAndApply(!isAdult() && hasPendingApply());
+    });
+  }
+
+  function isAdult() {
+    const app = window.PicSpeak.app;
+    return Boolean(app && app.mode === 'adult');
+  }
+
+  function hasPendingApply() {
+    const id = currentProfileId();
+    return Boolean(id && state[id] && state[id].pendingApply);
   }
 
   const app = window.PicSpeak.app;
@@ -687,6 +1078,15 @@
     connect,
     disconnect,
     syncNow: () => (enabledHere() ? runSync() : Promise.resolve()),
+    pullNow: () => pullAndApply(false),
+    hasConflict,
+    resolveConflict,
+    conflictInfo,
+    follow,
+    isSynced,
+    forgetProfile,
+    folder: () => (currentProfileId() ? folderOf(currentProfileId()) : null),
+    deviceId: () => (enabledHere() ? deviceId() : null),
     lastCopy,
     pending,
     saveSnapshot,
@@ -694,6 +1094,6 @@
     listCopies,
     openCopy,
     // Per i test
-    _test: { classify, checkPath, slug, parseStamp, rotate, markDirty, due, start, setLink: (value) => { link = value; access = null; }, state: () => state, FILE_NAMES },
+    _test: { classify, checkPath, slug, parseStamp, rotate, markDirty, due, start, setLink: (value) => { link = value; access = null; }, state: () => state, link: () => link, FILE_NAMES, pullNow, pullAndApply, restoreLayers },
   };
 })();

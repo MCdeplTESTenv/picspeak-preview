@@ -79,6 +79,13 @@
   let today = { day: -1, counts: new Map() }; // oggi: (combinazione * 32 + ora) → conteggio
   let base = []; // pesi di partenza: { prev, word, weight, day, ctx }
   let contexts = []; // contesti del profilo
+  /*
+   * Abitudini degli ALTRI dispositivi che seguono lo stesso profilo (sincronizzazione su Dropbox): un livello per
+   * dispositivo, { pairs, days, months } come nel file dello storico. Ogni aggiornamento SOSTITUISCE il livello di
+   * quel dispositivo, mai lo somma: il totale è sempre «usi di qui + usi di là», cioè l'uso reale. Non si salvano
+   * nello storico di questo dispositivo e non entrano nei suoi file (exportData).
+   */
+  let remoteLayers = new Map();
   // Cose da salvare
   const dirtyPages = new Set();
   const dirtyDays = new Set();
@@ -398,6 +405,7 @@
     applyLook();
 
     resetState();
+    remoteLayers = new Map();
     const all = await usageRecordsOf(profileId);
     const pages = [];
     const old = [];
@@ -546,8 +554,9 @@
    */
   function filteredWeights(rule, halfLife, nowDay, timeOf) {
     const out = new Map();
+    let pairList = combos; // combinazioni della fonte che si sta leggendo (questo dispositivo o un altro)
     const add = (c, value, uses) => {
-      const pair = combos[c];
+      const pair = pairList[c];
       if (!pair) return;
       const key = pairKey(pair[0], pair[1]);
       const item = out.get(key);
@@ -573,9 +582,7 @@
         add(v >>> 14, n * dec * (timeOf ? timeOf(h, weekend) : 1), n);
       }
     };
-    days.forEach((entries, day) => { if (day !== today.day) visitDay(day, entries); });
-    if (today.day >= 0) visitDay(today.day, todayEntries());
-    months.forEach((entries, start) => {
+    const visitMonth = (entries, start) => {
       const dec = decay(nowDay - (start + 14), halfLife);
       if (!rule && dec < 1e-4) return;
       for (let i = 0; i < entries.length; i += 1) {
@@ -587,7 +594,17 @@
         const n = v & 255;
         add(v >>> 14, n * dec * part * (timeOf ? timeOf(h, weekend) : 1), n * part);
       }
+    };
+    days.forEach((entries, day) => { if (day !== today.day) visitDay(day, entries); });
+    if (today.day >= 0) visitDay(today.day, todayEntries());
+    months.forEach(visitMonth);
+    // Abitudini degli altri dispositivi dello stesso profilo, ognuna letta una volta sola
+    remoteLayers.forEach((layer) => {
+      pairList = layer.pairs;
+      layer.days.forEach(([day, entries]) => visitDay(day, entries));
+      layer.months.forEach(([start, entries]) => visitMonth(entries, start));
     });
+    pairList = combos;
     return out;
   }
 
@@ -1168,6 +1185,12 @@
       await clearAll();
       await Promise.all(ids.map((id) => storage.deleteRecord('contexts', id)));
       contexts = [];
+    } else if (mode === 'replace-counts') {
+      // Solo i conteggi tornano quelli del file: contesti e pesi di partenza restano (sincronizzazione su Dropbox)
+      const keepBase = base;
+      await clearAll();
+      base = keepBase;
+      dirtyBase = true;
     }
     // Contesti
     const idByName = new Map(contexts.map((c) => [c.name.toLowerCase(), c.id]));
@@ -1249,6 +1272,42 @@
     base = [...byKey.values()];
     dirtyBase = true;
     await flush();
+    rebuild();
+  }
+
+  /*
+   * Livello delle abitudini di un altro dispositivo (parsed come da readHistoryFile): prende il posto di quello
+   * precedente dello stesso dispositivo. Solo conteggi: contesti e pesi di partenza del file si ignorano.
+   * parsed = null toglie il livello.
+   */
+  function setRemoteLayer(deviceId, parsed) {
+    if (typeof deviceId !== 'string' || !deviceId) return;
+    if (!parsed) remoteLayers.delete(deviceId);
+    else remoteLayers.set(deviceId, { pairs: parsed.pairs || [], days: parsed.days || [], months: parsed.months || [] });
+    rebuild();
+    if (window.PicSpeak.app && typeof window.PicSpeak.app.applySuggestions === 'function') window.PicSpeak.app.applySuggestions();
+  }
+
+  /*
+   * Contesti e pesi di partenza presi da un altro dispositivo dello stesso profilo (sincronizzazione): prendono il
+   * posto di quelli di qui. Lo storico dei tocchi di questo dispositivo non cambia.
+   */
+  async function replaceDefinitions(parsed) {
+    if (!profileId || !parsed) return;
+    await flush();
+    const ids = contexts.map((c) => c.id);
+    await Promise.all(ids.map((id) => storage.deleteRecord('contexts', id)));
+    contexts = [];
+    base = [];
+    dirtyBase = true;
+    await importData({ ...parsed, days: [], months: [] }, 'merge');
+    // Si salva subito: chi chiama (cloud.js) sta ignorando queste scritture, che non sono modifiche dell'adulto
+    await flush();
+  }
+
+  function clearRemoteLayers() {
+    if (!remoteLayers.size) return;
+    remoteLayers = new Map();
     rebuild();
   }
 
@@ -1435,6 +1494,10 @@
     exportData,
     readHistoryFile,
     importData,
+    setRemoteLayer,
+    clearRemoteLayers,
+    replaceDefinitions,
+    remoteDevices: () => [...remoteLayers.keys()],
     listContexts,
     saveContext,
     deleteContext,

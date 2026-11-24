@@ -216,6 +216,7 @@
     await storage.deleteRecords('images', orphanImages);
     await storage.removeProfileSettings(profileId);
     await storage.remove(`previousPages:${profileId}`);
+    if (window.PicSpeak.cloud) await window.PicSpeak.cloud.forgetProfile(profileId);
     await storage.deleteRecord('profiles', profileId);
     if (channel) channel.postMessage({ deleted: profileId });
   }

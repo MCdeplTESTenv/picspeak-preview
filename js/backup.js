@@ -638,7 +638,23 @@
     }
 
     if (choice.habits && parts.habits) {
-      await predict.importData(parts.habits, choice.habits === 'replace' ? 'replace' : 'merge');
+      const extra = Array.isArray(parts.habitsExtra) ? parts.habitsExtra : null;
+      const cloud = window.PicSpeak.cloud;
+      const sameFolder = Boolean(extra && cloud && cloud.isEnabledHere() && cloud.folder() === parts.habitsFolder);
+      if (sameFolder) {
+        /*
+         * Copia online della cartella che questo profilo usa già (anche da altri dispositivi): i tocchi degli altri
+         * dispositivi arrivano a parte e non si copiano qui, altrimenti si conterebbero due volte. Si prendono
+         * contesti e pesi di partenza; con «sostituisci» lo storico di qui torna quello del suo file.
+         */
+        await predict.replaceDefinitions(parts.habits);
+        const own = extra.find((h) => h.deviceId === cloud.deviceId());
+        if (choice.habits === 'replace') await predict.importData({ ...(own || { pairs: [], days: [], months: [] }), contexts: [], base: [] }, 'replace-counts');
+      } else {
+        await predict.importData(parts.habits, choice.habits === 'replace' ? 'replace' : 'merge');
+        // Conteggi di ogni dispositivo, ognuno sommato una volta sola
+        if (extra) for (const habits of extra) await predict.importData(habits, 'merge');
+      }
       if (typeof predict.flush === 'function') await predict.flush();
     }
 

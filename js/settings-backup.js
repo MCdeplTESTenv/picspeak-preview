@@ -242,6 +242,9 @@
   async function syncDropbox() {
     showNotice(t('cloudSyncing'), false, 'online');
     await cloud.syncNow();
+    // Si guarda anche se altri dispositivi hanno inviato qualcosa (le schede arrivano all'uscita dalla modalità adulto)
+    await cloud.pullNow();
+    if (cloud.hasConflict()) { await askConflict(); return; }
     const st = cloud.status();
     showNotice(st === 'idle' ? t('cloudSynced') : t(`cloudStatus_${st}`), st !== 'idle', 'online');
   }
@@ -250,8 +253,78 @@
     const st = cloud.status();
     const last = cloud.lastCopy();
     const lastText = last ? format('cloudLast', { date: dateText(last), time: timeText(last) }) : t('cloudLastNone');
-    if (st === 'idle' || st === 'off') return lastText + (cloud.pending() ? ` ${t('cloudPending')}` : '');
+    const synced = cloud.isSynced() ? ` ${t('cloudSyncedDevices')}` : '';
+    if (st === 'idle' || st === 'off') return lastText + (cloud.pending() ? ` ${t('cloudPending')}` : '') + synced;
     return `${t(`cloudStatus_${st}`)} ${lastText}`;
+  }
+
+  /*
+   * Le schede sono state cambiate qui e su un altro dispositivo prima che si potessero scambiare le modifiche:
+   * l'adulto sceglie quale versione tenere. L'altra resta su Dropbox come copia «prima di…».
+   */
+  let asking = false;
+  async function askConflict() {
+    if (asking || !cloud || !cloud.hasConflict()) return;
+    asking = true;
+    try {
+      const info = await cloud.conflictInfo();
+      const there = info.there ? format('cloudConflictThere', { device: info.there }) : t('cloudConflictThereUnknown');
+      const which = await askChoice(t('cloudConflictTitle'), t('cloudConflictHelp'), [
+        { value: 'mine', label: t('cloudConflictMine'), help: format('cloudConflictHere', { device: info.here }), className: 'is-primary' },
+        { value: 'theirs', label: t('cloudConflictTheirs'), help: `${there}${info.thereAt ? ` ${whenText(info.thereAt)}` : ''}` },
+      ]);
+      if (!which) return;
+      showNotice(t('cloudSyncing'), false, 'online');
+      const reload = await cloud.resolveConflict(which);
+      if (reload) { location.reload(); return; }
+      showNotice(t('cloudConflictDone'), false, 'online');
+    } catch (error) {
+      if (error instanceof cloud.CloudError && error.message === 'conflict') {
+        asking = false;
+        showNotice(t('cloudConflictAgain'), true, 'online');
+        await askConflict();
+        return;
+      }
+      showNotice(cloudErrorText(error), true, 'online');
+    } finally {
+      asking = false;
+    }
+  }
+
+  // Questo profilo usa le schede di un profilo già su Dropbox (per esempio quello del tablet di scuola)
+  async function followProfile() {
+    showNotice(t('cloudListing'), false, 'online');
+    let profiles;
+    try {
+      profiles = (await cloud.listProfiles()).filter((p) => p.id !== cloud.folder());
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+      return;
+    }
+    notice = null;
+    ui.render();
+    if (!profiles.length) { showNotice(t('cloudFollowNone'), true, 'online'); return; }
+    const folder = await askChoice(t('cloudFollowTitle'), t('cloudFollowPick'), profiles.map((p) => ({
+      value: p.id,
+      label: p.name || t('backupRestoredProfileName'),
+      help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
+    })));
+    if (!folder) return;
+    const ok = await ui.runDialog({
+      title: t('cloudFollowTitle'),
+      help: t('cloudFollowConfirm'),
+      primary: t('cloudFollowBtn'),
+      secondary: t('cancel'),
+    });
+    if (!ok) return;
+    showNotice(t('cloudFollowing'), false, 'online');
+    try {
+      // La copia di sicurezza di com'è ora la fa cloud.follow (se non riesce, non cambia nulla)
+      await cloud.follow(folder);
+      location.reload();
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+    }
   }
 
   function privacyLink() {
@@ -283,6 +356,7 @@
         await cloud.enableHere();
         showNotice(t('cloudConnected'), false, 'online');
       }, true)));
+      wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
       wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
       const offRow = el('div', 'choice-group');
       const offBtn = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
@@ -295,6 +369,9 @@
       `${t('cloudConnectedPlain')} ${cloudStatusText()}`);
     status.setAttribute('role', 'status');
     wrap.append(status);
+    if (cloud.hasConflict()) {
+      wrap.append(ui.settingRow('cloudConflictRow', 'cloudConflictRowHelp', ui.button(t('cloudConflictRowBtn'), askConflict, true)));
+    }
     if (cloud.status() === 'reconnect') {
       const control = el('div', 'choice-group');
       control.append(ui.button(t('cloudReconnectBtn'), async () => { await cloud.disconnect(); prepareLink(); ui.render(); }, true));
@@ -303,6 +380,7 @@
     wrap.append(ui.settingRow('cloudSync', 'cloudSyncHelp', ui.button(t('cloudSyncBtn'), syncDropbox, false)));
     wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
     wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
+    if (!cloud.isSynced()) wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
     const control = el('div', 'choice-group');
     const off = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
     off.classList.add('dlg-btn-danger');
@@ -838,6 +916,9 @@
     erase.classList.add('dlg-btn-danger');
     wrap.append(ui.settingRow('resetAll', 'resetAllHelp', erase));
   }
+
+  // Entrando in modalità adulto: se ci sono due versioni delle schede, si chiede subito quale tenere
+  document.addEventListener('picspeak:adult-enter', () => { setTimeout(askConflict, 300); });
 
   ui.addCategory({
     id: 'backup',

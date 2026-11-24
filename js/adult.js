@@ -441,6 +441,8 @@
     el.lock.hidden = true;
     resetInactivity();
     app.layoutGrid();
+    // Il backup online può chiedere all'adulto quale versione delle schede tenere
+    document.dispatchEvent(new CustomEvent('picspeak:adult-enter'));
   }
 
   function exitAdult() {
