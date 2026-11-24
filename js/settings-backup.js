@@ -226,6 +226,8 @@
       fields: [{ id: 'name', label: t('cloudPhotoName'), plain: true, maxLength: 30 }],
       primary: t('cloudPhotoBtn'),
       secondary: t('cancel'),
+      // Senza onSubmit la finestra restituirebbe solo «true» e il nome scritto andrebbe perso
+      onSubmit: (v) => v,
     });
     if (!values) return;
     showNotice(t('cloudPhotoSaving'), false, 'online');
