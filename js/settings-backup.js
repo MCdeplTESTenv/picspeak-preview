@@ -274,10 +274,9 @@
       wrap.append(ui.settingRow('cloudDropbox', 'cloudDropboxHelp', control));
       return;
     }
-    const name = cloud.accountName();
     if (!cloud.isEnabledHere()) {
       // Collegato da un altro profilo: questo profilo non va su Dropbox finché l'adulto non lo decide
-      wrap.append(el('p', 'settings-help backup-last', name ? format('cloudOtherProfileAs', { name }) : t('cloudOtherProfile')));
+      wrap.append(el('p', 'settings-help backup-last', t('cloudOtherProfile')));
       wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', ui.button(t('cloudEnableBtn'), async () => {
         await cloud.enableHere();
         showNotice(t('cloudConnected'), false, 'online');
@@ -291,7 +290,7 @@
       return;
     }
     const status = el('p', `settings-help backup-last${['error', 'reconnect'].includes(cloud.status()) ? ' is-error' : ''}`,
-      `${name ? format('cloudConnectedAs', { name }) : t('cloudConnectedPlain')} ${cloudStatusText()}`);
+      `${t('cloudConnectedPlain')} ${cloudStatusText()}`);
     status.setAttribute('role', 'status');
     wrap.append(status);
     if (cloud.status() === 'reconnect') {

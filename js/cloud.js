@@ -35,8 +35,9 @@
   const API = 'https://api.dropboxapi.com/2/';
   const CONTENT = 'https://content.dropboxapi.com/2/';
 
+  // account_info.read lo include sempre Dropbox (non si può togliere); il tool però non lo usa mai
   const SCOPES = 'account_info.read files.metadata.read files.content.read files.content.write';
-  // { refreshToken, name, connectedAt, profileIds } (del dispositivo). profileIds: i soli profili per cui l'adulto ha
+  // { refreshToken, connectedAt, profileIds } (del dispositivo). profileIds: i soli profili per cui l'adulto ha
   // attivato il backup online; gli altri profili dello stesso dispositivo (es. altri bambini) non vanno mai su Dropbox
   const LINK_KEY = 'cloudDropbox';
   const STATE_KEY = 'cloudState'; // { [id profilo]: { dirtyFull, dirtyHabits, firstDirtyAt, lastFullAt, lastHabitsAt, lastDaily, lastError } }
@@ -504,15 +505,9 @@
     }
     if (typeof body.refresh_token !== 'string' || !body.refresh_token) throw new CloudError('code');
     // Il backup online parte solo per il profilo in uso: gli altri si attivano uno per uno
-    link = { refreshToken: body.refresh_token, name: '', connectedAt: new Date().toISOString(), profileIds: [currentProfileId()].filter(Boolean) };
+    link = { refreshToken: body.refresh_token, connectedAt: new Date().toISOString(), profileIds: [currentProfileId()].filter(Boolean) };
     keepAccess(body);
-    try {
-      const account = await rpc('users/get_current_account', null);
-      const display = account && account.name && account.name.display_name;
-      if (typeof display === 'string') link.name = display.replace(/[\p{Cc}\p{Cf}]/gu, ' ').trim().slice(0, 60);
-    } catch (error) {
-      // Il nome dell'account serve solo da promemoria
-    }
+    // Di proposito non si chiede nulla dell'account Dropbox (nome, email): al tool serve solo la sua cartella
     await storage.set(LINK_KEY, link);
     setStatus('idle');
     tick(true);
@@ -649,7 +644,6 @@
     isConnected: () => Boolean(link),
     isEnabledHere: enabledHere,
     enableHere,
-    accountName: () => (link && link.name) || '',
     status: () => status,
     onStatus,
     newPkce,
