@@ -2,7 +2,9 @@
  * Impostazioni: «Backup e ripristino», in quattro sezioni.
  * - Backup locale: nome del profilo, «Salva un backup adesso» (file .picspeak, password facoltativa), data dell'ultimo
  *   backup salvato da questo dispositivo. La logica del file è in backup.js.
- * - Backup online: in arrivo (pulsante in grigio con l'etichetta «Prossimamente»).
+ * - Backup online su Dropbox (logica in cloud.js): «Collega Dropbox» (si incolla il codice mostrato da Dropbox), stato
+ *   dell'ultima copia, «Salva una fotografia adesso», «Ripristina da Dropbox», «Scollega». Il link alla pagina sulla
+ *   privacy compare solo qui, all'adulto, quando collega Dropbox.
  * - Ripristina un backup: apre un file .picspeak, mostra di chi è, quando è stato salvato e cosa contiene, poi
  *   «Ripristina tutto» (sostituisce) oppure «Scegli cosa ripristinare» (per ogni parte: no, sostituisci, aggiungi o unisci).
  * - Azzera l'app: «Torna alle impostazioni iniziali» (solo le scelte delle impostazioni; restano schede, immagini,
@@ -13,7 +15,7 @@
 (function () {
   'use strict';
 
-  const { i18n, storage, security, symbols, predict, data, backup, settingsUi: ui } = window.PicSpeak;
+  const { i18n, storage, security, symbols, predict, data, backup, cloud, settingsUi: ui } = window.PicSpeak;
   const t = i18n.t;
 
   // Chiavi dell'archivio "settings" che contengono solo scelte delle impostazioni.
@@ -159,9 +161,232 @@
     }).catch(() => { last.textContent = t('backupLastNone'); });
   }
 
+  // ---------- Backup online (Dropbox) ----------
+
+  // Coppia PKCE preparata prima del tocco: la pagina di Dropbox si apre subito, dentro il tocco (Safari lo richiede)
+  let pkce = null;
+
+  function prepareLink() {
+    if (pkce || !cloud || !cloud.isConfigured()) return;
+    cloud.newPkce().then((value) => { pkce = value; }).catch(() => { pkce = null; });
+  }
+
+  function cloudErrorText(error) {
+    const code = error instanceof cloud.CloudError ? error.message : '';
+    const key = `cloudErr_${code}`;
+    return t(key) === key ? t('cloudErr_server') : t(key);
+  }
+
+  async function connectDropbox() {
+    if (!pkce) {
+      prepareLink();
+      showNotice(t('cloudPreparing'), false, 'online');
+      return;
+    }
+    const current = pkce;
+    // La pagina di Dropbox si apre in una scheda nuova: lì l'adulto preme «Consenti» e copia il codice
+    window.open(cloud.authorizeUrl(current), '_blank', 'noopener,noreferrer');
+    const done = await ui.runDialog({
+      title: t('cloudCodeTitle'),
+      help: t('cloudCodeHelp'),
+      fields: [{ id: 'code', label: t('cloudCodeField'), raw: true }],
+      primary: t('cloudCodeBtn'),
+      secondary: t('cancel'),
+      onSubmit: async (v) => {
+        try {
+          await cloud.connect(v.code, current);
+          return true;
+        } catch (error) {
+          return cloudErrorText(error);
+        }
+      },
+    });
+    // Ogni collegamento usa una coppia nuova
+    pkce = null;
+    if (done) showNotice(t('cloudConnected'), false, 'online');
+    else ui.render();
+  }
+
+  async function disconnectDropbox() {
+    const ok = await ui.runDialog({
+      title: t('cloudDisconnectTitle'),
+      help: t('cloudDisconnectHelp'),
+      primary: t('cloudDisconnectBtn'),
+      secondary: t('cancel'),
+    });
+    if (!ok) return;
+    await cloud.disconnect();
+    showNotice(t('cloudDisconnected'), false, 'online');
+  }
+
+  async function savePhoto() {
+    const values = await ui.runDialog({
+      title: t('cloudPhotoTitle'),
+      help: t('cloudPhotoHelp'),
+      fields: [{ id: 'name', label: t('cloudPhotoName'), plain: true, maxLength: 30 }],
+      primary: t('cloudPhotoBtn'),
+      secondary: t('cancel'),
+    });
+    if (!values) return;
+    showNotice(t('cloudPhotoSaving'), false, 'online');
+    try {
+      await cloud.saveSnapshot('photo', values.name);
+      showNotice(t('cloudPhotoSaved'), false, 'online');
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+    }
+  }
+
+  async function syncDropbox() {
+    showNotice(t('cloudSyncing'), false, 'online');
+    await cloud.syncNow();
+    const st = cloud.status();
+    showNotice(st === 'idle' ? t('cloudSynced') : t(`cloudStatus_${st}`), st !== 'idle', 'online');
+  }
+
+  function cloudStatusText() {
+    const st = cloud.status();
+    const last = cloud.lastCopy();
+    const lastText = last ? format('cloudLast', { date: dateText(last), time: timeText(last) }) : t('cloudLastNone');
+    if (st === 'idle' || st === 'off') return lastText + (cloud.pending() ? ` ${t('cloudPending')}` : '');
+    return `${t(`cloudStatus_${st}`)} ${lastText}`;
+  }
+
+  function privacyLink() {
+    const a = el('a', 'dialog-link', t('cloudPrivacyLink'));
+    a.href = 'privacy.html';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    return a;
+  }
+
   function renderOnlineSection() {
     const wrap = ui.section('secBackupOnlineTitle', 'secBackupOnlineHelp');
-    wrap.append(comingRow('backupAuto', 'backupAutoHelp', 'backupAutoBtn'));
+    renderNotice(wrap, 'online');
+    if (!cloud || !cloud.isConfigured()) {
+      wrap.append(comingRow('cloudDropbox', 'cloudDropboxHelp', 'cloudConnectBtn'));
+      return;
+    }
+    if (!cloud.isConnected()) {
+      prepareLink();
+      const control = el('div', 'choice-group');
+      control.append(ui.button(t('cloudConnectBtn'), connectDropbox, true), privacyLink());
+      wrap.append(ui.settingRow('cloudDropbox', 'cloudDropboxHelp', control));
+      return;
+    }
+    const name = cloud.accountName();
+    if (!cloud.isEnabledHere()) {
+      // Collegato da un altro profilo: questo profilo non va su Dropbox finché l'adulto non lo decide
+      wrap.append(el('p', 'settings-help backup-last', name ? format('cloudOtherProfileAs', { name }) : t('cloudOtherProfile')));
+      wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', ui.button(t('cloudEnableBtn'), async () => {
+        await cloud.enableHere();
+        showNotice(t('cloudConnected'), false, 'online');
+      }, true)));
+      wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
+      const offRow = el('div', 'choice-group');
+      const offBtn = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
+      offBtn.classList.add('dlg-btn-danger');
+      offRow.append(offBtn, privacyLink());
+      wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', offRow));
+      return;
+    }
+    const status = el('p', `settings-help backup-last${['error', 'reconnect'].includes(cloud.status()) ? ' is-error' : ''}`,
+      `${name ? format('cloudConnectedAs', { name }) : t('cloudConnectedPlain')} ${cloudStatusText()}`);
+    status.setAttribute('role', 'status');
+    wrap.append(status);
+    if (cloud.status() === 'reconnect') {
+      const control = el('div', 'choice-group');
+      control.append(ui.button(t('cloudReconnectBtn'), async () => { await cloud.disconnect(); prepareLink(); ui.render(); }, true));
+      wrap.append(ui.settingRow('cloudReconnect', 'cloudReconnectHelp', control));
+    }
+    wrap.append(ui.settingRow('cloudSync', 'cloudSyncHelp', ui.button(t('cloudSyncBtn'), syncDropbox, false)));
+    wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
+    wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
+    const control = el('div', 'choice-group');
+    const off = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
+    off.classList.add('dlg-btn-danger');
+    control.append(off, privacyLink());
+    wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', control));
+  }
+
+  // Elenco di scelte (profili o copie) in una finestra; risolve con il valore scelto o null
+  function askChoice(title, help, choices) {
+    return ui.runPanelDialog({
+      title,
+      help,
+      className: 'choice-dialog',
+      build(close) {
+        const options = el('div', 'choice-options cloud-choices');
+        choices.forEach((opt) => {
+          const btn = el('button', `choice-option ${opt.className || ''}`.trim());
+          btn.type = 'button';
+          btn.append(el('strong', null, opt.label));
+          if (opt.help) btn.append(el('small', null, opt.help));
+          btn.addEventListener('click', () => close(opt.value));
+          options.append(btn);
+        });
+        return options;
+      },
+    });
+  }
+
+  function whenText(date) {
+    return date ? format('cloudWhen', { date: dateText(date), time: timeText(date) }) : '';
+  }
+
+  async function restoreFromDropbox() {
+    showNotice(t('cloudListing'), false, 'online');
+    let profiles;
+    try {
+      profiles = await cloud.listProfiles();
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+      return;
+    }
+    ui.render();
+    if (!profiles.length) {
+      await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
+      return;
+    }
+    const hereId = data.profile && data.profile.id;
+    const profileId = profiles.length === 1 ? profiles[0].id : await askChoice(t('cloudRestoreTitle'), t('cloudPickProfile'),
+      profiles.map((p) => ({
+        value: p.id,
+        label: (p.name || t('backupRestoredProfileName')) + (p.id === hereId ? ` ${t('cloudThisProfile')}` : ''),
+        help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
+        className: p.id === hereId ? 'is-primary' : '',
+      })));
+    if (!profileId) return;
+    let copies;
+    try {
+      copies = await cloud.listCopies(profileId);
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+      return;
+    }
+    if (!copies.length) {
+      await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
+      return;
+    }
+    const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), copies.map((c, index) => ({
+      value: String(index),
+      label: c.kind === 'photo' && c.label ? format('cloudKind_photoNamed', { name: c.label }) : t(`cloudKind_${c.kind}`),
+      help: c.kind === 'daily' && c.date ? dateText(c.date) : whenText(c.date),
+      className: c.kind === 'latest' ? 'is-primary' : '',
+    })));
+    if (picked === null || picked === undefined) return;
+    const copy = copies[Number(picked)];
+    showNotice(t('cloudDownloading'), false, 'online');
+    let result;
+    try {
+      result = await cloud.openCopy(profileId, copy);
+    } catch (error) {
+      if (error instanceof backup.BackupError) await showError(error);
+      else showNotice(cloudErrorText(error), true, 'online');
+      return;
+    }
+    ui.render();
+    await restoreOpened(result.opened, result.parts);
   }
 
   // ---------- Ripristina un backup ----------
@@ -405,6 +630,22 @@
       await showError(error);
       return;
     }
+    await restoreOpened(opened, parts);
+  }
+
+  // Copia automatica su Dropbox prima di un'operazione grande (se collegato); non blocca l'operazione se non riesce
+  async function cloudSafetyCopy(where) {
+    if (!cloud || !cloud.isConnected()) return;
+    showNotice(t('cloudSafetySaving'), false, where);
+    try {
+      await cloud.saveSnapshot('before');
+    } catch (error) {
+      // Si prosegue: l'adulto ha già avuto la proposta del backup sul dispositivo
+    }
+  }
+
+  // Ripristino di un backup già aperto (da un file o da Dropbox); parts è null se il backup è protetto da password
+  async function restoreOpened(opened, parts) {
     if (opened.info.encryption) {
       parts = await ui.runDialog({
         title: t('backupPassTitle'),
@@ -461,6 +702,7 @@
       }
     }
 
+    await cloudSafetyCopy('restore');
     showNotice(t('backupRestoring'), false, 'restore');
     if (channel) channel.postMessage('restoring');
     let report;
@@ -557,7 +799,9 @@
     });
     if (!confirmed) return;
 
-    // 3. Cancellazione e ripartenza come alla prima apertura
+    // 3. Cancellazione e ripartenza come alla prima apertura (prima una copia su Dropbox, se collegato, poi si scollega)
+    await cloudSafetyCopy('reset');
+    if (cloud && cloud.isConnected()) await cloud.disconnect();
     try {
       // Prima le abitudini in memoria: un salvataggio rimasto in sospeso non deve riscriverle dopo
       if (predict) await predict.clearAll();

@@ -31,6 +31,19 @@
   const PROFILE_ID = /^p_[A-Za-z0-9]{1,40}$/;
 
   const memory = new Map();
+  // Chi vuole sapere quando cambia qualcosa nell'archivio (backup online): riceve (archivio, chiave o id)
+  const listeners = new Set();
+
+  function onChange(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  function notify(storeName, key) {
+    listeners.forEach((listener) => {
+      try { listener(storeName, key); } catch (error) { /* un ascoltatore non blocca il salvataggio */ }
+    });
+  }
   const memoryStores = new Map(RECORD_STORES.map((name) => [name, new Map()]));
   let dbPromise = null;
 
@@ -98,6 +111,7 @@
     } catch (error) {
       // Resta solo in memoria per questa sessione
     }
+    notify(SETTINGS, key);
   }
 
   async function rawRemove(key) {
@@ -107,6 +121,7 @@
     } catch (error) {
       // Nulla da fare
     }
+    notify(SETTINGS, key);
   }
 
   // ---------- Profilo in uso e scelte per profilo ----------
@@ -234,6 +249,7 @@
     } catch (error) {
       // Resta solo in memoria per questa sessione
     }
+    notify(storeName, record.id);
   }
 
   async function putRecords(storeName, records) {
@@ -243,6 +259,7 @@
     } catch (error) {
       // Restano solo in memoria per questa sessione
     }
+    if (records.length) notify(storeName, records[0].id);
   }
 
   /*
@@ -277,6 +294,7 @@
     } catch (error) {
       // Nulla da fare
     }
+    notify(storeName, ids[0]);
   }
 
   async function deleteRecord(storeName, id) {
@@ -286,12 +304,13 @@
     } catch (error) {
       // Nulla da fare
     }
+    notify(storeName, id);
   }
 
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
     name: DB_NAME, get, set, remove, clearAll, requestPersistence, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
-    getRecordsByPrefix, deleteRecords,
+    getRecordsByPrefix, deleteRecords, onChange,
     PROFILE_KEYS, activeProfileId, setActiveProfileId, newProfileId,
     getProfileSettings, setProfileSettings, removeProfileSettings,
   };

@@ -129,6 +129,14 @@
           input.autocapitalize = 'words';
           input.maxLength = field.maxLength || 60;
           if (field.value) input.value = field.value;
+        } else if (field.raw) {
+          // Codice da incollare così com'è (es. quello di Dropbox): maiuscole e minuscole contano
+          input.type = 'text';
+          input.className = 'is-plain';
+          input.autocapitalize = 'off';
+          input.autocomplete = 'off';
+          input.spellcheck = false;
+          input.maxLength = 400;
         } else if (field.text) {
           input.type = 'text';
         } else {
@@ -443,6 +451,8 @@
     el.adultBar.hidden = true;
     el.lock.hidden = false;
     app.layoutGrid();
+    // Il backup online invia subito le modifiche fatte dall'adulto
+    document.dispatchEvent(new CustomEvent('picspeak:adult-exit'));
   }
 
   function resetInactivity() {

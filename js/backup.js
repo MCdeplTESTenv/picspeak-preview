@@ -202,7 +202,10 @@
 
   /*
    * Crea il file del backup e lo restituisce come { blob, name }.
-   * options: { name (nome del profilo), password (facoltativa, '' = nessuna), fallbackName }
+   * options: { name (nome del profilo), password (facoltativa, '' = nessuna), fallbackName,
+   *            only (facoltativo: elenco delle parti da mettere, es. ['habits'] per la copia online delle abitudini),
+   *            quiet (true per le copie online automatiche: non cambia il nome del profilo né la data dell'ultimo
+   *            backup salvato da questo dispositivo) }
    */
   async function create(options) {
     // Se la prova del file appena creato non riesce, lo si rifà da capo una volta, senza disturbare l'adulto
@@ -214,10 +217,11 @@
     }
   }
 
-  async function build({ name, password, fallbackName }) {
+  async function build({ name, password, fallbackName, only, quiet }) {
     const profileName = cleanName(name);
     if (password && !cryptoAvailable()) throw new BackupError('unsupported');
-    await setProfileName(profileName);
+    const want = (part) => !Array.isArray(only) || only.includes(part);
+    if (!quiet) await setProfileName(profileName);
     if (predict && typeof predict.flush === 'function') await predict.flush();
 
     const now = new Date();
@@ -246,12 +250,12 @@
     };
 
     // Schede: stesso formato dei modelli, immagini e foto dentro il file
-    if (data.profilePages().length) {
+    if (want('boards') && data.profilePages().length) {
       const boards = await templates.fromCurrentPages(profileName || 'PicSpeak', { embed: true });
       addPart('boards', shareImages(boards));
     }
-    if (predict && typeof predict.exportData === 'function') addPart('habits', predict.exportData());
-    const userTemplates = await templates.userTemplates();
+    if (want('habits') && predict && typeof predict.exportData === 'function') addPart('habits', predict.exportData());
+    const userTemplates = want('templates') ? await templates.userTemplates() : [];
     const templateList = [];
     for (const entry of userTemplates) {
       if (!entry || !entry.template) continue;
@@ -261,9 +265,9 @@
         // Modello illeggibile: si salta
       }
     }
-    addPart('templates', templateList);
-    addPart('appearance', await readGroup('appearance'));
-    addPart('settings', await readGroup('settings'));
+    if (want('templates')) addPart('templates', templateList);
+    if (want('appearance')) addPart('appearance', await readGroup('appearance'));
+    if (want('settings')) addPart('settings', await readGroup('settings'));
 
     const manifest = {
       format: FORMAT,
@@ -294,9 +298,10 @@
     archiveFiles.unshift({ name: 'manifest.json', data: JSON.stringify(manifest, null, 2), compress: true });
     const zipped = await zip.create(archiveFiles);
     const blob = new Blob([zipped], { type: 'application/octet-stream' });
-    await verify(blob, password, { pages: data.profilePages().length, templates: templateList.length, images: imagePaths.size });
-    await storage.set(LAST_KEY, { at: manifest.createdAt, name: profileName });
-    return { blob, name: fileName(profileName, now, fallbackName || 'backup') };
+    const pages = want('boards') ? data.profilePages().length : 0;
+    await verify(blob, password, { pages, templates: templateList.length, images: imagePaths.size });
+    if (!quiet) await storage.set(LAST_KEY, { at: manifest.createdAt, name: profileName });
+    return { blob, name: fileName(profileName, now, fallbackName || 'backup'), createdAt: now };
   }
 
   /*
@@ -689,7 +694,24 @@
     return report;
   }
 
+  /*
+   * Copia online «più recente»: il backup completo e, se è più nuovo, il file con le sole abitudini (che si aggiorna
+   * più spesso). Le abitudini più nuove prendono il posto di quelle del backup completo. Modifica e restituisce
+   * fullParts; info è la descrizione del backup completo (la data diventa quella del file più nuovo).
+   */
+  function combineLatest(fullParts, fullInfo, habitsParts, habitsInfo) {
+    if (!habitsParts || !habitsInfo || !habitsInfo.createdAt || !habitsParts.habits) return { parts: fullParts, info: fullInfo };
+    if (fullInfo.createdAt && habitsInfo.createdAt <= fullInfo.createdAt) return { parts: fullParts, info: fullInfo };
+    fullParts.habits = habitsParts.habits;
+    fullParts.summary.habits = habitsParts.summary.habits;
+    fullParts.issues.parts = fullParts.issues.parts.filter((part) => part !== 'habits');
+    return { parts: fullParts, info: { ...fullInfo, createdAt: habitsInfo.createdAt } };
+  }
+
   window.PicSpeak.backup = {
+    combineLatest,
+    fileName,
+    deviceLabel,
     BackupError,
     PARTS,
     MAX_TEMPLATES,

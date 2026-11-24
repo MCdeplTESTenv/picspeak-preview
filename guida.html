@@ -119,6 +119,7 @@
               <li><a href="#accesso-guidato">Tenere PicSpeak sempre aperto e a schermo intero</a></li>
               <li><a href="#dati">Sapere dove restano i dati</a></li>
               <li><a href="#backup">Fare un backup e ripristinarlo</a></li>
+              <li><a href="#backup-online">Backup online su Dropbox</a></li>
               <li><a href="#ripristino">Azzerare l’app</a></li>
               <li><a href="#crediti">Trovare crediti e licenze</a></li>
             </ul>
@@ -284,7 +285,7 @@
           <tr><th scope="row">Simboli</th><td>ARASAAC, Mulberry, OpenMoji, Twemoji, foto personali</td></tr>
           <tr><th scope="row">Voce</th><td>voce, velocità, tono, come avere una voce più naturale</td></tr>
           <tr><th scope="row">Sicurezza</th><td>cambiare il PIN, schermo sempre acceso, schermo intero, blocco del dispositivo su PicSpeak (Accesso guidato, Fissa app)</td></tr>
-          <tr><th scope="row">Backup e ripristino</th><td>backup locale (con password facoltativa), ripristinare un backup, azzerare l’app (impostazioni iniziali, cancella tutto); backup online in arrivo</td></tr>
+          <tr><th scope="row">Backup e ripristino</th><td>backup locale (con password facoltativa), ripristinare un backup, backup online su Dropbox, azzerare l’app (impostazioni iniziali, cancella tutto)</td></tr>
           <tr><th scope="row">In arrivo</th><td>le funzioni previste nelle prossime versioni</td></tr>
         </tbody>
       </table>
@@ -1165,7 +1166,9 @@
     <section id="dati" data-search>
       <h3>Sapere dove restano i dati</h3>
       <p>Tessere, foto e impostazioni di tutti i profili restano <strong>solo su questo dispositivo</strong>, nel browser. Non ci sono account e
-        nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.</p>
+        nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.
+        L’unica eccezione la decidete voi: se collegate il <a href="#backup-online">backup online</a>, una copia va nel
+        <strong>vostro</strong> Dropbox, e solo lì.</p>
       <p class="warn">Cancellare i dati di navigazione del browser per questo sito cancella anche le tessere personalizzate.
         Salvate ogni tanto un backup completo (vedi <a href="#backup">Fare un backup e ripristinarlo</a>) e
         conservatelo in un posto sicuro.</p>
@@ -1236,7 +1239,64 @@
         riscaricarli da <span class="where"><span>Impostazioni</span><span>Simboli</span></span>. Anche le emoji
         Twemoji, che si cercano su internet, restano accese o spente come erano su questo dispositivo: se nel backup
         erano accese, un avviso lo ricorda e si possono attivare dalla stessa pagina.</p>
-      <p>La sezione <strong>Backup online</strong>, con la copia automatica nel proprio spazio cloud, è in arrivo.</p>
+      <p>Per una copia che si salva da sola, senza pensarci, vedete <a href="#backup-online">Backup online su Dropbox</a>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="backup-online" data-search>
+      <h3>Backup online su Dropbox</h3>
+      <p>Con il backup online PicSpeak salva da solo una copia di tutto nel vostro Dropbox mentre lo usate: schede con
+        immagini e foto, abitudini d’uso e contesti, modelli salvati, aspetto e impostazioni. Il PIN non entra mai nella
+        copia. Basta un account Dropbox, anche gratuito.</p>
+      <p>PicSpeak usa <strong>solo la sua cartella</strong> <code>Applicazioni/PicSpeak</code> nel vostro Dropbox: non
+        vede, non modifica e non cancella nessun altro file. Lo garantisce Dropbox stesso.</p>
+      <h4>Collegare Dropbox</h4>
+      <ol class="steps">
+        <li><a href="#pin">Sbloccate le impostazioni</a> e aprite
+          <span class="where"><span>Impostazioni</span><span>Backup e ripristino</span></span>.</li>
+        <li>In <strong>Backup online</strong> toccate <strong>Collega Dropbox</strong>. La pagina di Dropbox si apre in
+          una nuova scheda.</li>
+        <li>Entrate con il vostro account Dropbox e toccate <strong>Consenti</strong>. Dropbox mostra un codice.</li>
+        <li>Copiate il codice, tornate a PicSpeak, incollatelo nella finestra <strong>Incolla il codice di Dropbox</strong>
+          e toccate <strong>Collega</strong>. La prima copia parte subito.</li>
+      </ol>
+      <p>Il backup online vale per il <strong>profilo in uso</strong> e solo su questo dispositivo. Se sullo stesso
+        dispositivo ci sono altri profili (per esempio altri bambini), le loro copie non vanno su Dropbox: in ogni altro
+        profilo la sezione dice che il backup online è spento e, solo se è il Dropbox della famiglia di quella persona,
+        potete toccare <strong>Attiva per questo profilo</strong>. Su un altro dispositivo si collega allo stesso modo.
+        Accanto al pulsante c’è il link <strong>Privacy</strong>, con due righe su cosa succede ai dati.</p>
+      <h4>Come si salvano le copie</h4>
+      <ul>
+        <li><strong>Copia aggiornata</strong>: si salva da sola un paio di minuti dopo una modifica, e comunque ogni
+          5 minuti al massimo mentre si usa PicSpeak, e subito quando uscite dalla modalità adulto. Senza internet le
+          modifiche aspettano e partono appena torna la connessione. Se per internet avete scelto
+          <strong>Solo Wi-Fi</strong> e il dispositivo sa di essere sui dati mobili (succede su Android), le copie
+          automatiche aspettano il Wi-Fi. Con <strong>Aggiorna adesso</strong> la salvate subito.</li>
+        <li><strong>Copie del giorno</strong>: ogni giorno in cui si usa PicSpeak resta anche una copia di quel giorno.
+          Si tengono le ultime 10; le più vecchie si cancellano da sole.</li>
+        <li><strong>Fotografie</strong>: con <strong>Salva una fotografia</strong> fate una copia di tutto com’è adesso,
+          con un nome se volete (per esempio «prima delle vacanze»). Resta su Dropbox finché non la cancellate voi
+          dalla cartella <code>Applicazioni/PicSpeak</code>.</li>
+        <li>Prima di un ripristino o di <strong>Cancella tutto</strong> PicSpeak salva anche una copia di sicurezza
+          (si tengono le ultime 5).</li>
+      </ul>
+      <p>Ogni profilo ha le sue copie. Sotto il titolo vedete a quale account Dropbox è collegato, la data dell’ultima
+        copia e se ci sono modifiche in attesa.</p>
+      <h4>Tornare a una copia</h4>
+      <ol class="steps">
+        <li>Toccate <strong>Ripristina da Dropbox</strong>.</li>
+        <li>Se su Dropbox ci sono più profili, scegliete quello da ripristinare.</li>
+        <li>Scegliete la copia: <strong>La copia più recente</strong>, una <strong>copia del giorno</strong> (per tornare
+          a com’era prima di una modifica sbagliata) o una <strong>fotografia</strong>.</li>
+        <li>Da qui si prosegue come in <a href="#backup">Ripristinare un backup</a>: in un profilo nuovo o in quello in
+          uso, tutto o parte per parte.</li>
+      </ol>
+      <p>Su un dispositivo nuovo, o dopo <strong>Cancella tutto</strong>, collegate Dropbox e usate
+        <strong>Ripristina da Dropbox</strong>. Poi scegliete un PIN nuovo.</p>
+      <h4>Scollegare</h4>
+      <p>Con <strong>Scollega</strong> PicSpeak smette di salvare e perde l’accesso a Dropbox. Le copie già salvate
+        restano nel vostro Dropbox. Se Dropbox chiede di ricollegare (per esempio dopo aver tolto il permesso dal sito di
+        Dropbox), toccate <strong>Ricollega</strong> e rifate i passi di collegamento.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
