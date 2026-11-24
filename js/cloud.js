@@ -109,10 +109,127 @@
 
   // ---------- Percorsi controllati ----------
 
-  function checkPath(profileId, name) {
+  /*
+   * Cartelle dei profili su Dropbox: si chiamano come il profilo («Luca B»; «Luca B (2)» se il nome è già usato).
+   * Il riferimento vero è l'id del profilo, scritto in profilo.json dentro la cartella: i dispositivi ritrovano la
+   * cartella da lì, anche se è stata rinominata. Le cartelle create prima si chiamano «p_…» (id nel nome) e prendono
+   * il nome del profilo alla copia completa successiva.
+   */
+  const FOLDER_NAME = /^[^\\/:*?"<>|\p{Cc}\p{Cf}]{1,48}$/u;
+  const MAX_FOLDERS = 200;
+  const folderNames = new Map(); // id del profilo → nome della cartella su Dropbox (com'è ora)
+  // Cartella su Dropbox (il suo codice interno, che non cambia se la cartella si rinomina) → id letto in profilo.json
+  const folderIds = new Map();
+
+  function validFolder(name) {
+    return typeof name === 'string' && FOLDER_NAME.test(name) && name.trim() === name && !/[.]$/.test(name);
+  }
+
+  // Nome del profilo ripulito per Dropbox: caratteri non accettati tolti, al massimo 40 caratteri interi
+  function baseName(profileName) {
+    const clean = Array.from(String(profileName || '').replace(/[\\/:*?"<>|\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim())
+      .slice(0, 40).join('').replace(/[. ]+$/, '');
+    // Un nome che sembra un id («p_…») o vuoto non si usa: si mette un nome generico
+    return clean && !PROFILE_ID.test(clean) ? clean : 'Profilo';
+  }
+
+  function dirOf(profileId) {
     if (!PROFILE_ID.test(profileId)) throw new CloudError('path');
+    const name = folderNames.get(profileId) || profileId;
+    if (!validFolder(name)) throw new CloudError('path');
+    return `/${name}`;
+  }
+
+  function checkPath(profileId, name) {
     if (!Object.values(FILE_NAMES).some((re) => re.test(name))) throw new CloudError('path');
-    return `/${profileId}/${name}`;
+    return `${dirOf(profileId)}/${name}`;
+  }
+
+  // Id del profilo di una cartella: dal nome per le cartelle vecchie, altrimenti da profilo.json (dato non affidabile).
+  // Si ricorda per il codice della cartella su Dropbox, non per il nome: un nome può passare a un altro profilo.
+  async function folderId(entry) {
+    if (PROFILE_ID.test(entry.name)) return entry.name;
+    const key = typeof entry.id === 'string' && entry.id ? entry.id : null;
+    if (key && folderIds.has(key)) return folderIds.get(key);
+    let id = null;
+    try {
+      const info = JSON.parse(await (await download(`/${entry.name}/profilo.json`, 4096)).text());
+      if (info && typeof info.id === 'string' && PROFILE_ID.test(info.id)) id = info.id;
+    } catch (error) {
+      // Rete, accesso, tempo: si ferma tutto (meglio che creare una cartella doppia). File assente o non valido: niente id
+      if (error instanceof CloudError && error.message !== 'not-found') throw error;
+      if (!(error instanceof CloudError) && !(error instanceof SyntaxError)) throw error;
+      id = null;
+    }
+    if (key) folderIds.set(key, id);
+    return id;
+  }
+
+  // Ordine con cui si sceglie tra due cartelle dello stesso profilo (caso raro): prima quella con il nome
+  function preferFolder(x, y) {
+    return (PROFILE_ID.test(x) - PROFILE_ID.test(y)) || (x < y ? -1 : 1);
+  }
+
+  // Cartelle dei profili sulla radice: { list: [{ name, id }], complete } (complete false se sono troppe)
+  async function scanFolders() {
+    const entries = (await listFolder('')).filter((e) => e['.tag'] === 'folder' && validFolder(e.name))
+      .sort((x, y) => (x.name < y.name ? -1 : 1));
+    const list = [];
+    for (const entry of entries.slice(0, MAX_FOLDERS)) {
+      const id = await folderId(entry);
+      if (id) list.push({ name: entry.name, id });
+    }
+    return { list, complete: entries.length <= MAX_FOLDERS };
+  }
+
+  /*
+   * Cerca su Dropbox la cartella del profilo (dall'id). fresh: rilegge l'elenco anche se è già nota (un altro
+   * dispositivo potrebbe averla rinominata). Con due cartelle dello stesso id (caso raro) vale quella con il nome.
+   */
+  async function findFolder(profileId, fresh = false) {
+    if (!PROFILE_ID.test(profileId)) throw new CloudError('path');
+    if (!fresh && folderNames.has(profileId)) return folderNames.get(profileId);
+    const { list, complete } = await scanFolders();
+    const found = list.filter((f) => f.id === profileId).map((f) => f.name).sort(preferFolder);
+    if (found.length) folderNames.set(profileId, found[0]);
+    else if (!complete) throw new CloudError('path'); // troppe cartelle: non se ne crea una nuova alla cieca
+    else folderNames.delete(profileId);
+    return found[0] || null;
+  }
+
+  // Primo nome libero: «Luca», poi «Luca (2)», «Luca (3)»… (Dropbox non distingue maiuscole e minuscole)
+  async function freeName(base, except) {
+    const taken = new Set((await listFolder('')).map((e) => e.name.toLowerCase()));
+    taken.delete(String(except || '').toLowerCase());
+    for (let n = 1; n < 100; n += 1) {
+      const name = n === 1 ? base : `${base} (${n})`;
+      if (!taken.has(name.toLowerCase())) return name;
+    }
+    throw new CloudError('path');
+  }
+
+  // La cartella va bene per questo nome di profilo? («Luca» e «Luca (2)» vanno bene per «Luca»)
+  function fitsName(folder, base) {
+    if (folder.toLowerCase() === base.toLowerCase()) return true;
+    const m = /^(.*) \((\d{1,2})\)$/.exec(folder);
+    return Boolean(m && m[1].toLowerCase() === base.toLowerCase());
+  }
+
+  // Dà alla cartella il nome del profilo: alla prima copia la crea già così, dopo la rinomina se il nome è cambiato
+  async function nameFolder(profileId, profileName) {
+    const base = baseName(profileName);
+    const current = await findFolder(profileId, true);
+    if (current && fitsName(current, base)) return false;
+    const wanted = await freeName(base, current);
+    if (!current) { folderNames.set(profileId, wanted); return true; }
+    try {
+      await rpc('files/move_v2', { from_path: dirOf(profileId), to_path: `/${wanted}`, autorename: false });
+      folderNames.set(profileId, wanted);
+    } catch (error) {
+      // Rinominata nel frattempo altrove (o nome appena preso): si resta sul nome che c'è
+      await findFolder(profileId, true);
+    }
+    return false;
   }
 
   function pad(n, len = 2) {
@@ -275,7 +392,7 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': JSON.stringify({ path, mode, mute: true }),
+        'Dropbox-API-Arg': apiArg({ path, mode, mute: true }),
       },
       body: blob,
     }), async (res) => {
@@ -283,10 +400,18 @@
     }, timeoutMs);
   }
 
+  /*
+   * Intestazione Dropbox-API-Arg: Dropbox vuole solo caratteri ASCII (gli altri come \uXXXX). Servono per i nomi
+   * delle cartelle con lettere accentate, emoji o alfabeti diversi.
+   */
+  function apiArg(value) {
+    return JSON.stringify(value).replace(/[\u007f-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  }
+
   async function download(path, max = MAX_DOWNLOAD) {
     return call(`${CONTENT}files/download`, () => ({
       method: 'POST',
-      headers: { 'Dropbox-API-Arg': JSON.stringify({ path }) },
+      headers: { 'Dropbox-API-Arg': apiArg({ path }) },
     }), (res) => readLimited(res, max), TIMEOUT_MS * 10);
   }
 
@@ -447,7 +572,7 @@
 
   // Tiene le ultime N copie automatiche di un tipo; non tocca nessun altro file
   async function rotate(profileId, kind, keep) {
-    const names = (await listFolder(`/${profileId}`))
+    const names = (await listFolder(dirOf(profileId)))
       .filter((e) => e['.tag'] === 'file' && FILE_NAMES[kind].test(e.name))
       .map((e) => e.name).sort();
     for (const name of names.slice(0, Math.max(0, names.length - keep))) await remove(profileId, name);
@@ -476,7 +601,18 @@
     st.firstDirtyAt = 0;
     setStatus('syncing');
     try {
+      // Cartella con il nome del profilo (rinominata se il nome è cambiato, ritrovata se l'ha rinominata un altro)
       const now = new Date();
+      let created = false;
+      if (folder !== profileId) {
+        // Profilo che ne segue un altro: la cartella c'è già, non se ne crea mai una
+        if (!(await findFolder(folder, true))) throw new CloudError('not-found');
+        if (full) await nameFolder(folder, (data.profile && data.profile.name) || '');
+      } else if (full || !(await findFolder(folder, true))) {
+        created = await nameFolder(folder, (data.profile && data.profile.name) || '');
+      }
+      // Cartella nuova: profilo.json per primo, è il file da cui gli altri dispositivi la riconoscono
+      if (created) await uploadProfileInfo(folder, now);
       const today = dayStamp(now);
       // Anche mentre si aspetta la scelta dell'adulto: la copia del giorno è di questo dispositivo, non sovrascrive nulla
       const needDaily = st.lastDaily !== today;
@@ -490,6 +626,7 @@
         }
         if (full) {
           st.lastFullAt = now.toISOString();
+          // Dopo l'invio riuscito: data e dispositivo dell'ultima versione delle schede
           await uploadProfileInfo(folder, now);
         }
       }
@@ -599,7 +736,8 @@
     const st = profileState(profileId);
     let entries;
     try {
-      entries = (await listFolder(`/${folder}`)).filter((e) => e['.tag'] === 'file');
+      if (!(await findFolder(folder, true))) return;
+      entries = (await listFolder(dirOf(folder))).filter((e) => e['.tag'] === 'file');
     } catch (error) {
       if (error instanceof CloudError && error.message === 'not-found') return;
       throw error;
@@ -684,6 +822,7 @@
     const folder = folderOf(profileId);
     const st = profileState(profileId);
     if (!st.conflictRev) return;
+    if (!(await findFolder(folder, true))) throw new CloudError('not-found');
     const now = new Date();
     const beforeName = `prima-${timeStamp(now)}.picspeak`;
     if (which === 'mine') {
@@ -697,7 +836,7 @@
       } catch (error) {
         if (error instanceof CloudError && error.message === 'conflict') {
           // Un'altra versione ancora, arrivata proprio ora: la domanda si ripete su quella
-          const latest = (await listFolder(`/${folder}`)).find((e) => FILE_NAMES.full.test(e.name));
+          const latest = (await listFolder(dirOf(folder))).find((e) => FILE_NAMES.full.test(e.name));
           if (latest && latest.rev) st.conflictRev = latest.rev;
           await saveStateQuiet();
         }
@@ -710,7 +849,7 @@
       // Si conserva la propria versione, poi si prendono le schede dell'altro dispositivo
       const file = await buildFile(null);
       await upload(checkPath(folder, beforeName), file.blob);
-      const entries = await listFolder(`/${folder}`);
+      const entries = await listFolder(dirOf(folder));
       const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
       const { opened, parts } = await openRemote(folder, 'attuale-completo.picspeak');
       await applyRemoteFull(parts, opened.info);
@@ -732,6 +871,7 @@
     const out = { here: backup.deviceLabel(), there: null, thereAt: null };
     if (!profileId) return out;
     try {
+      await findFolder(folderOf(profileId));
       const blob = await download(checkPath(folderOf(profileId), 'profilo.json'), 4 * 1024);
       const info = JSON.parse(await blob.text());
       if (info && typeof info === 'object') {
@@ -756,7 +896,8 @@
   async function follow(folder) {
     const profileId = currentProfileId();
     if (!profileId || !link || !PROFILE_ID.test(folder)) throw new CloudError('path');
-    const entries = await listFolder(`/${folder}`);
+    if (!(await findFolder(folder, true))) throw new CloudError('not-found');
+    const entries = await listFolder(dirOf(folder));
     const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
     if (!fullEntry) throw new CloudError('not-found');
     // Copia di sicurezza di com'era questo profilo, nella cartella scelta: se non riesce, non si cambia nulla
@@ -811,6 +952,12 @@
     if (!profileId || !enabledHere()) throw new CloudError('auth');
     if (running) await running.catch(() => {});
     const folder = folderOf(profileId);
+    if (!(await findFolder(folder, true))) {
+      // Nessuna cartella ancora: la si crea con il nome del profilo (mai per un profilo che ne segue un altro)
+      if (folder !== profileId) throw new CloudError('not-found');
+      await nameFolder(folder, data.profile && data.profile.name);
+      await uploadProfileInfo(folder, new Date());
+    }
     const now = new Date();
     const extra = kind === 'photo' && slug(label) ? `-${slug(label)}` : '';
     const name = `${kind === 'photo' ? 'foto' : 'prima'}-${timeStamp(now)}${extra}.picspeak`;
@@ -912,12 +1059,16 @@
 
   // Profili salvati su Dropbox: [{ id, name, updatedAt, device }]
   async function listProfiles() {
-    const folders = (await listFolder('')).filter((e) => e['.tag'] === 'folder' && PROFILE_ID.test(e.name));
+    const { list } = await scanFolders();
+    const folders = list.slice().sort((x, y) => preferFolder(x.name, y.name));
     const out = [];
-    for (const folder of folders.slice(0, 50)) {
+    for (const folder of folders) {
+      const { id } = folder;
+      if (out.some((p) => p.id === id)) continue;
+      folderNames.set(id, folder.name);
       let info = {};
       try {
-        const blob = await download(checkPath(folder.name, 'profilo.json'), 4096);
+        const blob = await download(checkPath(id, 'profilo.json'), 4096);
         info = JSON.parse(await blob.text()) || {};
         if (!info || typeof info !== 'object') info = {};
       } catch (error) {
@@ -925,7 +1076,8 @@
       }
       const at = typeof info.updatedAt === 'string' ? new Date(info.updatedAt) : null;
       out.push({
-        id: folder.name,
+        id,
+        folder: folder.name,
         name: cleanText(info.name, 40),
         updatedAt: at && !Number.isNaN(at.getTime()) ? at : null,
         device: cleanText(info.device, 60),
@@ -944,7 +1096,8 @@
   // Copie di un profilo: [{ kind: latest|daily|before|photo, name, date, label }], dalla più recente
   async function listCopies(profileId) {
     if (!PROFILE_ID.test(profileId)) throw new CloudError('path');
-    const files = (await listFolder(`/${profileId}`)).filter((e) => e['.tag'] === 'file');
+    if (!(await findFolder(profileId, true))) return [];
+    const files = (await listFolder(dirOf(profileId))).filter((e) => e['.tag'] === 'file');
     const copies = [];
     const fullEntry = files.find((e) => FILE_NAMES.full.test(e.name));
     if (fullEntry) {
@@ -973,12 +1126,13 @@
    * delle abitudini, se è più nuovo. Restituisce { opened, parts } (parts null se il file è protetto da password).
    */
   async function openCopy(profileId, copy) {
+    await findFolder(profileId);
     const opened = await backup.open(await download(checkPath(profileId, copy.name)));
     if (opened.info.encryption) return { opened, parts: null };
     let parts = await backup.read(opened);
     let info = opened.info;
     const deviceFiles = copy.kind === 'latest'
-      ? (await listFolder(`/${profileId}`)).filter((e) => e['.tag'] === 'file' && FILE_NAMES.device.test(e.name)).slice(0, MAX_DEVICES)
+      ? (await listFolder(dirOf(profileId))).filter((e) => e['.tag'] === 'file' && FILE_NAMES.device.test(e.name)).slice(0, MAX_DEVICES)
       : [];
     if (deviceFiles.length && parts.habits) {
       /*
