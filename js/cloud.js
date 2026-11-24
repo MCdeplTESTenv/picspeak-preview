@@ -15,6 +15,7 @@
  *   prima-AAAA-MM-GG-HHMMSS.picspeak  copia automatica prima di un ripristino o di «Cancella tutto», ultime 5
  *   foto-AAAA-MM-GG-HHMMSS[-nome].picspeak  fotografie salvate a mano dall'adulto, mai cancellate dal tool
  *   profilo.json                nome del profilo, data dell'ultima copia e dispositivo (per l'elenco del ripristino)
+ *   fotografie.json             nomi delle fotografie esattamente come li ha scritti l'adulto (nome del file → nome)
  * Ogni percorso si controlla prima di scrivere o cancellare (solo questi nomi); il tool cancella solo le sue copie
  * automatiche più vecchie.
  *
@@ -59,6 +60,7 @@
     before: /^prima-\d{4}-\d{2}-\d{2}-\d{6}\.picspeak$/,
     photo: /^foto-\d{4}-\d{2}-\d{2}-\d{6}(-[a-z0-9-]{1,30})?\.picspeak$/,
     profile: /^profilo\.json$/,
+    names: /^fotografie\.json$/,
   };
 
   // Cosa cambia nell'archivio e quale file online va aggiornato
@@ -489,7 +491,37 @@
     const file = await buildFile(null);
     await upload(checkPath(profileId, name), file.blob);
     if (kind === 'before') await rotate(profileId, 'before', KEEP_BEFORE);
+    const typed = kind === 'photo' ? cleanText(label, 40) : '';
+    if (typed) {
+      // Il nome scritto dall'adulto, con maiuscole e accenti, si ritrova uguale nell'elenco del ripristino
+      try {
+        const names = await readPhotoNames(profileId);
+        names[name] = typed;
+        await upload(checkPath(profileId, 'fotografie.json'), new Blob([JSON.stringify(names)], { type: 'application/json' }));
+      } catch (error) {
+        // Resta il nome semplificato nel nome del file
+      }
+    }
     return name;
+  }
+
+  // Nomi delle fotografie salvati su Dropbox (dato non affidabile: solo nomi di file validi e testo ripulito)
+  async function readPhotoNames(profileId) {
+    let raw = null;
+    try {
+      raw = JSON.parse(await (await download(checkPath(profileId, 'fotografie.json'), 64 * 1024)).text());
+    } catch (error) {
+      if (error instanceof CloudError && error.message !== 'not-found') throw error;
+      raw = null;
+    }
+    const out = {};
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      Object.keys(raw).slice(0, 500).forEach((key) => {
+        const text = cleanText(raw[key], 40);
+        if (FILE_NAMES.photo.test(key) && text) out[key] = text;
+      });
+    }
+    return out;
   }
 
   // ---------- Collegare e scollegare ----------
@@ -577,11 +609,15 @@
       const times = [fullEntry, habitsEntry].filter(Boolean).map((e) => Date.parse(e.server_modified)).filter(Number.isFinite);
       copies.push({ kind: 'latest', name: fullEntry.name, date: times.length ? new Date(Math.max(...times)) : null, label: '' });
     }
+    let typedNames = {};
+    if (files.some((e) => FILE_NAMES.names.test(e.name))) {
+      try { typedNames = await readPhotoNames(profileId); } catch (error) { typedNames = {}; }
+    }
     const groups = [['photo', 'foto-'], ['daily', 'giorno-'], ['before', 'prima-']];
     groups.forEach(([kind, prefix]) => {
       files.filter((e) => FILE_NAMES[kind].test(e.name)).forEach((e) => {
         const rest = e.name.slice(prefix.length).replace(/\.picspeak$/, '');
-        const label = kind === 'photo' ? rest.slice(18).replace(/-/g, ' ').trim() : '';
+        const label = kind === 'photo' ? (typedNames[e.name] || rest.slice(18).replace(/-/g, ' ').trim()) : '';
         copies.push({ kind, name: e.name, date: parseStamp(rest), label });
       });
     });

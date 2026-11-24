@@ -369,12 +369,22 @@
       await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
       return;
     }
-    const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), copies.map((c, index) => ({
-      value: String(index),
-      label: c.kind === 'photo' && c.label ? format('cloudKind_photoNamed', { name: c.label }) : t(`cloudKind_${c.kind}`),
-      help: c.kind === 'daily' && c.date ? dateText(c.date) : whenText(c.date),
-      className: c.kind === 'latest' ? 'is-primary' : '',
-    })));
+    // Copia più recente del profilo in uso: è quasi uguale a quello che c'è già sul dispositivo, quindi va in fondo,
+    // non evidenziata, con la spiegazione di quando serve (dispositivo nuovo, dopo «Cancella tutto»)
+    const same = profileId === hereId;
+    const choices = copies.map((c, index) => {
+      const kind = c.kind === 'latest' && same ? 'latestHere' : c.kind;
+      return {
+        value: String(index),
+        kind,
+        label: c.kind === 'photo' && c.label ? format('cloudKind_photoNamed', { name: c.label }) : t(`cloudKind_${kind}`),
+        // Data e, sotto, a cosa serve quella copia
+        help: format(`cloudExplain_${kind}`, { when: c.kind === 'daily' && c.date ? dateText(c.date) : whenText(c.date) }),
+        className: kind === 'latest' ? 'is-primary' : '',
+      };
+    });
+    const ordered = [...choices.filter((c) => c.kind !== 'latestHere'), ...choices.filter((c) => c.kind === 'latestHere')];
+    const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
     if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
     showNotice(t('cloudDownloading'), false, 'online');
