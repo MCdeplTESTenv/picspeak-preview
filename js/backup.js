@@ -217,7 +217,7 @@
     }
   }
 
-  async function build({ name, password, fallbackName, only, quiet }) {
+  async function build({ name, password, fallbackName, only, quiet, device }) {
     const profileName = cleanName(name);
     if (password && !cryptoAvailable()) throw new BackupError('unsupported');
     const want = (part) => !Array.isArray(only) || only.includes(part);
@@ -276,7 +276,8 @@
       app: 'PicSpeak',
       createdAt: now.toISOString(),
       profile: { id: data.profile ? data.profile.id : null, name: profileName },
-      device: deviceLabel(),
+      // Nome del dispositivo scelto dall'adulto per il backup online (es. «Tablet di scuola»), altrimenti il tipo
+      device: (typeof device === 'string' && device.trim() ? device.trim().slice(0, 60) : deviceLabel()),
       parts,
       encryption: null,
     };

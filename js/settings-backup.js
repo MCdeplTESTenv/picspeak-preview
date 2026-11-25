@@ -177,7 +177,12 @@
     return t(key) === key ? t('cloudErr_server') : t(key);
   }
 
-  async function connectDropbox() {
+  /*
+   * Collega un account Dropbox per il profilo in uso. account: chiave di un account da ricollegare (permesso scaduto);
+   * senza, se ne aggiunge uno nuovo (con un nome dato dall'adulto, se sul dispositivo ce n'è già un altro).
+   */
+  async function connectDropbox(options = {}) {
+    const { account } = options && typeof options === 'object' && !(options instanceof Event) ? options : {};
     if (!pkce) {
       prepareLink();
       showNotice(t('cloudPreparing'), false, 'online');
@@ -189,13 +194,17 @@
     const done = await ui.runDialog({
       title: t('cloudCodeTitle'),
       help: t('cloudCodeHelp'),
-      fields: [{ id: 'code', label: t('cloudCodeField'), raw: true }],
+      fields: [
+        { id: 'code', label: t('cloudCodeField'), raw: true },
+        // Più account sullo stesso dispositivo: un nome per riconoscerlo (PicSpeak non chiede a Dropbox nome o email)
+        ...(!account && cloud.listAccounts().length ? [{ id: 'name', label: t('cloudAccountName'), plain: true, maxLength: 40 }] : []),
+      ],
       primary: t('cloudCodeBtn'),
       secondary: t('cancel'),
       onSubmit: async (v) => {
         try {
-          await cloud.connect(v.code, current);
-          return true;
+          const result = await cloud.connect(v.code, current, { name: v.name, account });
+          return result && result.sameAs ? { sameAs: result.sameAs } : true;
         } catch (error) {
           return cloudErrorText(error);
         }
@@ -203,8 +212,40 @@
     });
     // Ogni collegamento usa una coppia nuova
     pkce = null;
-    if (done) showNotice(t('cloudConnected'), false, 'online');
+    if (done && done.sameAs) showNotice(format('cloudAccountSame', { name: done.sameAs }), false, 'online');
+    else if (done) showNotice(t('cloudConnected'), false, 'online');
     else ui.render();
+  }
+
+  /*
+   * Account da usare in un profilo che non ha ancora il backup online: quello unico, oppure scelto dall'adulto.
+   * Risolve con la chiave, con '' se il profilo usa già il suo, con null se l'adulto annulla.
+   * withNew: aggiunge «Collega un altro account Dropbox» (risolve con 'new').
+   */
+  async function pickAccount(withNew = false) {
+    if (cloud.isEnabledHere()) return '';
+    const accounts = cloud.listAccounts();
+    if (accounts.length === 1 && !withNew) return accounts[0].key;
+    const choices = accounts.map((a) => ({
+      value: a.key,
+      label: a.name,
+      help: format(a.profiles === 1 ? 'cloudAccountUsedOne' : 'cloudAccountUsed', { n: a.profiles }),
+    }));
+    if (withNew) choices.push({ value: 'new', label: t('cloudAccountNew'), help: t('cloudAccountNewHelp') });
+    return (await askChoice(t('cloudAccountTitle'), t('cloudAccountPick'), choices)) || null;
+  }
+
+  // Esegue una richiesta a Dropbox con l'account scelto ('' = quello del profilo in uso)
+  function viaAccount(key, fn) {
+    return key ? cloud.withAccount(key, fn) : fn();
+  }
+
+  async function enableProfile() {
+    const key = await pickAccount(true);
+    if (!key) return;
+    if (key === 'new') { await connectDropbox(); return; }
+    await cloud.enableHere(key);
+    showNotice(t('cloudConnected'), false, 'online');
   }
 
   async function disconnectDropbox() {
@@ -254,8 +295,11 @@
     const last = cloud.lastCopy();
     const lastText = last ? format('cloudLast', { date: dateText(last), time: timeText(last) }) : t('cloudLastNone');
     const synced = cloud.isSynced() ? ` ${t('cloudSyncedDevices')}` : '';
-    if (st === 'idle' || st === 'off') return lastText + (cloud.pending() ? ` ${t('cloudPending')}` : '') + synced;
-    return `${t(`cloudStatus_${st}`)} ${lastText}`;
+    const accounts = cloud.listAccounts();
+    const own = accounts.find((a) => a.here);
+    const which = accounts.length > 1 && own ? `${format('cloudAccountIs', { name: own.name })} ` : '';
+    if (st === 'idle' || st === 'off') return which + lastText + (cloud.pending() ? ` ${t('cloudPending')}` : '') + synced;
+    return `${which}${t(`cloudStatus_${st}`)} ${lastText}`;
   }
 
   /*
@@ -293,10 +337,12 @@
 
   // Questo profilo usa le schede di un profilo già su Dropbox (per esempio quello del tablet di scuola)
   async function followProfile() {
+    const account = await pickAccount();
+    if (account === null) return;
     showNotice(t('cloudListing'), false, 'online');
     let profiles;
     try {
-      profiles = (await cloud.listProfiles()).filter((p) => p.id !== cloud.folder());
+      profiles = (await viaAccount(account, () => cloud.listProfiles())).filter((p) => p.id !== cloud.folder());
     } catch (error) {
       showNotice(cloudErrorText(error), true, 'online');
       return;
@@ -320,7 +366,7 @@
     showNotice(t('cloudFollowing'), false, 'online');
     try {
       // La copia di sicurezza di com'è ora la fa cloud.follow (se non riesce, non cambia nulla)
-      await cloud.follow(folder);
+      await viaAccount(account, () => cloud.follow(folder));
       location.reload();
     } catch (error) {
       showNotice(cloudErrorText(error), true, 'online');
@@ -352,7 +398,10 @@
           const when = d.at ? format('cloudDeviceLast', { when: whenText(d.at) }) : '';
           text.append(el('small', null, [d.here ? t('cloudDeviceHere') : '', when].filter(Boolean).join(' · ')));
           row.append(text);
-          if (!d.here) {
+          if (d.here) {
+            // Il nome si cambia solo da qui: ogni dispositivo scrive solo il suo
+            row.append(ui.button(t('cloudDeviceRename'), () => close({ rename: true }), false));
+          } else {
             const btn = ui.button(t('cloudDeviceExclude'), () => close(d), false);
             btn.classList.add('dlg-btn-danger');
             row.append(btn);
@@ -363,6 +412,20 @@
       },
     });
     if (!picked) return;
+    if (picked.rename) {
+      const values = await ui.runDialog({
+        title: t('cloudDeviceNameTitle'),
+        help: t('cloudDeviceNameHelp'),
+        fields: [{ id: 'name', label: t('cloudDeviceNameField'), plain: true, maxLength: 30, value: cloud.deviceName() }],
+        primary: t('confirm'),
+        secondary: t('cancel'),
+        onSubmit: (v) => v,
+      });
+      if (!values) return;
+      await cloud.setDeviceName(values.name);
+      showNotice(t('cloudDeviceNamed'), false, 'online');
+      return;
+    }
     const ok = await ui.runDialog({
       title: t('cloudDeviceExcludeTitle'),
       help: format('cloudDeviceExcludeHelp', { device: picked.label || t('cloudDeviceUnknown') }),
@@ -403,17 +466,11 @@
     if (!cloud.isEnabledHere()) {
       // Collegato da un altro profilo: questo profilo non va su Dropbox finché l'adulto non lo decide
       wrap.append(el('p', 'settings-help backup-last', t(cloud.wasExcluded() ? 'cloudExcludedHere' : 'cloudOtherProfile')));
-      wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', ui.button(t('cloudEnableBtn'), async () => {
-        await cloud.enableHere();
-        showNotice(t('cloudConnected'), false, 'online');
-      }, true)));
+      const enableRow = el('div', 'choice-group');
+      enableRow.append(ui.button(t('cloudEnableBtn'), enableProfile, true), privacyLink());
+      wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', enableRow));
       wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
       wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
-      const offRow = el('div', 'choice-group');
-      const offBtn = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
-      offBtn.classList.add('dlg-btn-danger');
-      offRow.append(offBtn, privacyLink());
-      wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', offRow));
       return;
     }
     const status = el('p', `settings-help backup-last${['error', 'reconnect'].includes(cloud.status()) ? ' is-error' : ''}`,
@@ -425,7 +482,10 @@
     }
     if (cloud.status() === 'reconnect') {
       const control = el('div', 'choice-group');
-      control.append(ui.button(t('cloudReconnectBtn'), async () => { await cloud.disconnect(); prepareLink(); ui.render(); }, true));
+      // Si ricollega lo stesso account (stesso nome, stessi profili): basta il codice nuovo di Dropbox
+      const own = cloud.listAccounts().find((a) => a.here);
+      prepareLink();
+      control.append(ui.button(t('cloudReconnectBtn'), () => connectDropbox({ account: own && own.key }), true));
       wrap.append(ui.settingRow('cloudReconnect', 'cloudReconnectHelp', control));
     }
     wrap.append(ui.settingRow('cloudSync', 'cloudSyncHelp', ui.button(t('cloudSyncBtn'), syncDropbox, false)));
@@ -466,10 +526,12 @@
   }
 
   async function restoreFromDropbox() {
+    const account = await pickAccount();
+    if (account === null) return;
     showNotice(t('cloudListing'), false, 'online');
     let profiles;
     try {
-      profiles = await cloud.listProfiles();
+      profiles = await viaAccount(account, () => cloud.listProfiles());
     } catch (error) {
       showNotice(cloudErrorText(error), true, 'online');
       return;
@@ -490,7 +552,7 @@
     if (!profileId) return;
     let copies;
     try {
-      copies = await cloud.listCopies(profileId);
+      copies = await viaAccount(account, () => cloud.listCopies(profileId));
     } catch (error) {
       showNotice(cloudErrorText(error), true, 'online');
       return;
@@ -520,7 +582,7 @@
     showNotice(t('cloudDownloading'), false, 'online');
     let result;
     try {
-      result = await cloud.openCopy(profileId, copy);
+      result = await viaAccount(account, () => cloud.openCopy(profileId, copy));
     } catch (error) {
       if (error instanceof backup.BackupError) await showError(error);
       else showNotice(cloudErrorText(error), true, 'online');
@@ -942,7 +1004,7 @@
 
     // 3. Cancellazione e ripartenza come alla prima apertura (prima una copia su Dropbox, se collegato, poi si scollega)
     await cloudSafetyCopy('reset');
-    if (cloud && cloud.isConnected()) await cloud.disconnect();
+    if (cloud && cloud.isConnected()) await cloud.disconnectAll();
     try {
       // Prima le abitudini in memoria: un salvataggio rimasto in sospeso non deve riscriverle dopo
       if (predict) await predict.clearAll();

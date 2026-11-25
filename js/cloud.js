@@ -85,8 +85,17 @@
 
   class CloudError extends Error {}
 
-  let link = null; // permesso salvato
-  let access = null; // { token, until } solo in memoria
+  /*
+   * Collegamenti salvati sul dispositivo (chiave cloudDropbox, formato 2):
+   *   { format: 2, accounts: { a…: { refreshToken, connectedAt, name } },
+   *     profiles: { id profilo: { account, folder?, device?, deviceName? } }, excludedProfiles: [] }
+   * Ogni profilo usa il suo account Dropbox (anche lo stesso di un altro profilo). name è il nome dato dall'adulto
+   * all'account: PicSpeak non chiede a Dropbox né nome né email. Il formato 1 (un solo permesso per il dispositivo)
+   * si converte da solo (normalizeLink).
+   */
+  let link = null;
+  const accessByAccount = new Map(); // account → { token, until }, solo in memoria
+  let accountOverride = null; // account da usare per le chiamate fuori dal profilo (ripristino, scelta del profilo)
   let state = {};
   let status = 'off'; // off | idle | syncing | waiting (senza rete) | error | reconnect
   let lastChangeAt = 0;
@@ -317,6 +326,9 @@
       // Solo i permessi che servono, anche se sulla console di Dropbox ne venissero aggiunti altri
       scope: SCOPES,
     });
+    // Con un account già collegato si chiede sempre di rientrare: il browser potrebbe essere ancora aperto sul
+    // Dropbox di un'altra famiglia (tablet condiviso)
+    if (link && Object.keys(link.accounts).length) params.set('force_reauthentication', 'true');
     return `${AUTH_URL}?${params}`;
   }
 
@@ -334,16 +346,52 @@
     });
   }
 
-  function keepAccess(body) {
+  function keepAccess(body, key) {
     const seconds = Number.isFinite(body.expires_in) ? body.expires_in : 3600;
-    access = { token: body.access_token, until: Date.now() + Math.max(60, seconds - 120) * 1000 };
+    accessByAccount.set(key, { token: body.access_token, until: Date.now() + Math.max(60, seconds - 120) * 1000 });
+  }
+
+  // Account delle chiamate: quello scelto per un'operazione fuori dal profilo, altrimenti quello del profilo in uso
+  function activeAccount() {
+    if (accountOverride && link && link.accounts[accountOverride]) return accountOverride;
+    const own = profileLink(currentProfileId());
+    return own ? own.account : null;
+  }
+
+  // Account per un profilo che non usa ancora Dropbox: quello scelto, oppure l'unico collegato sul dispositivo
+  function accountForNewUse() {
+    const key = activeAccount();
+    if (key) return key;
+    const keys = link ? Object.keys(link.accounts) : [];
+    return keys.length === 1 ? keys[0] : null;
   }
 
   async function accessToken() {
-    if (access && access.until > Date.now()) return access.token;
-    if (!link || !link.refreshToken) throw new CloudError('auth');
-    keepAccess(await tokenRequest({ grant_type: 'refresh_token', refresh_token: link.refreshToken }));
-    return access.token;
+    const key = activeAccount();
+    const account = key && link ? link.accounts[key] : null;
+    if (!account || !account.refreshToken) throw new CloudError('auth');
+    const cached = accessByAccount.get(key);
+    if (cached && cached.until > Date.now()) return cached.token;
+    keepAccess(await tokenRequest({ grant_type: 'refresh_token', refresh_token: account.refreshToken }), key);
+    return accessByAccount.get(key).token;
+  }
+
+  // Esegue fn con un account scelto (es. per guardare i profili di un altro Dropbox già collegato)
+  async function withAccount(key, fn) {
+    if (!link || !link.accounts[key]) throw new CloudError('auth');
+    // Le copie automatiche del profilo in uso aspettano: non devono mai partire con l'account sbagliato
+    if (running) await running.catch(() => {});
+    if (pulling) await pulling.catch(() => {});
+    const before = accountOverride;
+    accountOverride = key;
+    try {
+      return await fn();
+    } finally {
+      accountOverride = before;
+      // Nomi delle cartelle visti con l'altro account: non valgono per questo
+      folderNames.clear();
+      folderIds.clear();
+    }
   }
 
   /*
@@ -366,7 +414,7 @@
       return { value: await read(res) };
     }, timeoutMs);
     if (outcome.retry && !retried) {
-      access = null;
+      accessByAccount.delete(activeAccount());
       return call(url, makeOptions, read, timeoutMs, true);
     }
     if (outcome.retry) throw new CloudError('auth');
@@ -453,10 +501,63 @@
     return data.profile && PROFILE_ID.test(data.profile.id) ? data.profile.id : null;
   }
 
+  const ACCOUNT_KEY = /^a[0-9a-f]{8}$/;
+
+  function randomHex(bytes) {
+    return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Collegamenti salvati → formato 2 controllato (dato del dispositivo, ma letto con prudenza)
+  function normalizeLink(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const out = { format: 2, accounts: {}, profiles: {}, excludedProfiles: [] };
+    const okDevice = (v) => (typeof v === 'string' && DEVICE_CODE.test(v) ? v : undefined);
+    const okFolder = (v) => (typeof v === 'string' && PROFILE_ID.test(v) ? v : undefined);
+    if (raw.format === 2) {
+      Object.entries(raw.accounts && typeof raw.accounts === 'object' ? raw.accounts : {}).forEach(([key, a]) => {
+        if (!ACCOUNT_KEY.test(key) || !a || typeof a.refreshToken !== 'string' || !a.refreshToken) return;
+        out.accounts[key] = {
+          refreshToken: a.refreshToken, connectedAt: String(a.connectedAt || ''), name: cleanText(a.name, 40),
+          print: typeof a.print === 'string' && /^[0-9a-f]{64}$/.test(a.print) ? a.print : undefined,
+        };
+      });
+      Object.entries(raw.profiles && typeof raw.profiles === 'object' ? raw.profiles : {}).forEach(([id, p]) => {
+        if (!PROFILE_ID.test(id) || !p || !out.accounts[p.account]) return;
+        out.profiles[id] = { account: p.account, folder: okFolder(p.folder), device: okDevice(p.device), deviceName: cleanText(p.deviceName, 30) || undefined };
+      });
+    } else if (typeof raw.refreshToken === 'string' && raw.refreshToken) {
+      // Formato 1 (fino al 25/11/2026): un solo permesso per tutto il dispositivo
+      const key = `a${randomHex(4)}`;
+      out.accounts[key] = { refreshToken: raw.refreshToken, connectedAt: String(raw.connectedAt || ''), name: 'Dropbox' };
+      const ids = new Set([...(Array.isArray(raw.profileIds) ? raw.profileIds : [])].filter((id) => PROFILE_ID.test(String(id))));
+      ids.forEach((id) => {
+        out.profiles[id] = {
+          account: key,
+          folder: okFolder(raw.folders && raw.folders[id]),
+          device: okDevice(raw.devices && raw.devices[id]),
+        };
+      });
+    } else {
+      return null;
+    }
+    out.excludedProfiles = (Array.isArray(raw.excludedProfiles) ? raw.excludedProfiles : []).filter((id) => PROFILE_ID.test(String(id))).slice(-20);
+    return Object.keys(out.accounts).length ? out : null;
+  }
+
+  async function saveLink() {
+    if (link && Object.keys(link.accounts).length) await storage.set(LINK_KEY, link);
+    else { link = null; await storage.remove(LINK_KEY); }
+  }
+
+  function profileLink(id) {
+    const p = id && link ? link.profiles[id] : null;
+    return p && link.accounts[p.account] ? p : null;
+  }
+
   // Cartella su Dropbox del profilo: la sua, oppure quella del profilo seguito da un altro dispositivo
   function folderOf(localId) {
-    const mapped = link && link.folders && typeof link.folders === 'object' ? link.folders[localId] : null;
-    return typeof mapped === 'string' && PROFILE_ID.test(mapped) ? mapped : localId;
+    const p = profileLink(localId);
+    return p && typeof p.folder === 'string' && PROFILE_ID.test(p.folder) ? p.folder : localId;
   }
 
   /*
@@ -464,15 +565,28 @@
    * Uno per profilo: due profili dello stesso dispositivo che seguono la stessa cartella non si sovrascrivono.
    */
   function deviceId() {
-    const id = currentProfileId();
-    if (!link || !id) return null;
-    const devices = link.devices && typeof link.devices === 'object' && !Array.isArray(link.devices) ? link.devices : {};
-    if (typeof devices[id] !== 'string' || !/^d[0-9a-f]{12}$/.test(devices[id])) {
-      devices[id] = `d${Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
-      link.devices = devices;
-      storage.set(LINK_KEY, link).catch(() => {});
+    const p = profileLink(currentProfileId());
+    if (!p) return null;
+    if (typeof p.device !== 'string' || !DEVICE_CODE.test(p.device)) {
+      p.device = `d${randomHex(6)}`;
+      saveLink().catch(() => {});
     }
-    return devices[id];
+    return p.device;
+  }
+
+  // Nome di questo dispositivo scelto dall'adulto (es. «Tablet di scuola»), altrimenti il tipo («iPad, Safari»)
+  function deviceName() {
+    const p = profileLink(currentProfileId());
+    return (p && p.deviceName) || backup.deviceLabel();
+  }
+
+  async function setDeviceName(name) {
+    const p = profileLink(currentProfileId());
+    if (!p) throw new CloudError('auth');
+    p.deviceName = cleanText(name, 30) || undefined;
+    await saveLink();
+    // Il nome viaggia con il file delle parole usate e con profilo.json: si rimandano alla prossima copia
+    markDirty('habits');
   }
 
   // Il profilo in uso segue la cartella di un altro dispositivo, o un altro dispositivo segue la sua?
@@ -483,19 +597,44 @@
 
   // Il backup online è attivo per il profilo in uso?
   function enabledHere() {
-    const id = currentProfileId();
-    return Boolean(id && link && Array.isArray(link.profileIds) && link.profileIds.includes(id));
+    return Boolean(profileLink(currentProfileId()));
   }
 
-  // Attiva il backup online anche per il profilo in uso (scelta dell'adulto, nelle impostazioni con PIN)
-  async function enableHere() {
+  function attachProfile(id, account, extra = {}) {
+    const old = link.profiles[id];
+    link.profiles[id] = { account, ...(old && old.account === account ? { device: old.device, deviceName: old.deviceName } : {}), ...extra };
+    link.excludedProfiles = link.excludedProfiles.filter((x) => x !== id);
+  }
+
+  // Attiva il backup online per il profilo in uso con un account già collegato (scelta dell'adulto, con PIN)
+  async function enableHere(account) {
     const id = currentProfileId();
-    if (!id || !link) throw new CloudError('auth');
-    if (!Array.isArray(link.profileIds)) link.profileIds = [];
-    if (!link.profileIds.includes(id)) link.profileIds.push(id);
-    if (Array.isArray(link.excludedProfiles)) link.excludedProfiles = link.excludedProfiles.filter((x) => x !== id);
-    await storage.set(LINK_KEY, link);
+    const key = account || (link && Object.keys(link.accounts).length === 1 ? Object.keys(link.accounts)[0] : null);
+    if (!id || !link || !link.accounts[key]) throw new CloudError('auth');
+    attachProfile(id, key);
+    await saveLink();
     tick(true);
+  }
+
+  // Account collegati su questo dispositivo: [{ key, name, profiles (quanti profili lo usano), here }]
+  function listAccounts() {
+    if (!link) return [];
+    const here = profileLink(currentProfileId());
+    return Object.entries(link.accounts).map(([key, a]) => ({
+      key,
+      name: a.name || 'Dropbox',
+      profiles: Object.values(link.profiles).filter((p) => p.account === key).length,
+      here: Boolean(here && here.account === key),
+    }));
+  }
+
+  // Nome libero per un account nuovo: «Dropbox», «Dropbox 2»…
+  function freeAccountName(name) {
+    const base = cleanText(name, 40) || 'Dropbox';
+    const used = new Set(listAccounts().map((a) => a.name.toLowerCase()));
+    if (!used.has(base.toLowerCase())) return base;
+    for (let n = 2; n < 100; n += 1) if (!used.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
+    return base;
   }
 
   // «Solo Wi-Fi» scelto per internet e il browser dice che la rete non è Wi-Fi: gli invii automatici aspettano
@@ -570,13 +709,13 @@
 
   // Prepara la copia senza scrivere nulla (quiet). Le modifiche fatte intanto dall'adulto restano segnate da inviare
   async function buildFile(only) {
-    return backup.create({ name: (data.profile && data.profile.name) || '', password: '', only, quiet: true });
+    return backup.create({ name: (data.profile && data.profile.name) || '', password: '', only, quiet: true, device: deviceName() });
   }
 
   async function uploadProfileInfo(profileId, at) {
     const info = {
       format: 'picspeak', kind: 'cloud-profile', id: profileId,
-      name: (data.profile && data.profile.name) || '', updatedAt: at.toISOString(), device: backup.deviceLabel(),
+      name: (data.profile && data.profile.name) || '', updatedAt: at.toISOString(), device: deviceName(),
     };
     await upload(checkPath(profileId, 'profilo.json'), new Blob([JSON.stringify(info)], { type: 'application/json' }));
   }
@@ -776,11 +915,10 @@
     delete state[profileId];
     await saveState();
     if (link) {
-      if (Array.isArray(link.profileIds)) link.profileIds = link.profileIds.filter((id) => id !== profileId);
-      if (link.folders) delete link.folders[profileId];
-      if (link.devices) delete link.devices[profileId];
-      link.excludedProfiles = [...new Set([...(Array.isArray(link.excludedProfiles) ? link.excludedProfiles : []), profileId])].slice(-20);
-      await storage.set(LINK_KEY, link);
+      // L'account resta collegato sul dispositivo (si può riusare); il profilo non lo usa più
+      delete link.profiles[profileId];
+      link.excludedProfiles = [...new Set([...link.excludedProfiles, profileId])].slice(-20);
+      await saveLink();
     }
     setStatus('idle');
   }
@@ -795,7 +933,7 @@
 
   function wasExcluded() {
     const id = currentProfileId();
-    return Boolean(id && link && Array.isArray(link.excludedProfiles) && link.excludedProfiles.includes(id));
+    return Boolean(id && link && link.excludedProfiles.includes(id));
   }
 
   // Dispositivi che usano il profilo in uso: [{ id, label, at, here }] (questo dispositivo per primo)
@@ -815,11 +953,11 @@
       return {
         id,
         here: id === mine,
-        label: id === mine ? backup.deviceLabel() : ((layers[id] && layers[id].device) || ''),
+        label: id === mine ? deviceName() : ((layers[id] && layers[id].device) || ''),
         at: Number.isNaN(at) ? null : new Date(at),
       };
     }).filter((d) => !excluded.includes(d.id));
-    if (!out.some((d) => d.here)) out.push({ id: mine, here: true, label: backup.deviceLabel(), at: null });
+    if (!out.some((d) => d.here)) out.push({ id: mine, here: true, label: deviceName(), at: null });
     return out.sort((x, y) => (y.here - x.here) || ((y.at || 0) - (x.at || 0))).slice(0, MAX_DEVICES + 1);
   }
 
@@ -937,13 +1075,19 @@
   }
 
   // Ricontrolla e, se sono arrivate schede nuove, ricarica la pagina (mai mentre il bambino le sta usando)
+  let pulling = null; // lettura degli arrivi in corso (withAccount la aspetta)
+
   async function pullAndApply(apply) {
-    if (!enabledHere() || !hasNetwork() || cellularOnly() || status === 'reconnect') return;
+    if (!enabledHere() || !hasNetwork() || cellularOnly() || status === 'reconnect' || accountOverride || pulling) return;
     if (running) await running.catch(() => {});
+    if (accountOverride) return;
+    pulling = pullNow({ apply: apply && !isAdult() });
     try {
-      await pullNow({ apply: apply && !isAdult() });
+      await pulling;
     } catch (error) {
       return;
+    } finally {
+      pulling = null;
     }
     if (reloadNeeded && typeof window.PicSpeak.onCloudReload === 'function') window.PicSpeak.onCloudReload();
     else if (reloadNeeded) location.reload();
@@ -1006,7 +1150,7 @@
   // Da dove viene l'altra versione (per la domanda all'adulto): quando e da che tipo di dispositivo
   async function conflictInfo() {
     const profileId = currentProfileId();
-    const out = { here: backup.deviceLabel(), there: null, thereAt: null };
+    const out = { here: deviceName(), there: null, thereAt: null };
     if (!profileId) return out;
     try {
       await findFolder(folderOf(profileId));
@@ -1033,7 +1177,10 @@
    */
   async function follow(folder) {
     const profileId = currentProfileId();
-    if (!profileId || !link || !PROFILE_ID.test(folder)) throw new CloudError('path');
+    const account = accountForNewUse();
+    if (!profileId || !link || !account || !PROFILE_ID.test(folder)) throw new CloudError('path');
+    // Le chiamate di follow usano questo account anche prima che il profilo sia collegato
+    if (!accountOverride || accountOverride !== account) return withAccount(account, () => follow(folder));
     if (!(await findFolder(folder, true))) throw new CloudError('not-found');
     const entries = await listFolder(dirOf(folder));
     const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
@@ -1041,12 +1188,9 @@
     // Copia di sicurezza di com'era questo profilo, nella cartella scelta: se non riesce, non si cambia nulla
     const before = await buildFile(null);
     await upload(checkPath(folder, `prima-${timeStamp(new Date())}.picspeak`), before.blob, 'add');
-    if (!Array.isArray(link.profileIds)) link.profileIds = [];
-    if (!link.profileIds.includes(profileId)) link.profileIds.push(profileId);
-    link.folders = { ...(link.folders && typeof link.folders === 'object' ? link.folders : {}), [profileId]: folder };
-    if (Array.isArray(link.excludedProfiles)) link.excludedProfiles = link.excludedProfiles.filter((x) => x !== profileId);
+    attachProfile(profileId, account, { folder: folder === profileId ? undefined : folder });
     deviceId();
-    await storage.set(LINK_KEY, link);
+    await saveLink();
     const st = profileState(profileId);
     Object.assign(st, { dirtyFull: false, dirtyHabits: false, firstDirtyAt: 0, conflictRev: null, legacyClean: true });
     const { opened, parts } = await openRemote(folder, fullEntry.name);
@@ -1065,7 +1209,7 @@
   }
 
   async function tick(force) {
-    if (!ready) return;
+    if (!ready || accountOverride) return;
     if (due(force)) await runSync();
   }
 
@@ -1138,7 +1282,20 @@
 
   // ---------- Collegare e scollegare ----------
 
-  async function connect(code, pkce) {
+  /*
+   * Collega un account Dropbox con il codice incollato dall'adulto e lo usa per il profilo in uso.
+   * name: nome dato dall'adulto all'account (per riconoscerlo tra gli altri); account: chiave di un account già
+   * collegato da ricollegare (permesso scaduto), altrimenti se ne aggiunge uno nuovo.
+   */
+  // Impronta dell'account Dropbox (SHA-256 del suo codice, che Dropbox manda con il permesso): serve solo a capire
+  // se due collegamenti sono lo stesso Dropbox. Non è un dato leggibile e non lascia mai il dispositivo.
+  async function accountPrint(body) {
+    if (!body || typeof body.account_id !== 'string' || !body.account_id) return '';
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`picspeak:${body.account_id}`));
+    return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function connect(code, pkce, { name, account } = {}) {
     const clean = String(code || '').trim();
     if (!clean || clean.length > 400 || !/^[A-Za-z0-9_\-.~]+$/.test(clean) || !pkce) throw new CloudError('code');
     let body;
@@ -1148,32 +1305,93 @@
       throw new CloudError(error.message === 'network' ? 'network' : 'code');
     }
     if (typeof body.refresh_token !== 'string' || !body.refresh_token) throw new CloudError('code');
-    // Il backup online parte solo per il profilo in uso: gli altri si attivano uno per uno
-    link = { refreshToken: body.refresh_token, connectedAt: new Date().toISOString(), profileIds: [currentProfileId()].filter(Boolean), folders: {} };
-    deviceId();
-    keepAccess(body);
-    // Di proposito non si chiede nulla dell'account Dropbox (nome, email): al tool serve solo la sua cartella
-    await storage.set(LINK_KEY, link);
-    setStatus('idle');
-    tick(true);
-  }
-
-  async function disconnect() {
-    const had = link;
-    if (had) {
-      try {
-        // Dropbox ritira il permesso: anche chi avesse una copia del dispositivo non potrebbe più usarlo
-        await rpc('auth/token/revoke', null);
-      } catch (error) {
-        // Senza rete il permesso resta valido su Dropbox ma si cancella comunque da qui
+    if (!link) link = { format: 2, accounts: {}, profiles: {}, excludedProfiles: [] };
+    const now = new Date().toISOString();
+    const print = await accountPrint(body);
+    let key = account && link.accounts[account] ? account : null;
+    let sameAs = null;
+    if (key) {
+      // Ricollegamento: deve essere lo stesso Dropbox, altrimenti tutti i profili dell'account cambierebbero Dropbox
+      const old = link.accounts[key].print;
+      if (old && print && old !== print) {
+        // Il permesso appena dato dall'altro Dropbox non serve: lo si ritira subito
+        try {
+          await request(`${API}auth/token/revoke`, { method: 'POST', headers: { Authorization: `Bearer ${body.access_token}` } }, () => null);
+        } catch (error) { /* senza rete resta valido su Dropbox, ma non si salva qui */ }
+        throw new CloudError('other-account');
+      }
+      link.accounts[key].refreshToken = body.refresh_token;
+      link.accounts[key].connectedAt = now;
+      if (print) link.accounts[key].print = print;
+    } else {
+      // Lo stesso Dropbox di un account già collegato: si usa quello (e lo si dice all'adulto)
+      const same = print ? Object.entries(link.accounts).find(([, a]) => a.print === print) : null;
+      if (same) {
+        [key] = same;
+        sameAs = same[1].name || 'Dropbox';
+        link.accounts[key].refreshToken = body.refresh_token;
+        link.accounts[key].connectedAt = now;
+      } else {
+        key = `a${randomHex(4)}`;
+        link.accounts[key] = { refreshToken: body.refresh_token, connectedAt: now, name: freeAccountName(name), print: print || undefined };
       }
     }
-    // Le abitudini degli altri dispositivi scaricate per i profili collegati si cancellano da qui
-    const ids = had ? [...new Set([...(Array.isArray(had.profileIds) ? had.profileIds : []), ...Object.keys(had.devices || {})])] : [];
-    for (const id of ids) if (PROFILE_ID.test(id)) await storage.remove(LAYERS_PREFIX + id);
+    // Il backup online parte solo per il profilo in uso: gli altri si attivano uno per uno
+    const id = currentProfileId();
+    if (id && (!profileLink(id) || !account)) attachProfile(id, key);
+    keepAccess(body, key);
+    // Di proposito non si chiede nulla dell'account Dropbox (nome, email): al tool serve solo la sua cartella
+    await saveLink();
+    deviceId();
+    setStatus('idle');
+    tick(true);
+    return { sameAs };
+  }
+
+  // Ritira su Dropbox il permesso di un account e lo toglie dal dispositivo
+  async function revokeAccount(key) {
+    if (!link || !link.accounts[key]) return;
+    try {
+      // Dropbox ritira il permesso: anche chi avesse una copia del dispositivo non potrebbe più usarlo
+      await withAccount(key, () => rpc('auth/token/revoke', null));
+    } catch (error) {
+      // Senza rete il permesso resta valido su Dropbox ma si cancella comunque da qui
+    }
+    delete link.accounts[key];
+    accessByAccount.delete(key);
+    Object.keys(link.profiles).forEach((id) => { if (link.profiles[id].account === key) delete link.profiles[id]; });
+  }
+
+  // Account che nessun profilo usa più: si ritira il permesso
+  async function dropUnusedAccounts() {
+    if (!link) return;
+    const used = new Set(Object.values(link.profiles).map((p) => p.account));
+    for (const key of Object.keys(link.accounts)) if (!used.has(key)) await revokeAccount(key);
+  }
+
+  // «Scollega» nel profilo in uso: il profilo smette di usare Dropbox; l'account si ritira se non serve ad altri
+  async function disconnect() {
+    const id = currentProfileId();
+    if (!link || !id) return;
+    await storage.remove(LAYERS_PREFIX + id);
+    if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
+    delete link.profiles[id];
+    delete state[id];
+    await saveState();
+    await dropUnusedAccounts();
+    await saveLink();
+    setStatus(link ? 'idle' : 'off');
+  }
+
+  // «Cancella tutto»: tutti gli account ritirati e tolti dal dispositivo
+  async function disconnectAll() {
+    if (link) {
+      for (const id of Object.keys(link.profiles)) if (PROFILE_ID.test(id)) await storage.remove(LAYERS_PREFIX + id);
+      for (const key of Object.keys(link.accounts)) await revokeAccount(key);
+    }
     if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
     link = null;
-    access = null;
+    accessByAccount.clear();
     await storage.remove(LINK_KEY);
     setStatus('off');
   }
@@ -1184,10 +1402,10 @@
     await storage.remove(LAYERS_PREFIX + profileId);
     if (state[profileId]) { delete state[profileId]; await saveState(); }
     if (!link) return;
-    if (Array.isArray(link.profileIds)) link.profileIds = link.profileIds.filter((id) => id !== profileId);
-    if (link.folders) delete link.folders[profileId];
-    if (link.devices) delete link.devices[profileId];
-    await storage.set(LINK_KEY, link);
+    delete link.profiles[profileId];
+    link.excludedProfiles = link.excludedProfiles.filter((x) => x !== profileId);
+    await dropUnusedAccounts();
+    await saveLink();
   }
 
   // ---------- Ripristino da Dropbox ----------
@@ -1318,11 +1536,28 @@
 
   let started = false;
 
+  // Collegamenti di profili che non esistono più (eliminati da una versione vecchia): via, e via gli account inutili
+  async function pruneLink() {
+    if (!link) return;
+    const existing = new Set((await storage.getAllRecords('profiles')).map((p) => p && p.id));
+    let changed = false;
+    Object.keys(link.profiles).forEach((id) => { if (!existing.has(id)) { delete link.profiles[id]; changed = true; } });
+    if (changed) { await dropUnusedAccounts(); await saveLink(); }
+  }
+
+  async function loadLink() {
+    const raw = await storage.get(LINK_KEY);
+    link = normalizeLink(raw);
+    accessByAccount.clear();
+    // Formato vecchio: si salva subito convertito (la conversione dà un codice nuovo all'account)
+    if (link && raw.format !== 2) await saveLink();
+  }
+
   async function start() {
     if (started) return;
     started = true;
-    link = await storage.get(LINK_KEY);
-    if (!link || typeof link.refreshToken !== 'string') link = null;
+    await loadLink();
+    await pruneLink().catch(() => {});
     await loadState();
     storage.onChange(onStorageChange);
     ready = true;
@@ -1338,7 +1573,6 @@
       pullAndApply(true);
     });
     setTimeout(() => tick(false), 5000);
-    if (!link) return;
     // Abitudini degli altri dispositivi già scaricate: valgono subito, anche senza rete
     await restoreLayers().catch(() => {});
     // Appena aperta l'app si possono applicare le schede arrivate da altri dispositivi (poi solo all'uscita dall'adulto)
@@ -1370,6 +1604,11 @@
     CloudError,
     isConfigured,
     isConnected: () => Boolean(link),
+    listAccounts,
+    withAccount,
+    disconnectAll,
+    deviceName,
+    setDeviceName,
     isEnabledHere: enabledHere,
     enableHere,
     status: () => status,
@@ -1400,6 +1639,6 @@
     listCopies,
     openCopy,
     // Per i test
-    _test: { classify, checkPath, slug, parseStamp, rotate, markDirty, due, start, setLink: (value) => { link = value; access = null; }, state: () => state, link: () => link, FILE_NAMES, pullNow, pullAndApply, restoreLayers },
+    _test: { classify, checkPath, slug, parseStamp, rotate, markDirty, due, start, setLink: (value) => { link = normalizeLink(value); accessByAccount.clear(); }, normalizeLink, state: () => state, link: () => link, FILE_NAMES, pullNow, pullAndApply, restoreLayers, loadLink },
   };
 })();
