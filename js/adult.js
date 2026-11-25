@@ -69,6 +69,7 @@
     settings: document.getElementById('settings-screen'),
     settingsBody: document.getElementById('settings-body'),
     settingsBack: document.getElementById('btn-settings-back'),
+    settingsProfile: document.getElementById('settings-profile'),
   };
 
   let inactivityTimer = null;
@@ -1494,7 +1495,20 @@
       render: [renderComingSection] },
   ];
 
+  // Accanto al titolo «Impostazioni»: il nome del profilo in uso, perché le scelte valgono solo per lui.
+  // Si aggiorna a ogni disegno della pagina (anche dopo una rinomina o un cambio di lingua).
+  function showSettingsProfile() {
+    const tag = el.settingsProfile;
+    const profiles = window.PicSpeak.profiles;
+    if (!tag) return;
+    const name = profiles && data.profile ? profiles.displayName(data.profile) : '';
+    tag.textContent = name;
+    tag.title = name;
+    tag.hidden = !name;
+  }
+
   function renderSettings() {
+    showSettingsProfile();
     const layout = document.createElement('div');
     layout.className = 'settings-layout';
     layout.classList.toggle('show-panel', showPanelOnPhone);
