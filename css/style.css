@@ -1765,6 +1765,14 @@ body > .adult-bar { order: 0; }
 /* Elenco dei dispositivi del backup online: testo a sinistra, «Escludi» a destra (sotto, se lo spazio non basta) */
 .choice-option.cloud-device { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; cursor: default; }
 .cloud-device-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
+/* Elenco delle copie online del profilo in uso: la copia a sinistra, il cestino a destra (tocco di 64px) */
+.cloud-copy-row { display: flex; align-items: center; gap: 8px; }
+.cloud-copy-row .choice-option { flex: 1 1 auto; min-width: 0; }
+.cloud-copy-delete {
+  flex: 0 0 64px; height: 64px; display: flex; align-items: center; justify-content: center; padding: 0;
+  font: inherit; color: #b3261e; cursor: pointer; background: #ffffff; border: 2px solid #e0a3a0; border-radius: 12px;
+}
+.cloud-copy-delete:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .name-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .name-input {
   flex: 1 1 200px; min-height: 48px; padding: 0 12px; font-size: 18px; font-family: inherit;

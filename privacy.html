@@ -21,8 +21,39 @@
   <main class="guide">
     <h1>Privacy</h1>
     <p class="lead">PicSpeak non raccoglie dati. Non ci sono account, server di PicSpeak, pubblicità o statistiche.</p>
+
+    <h2>Cookie e dati sul dispositivo</h2>
     <ul>
-      <li>Schede, foto, abitudini d’uso e impostazioni restano sul dispositivo, nel browser.</li>
+      <li>PicSpeak <strong>non usa cookie</strong>: né di profilazione, né di statistica, né di terze parti. Non ci sono
+        pixel, contatori o script di altri siti.</li>
+      <li>Schede, foto, abitudini d’uso, impostazioni e impronta del PIN (mai il PIN in chiaro) restano sul dispositivo,
+        nella memoria del browser (IndexedDB). Una copia dei file del tool e dei pacchetti di simboli scaricati serve per usarlo senza internet. Dopo un ricaricamento, una nota di sessione di pochi istanti fa
+        riaprire la stessa pagina.</li>
+      <li>Questi dati servono solo a far funzionare PicSpeak e nessuno li riceve: per questo non serve un banner per il
+        consenso. Si cancellano con <strong>Cancella tutto</strong> nelle impostazioni o cancellando i dati del sito nel
+        browser.</li>
+    </ul>
+
+    <h2>Servizi esterni</h2>
+    <p>Come ogni sito, chi risponde a una richiesta vede l’indirizzo IP e il tipo di browser. PicSpeak contatta solo:</p>
+    <ul>
+      <li><strong>GitHub Pages</strong>, che ospita il sito: quando si apre PicSpeak, arriva un aggiornamento o si scarica un
+        pacchetto di simboli.</li>
+      <li><strong>ARASAAC</strong> (arasaac.org), quando si cercano simboli online: riceve solo la parola cercata e
+        invia le immagini.</li>
+      <li><strong>MyMemory</strong> (mymemory.translated.net), solo se per cercare un simbolo serve tradurre la parola
+        in inglese: riceve solo quella parola.</li>
+      <li><strong>jsDelivr</strong> (cdn.jsdelivr.net), solo con le emoji Twemoji attive: la ricerca avviene sul
+        dispositivo, jsDelivr non riceve la parola ma vede quali emoji vengono mostrate.</li>
+      <li>Con la ricerca online spenta (Impostazioni › Generale › Internet e consumo dati) questi servizi di ricerca non
+        vengono mai contattati.</li>
+      <li>Le <strong>voci</strong> sono quelle del dispositivo. Le voci segnate «solo con internet» sono del produttore
+        del browser o del sistema (per esempio Google, Microsoft, Apple), che riceve il testo da leggere: per evitarlo
+        scegliete una voce senza quella scritta.</li>
+    </ul>
+
+    <h2>Backup online (Dropbox)</h2>
+    <ul>
       <li>Se l’adulto collega il <strong>backup online</strong>, PicSpeak salva una copia solo nella cartella
         <code>Applicazioni/PicSpeak</code> del suo Dropbox, e solo per i profili per cui lo attiva. La copia passa
         direttamente dal dispositivo a Dropbox: nessun altro la riceve. PicSpeak non vede e non tocca gli altri file del
@@ -32,7 +63,6 @@
         restituisce a Dropbox; le copie già salvate restano nel Dropbox dell’adulto, che può cancellarle quando vuole.</li>
       <li>Le copie su Dropbox non hanno una password propria: le protegge l’account Dropbox. Usate una password sicura e
         attivate la verifica in due passaggi di Dropbox.</li>
-      <li>Quando si cercano nuovi simboli online, esce solo la parola cercata (o il codice dell’emoji).</li>
     </ul>
     <p class="lang-switch"><a href="privacy-en.html" hreflang="en" lang="en">Read in English</a></p>
   </main>

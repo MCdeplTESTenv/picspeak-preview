@@ -21,8 +21,40 @@
   <main class="guide">
     <h1>Privacy</h1>
     <p class="lead">PicSpeak collects no data. There are no accounts, no PicSpeak servers, no ads and no analytics.</p>
+
+    <h2>Cookies and data on the device</h2>
     <ul>
-      <li>Boards, photos, usage habits and settings stay on the device, in the browser.</li>
+      <li>PicSpeak <strong>uses no cookies</strong>: no profiling, analytics or third-party cookies. There are no
+        pixels, counters or scripts from other sites.</li>
+      <li>Boards, photos, usage habits, settings and the PIN fingerprint (never the PIN itself) stay on the device, in the
+        browser’s storage (IndexedDB).
+        A copy of the tool’s files and of the downloaded symbol packs lets it work without internet. After a reload, a session note lasting a few moments
+        reopens the same page.</li>
+      <li>This data is only used to make PicSpeak work and nobody receives it: that is why no consent banner is needed.
+        It is deleted with <strong>Delete everything</strong> in the settings or by clearing the site’s data in the
+        browser.</li>
+    </ul>
+
+    <h2>External services</h2>
+    <p>As with any website, whoever answers a request sees the IP address and the browser type. PicSpeak only contacts:</p>
+    <ul>
+      <li><strong>GitHub Pages</strong>, which hosts the site: when PicSpeak is opened, an update arrives or a symbol pack is
+        downloaded.</li>
+      <li><strong>ARASAAC</strong> (arasaac.org), when searching symbols online: it only receives the searched word and
+        sends the images.</li>
+      <li><strong>MyMemory</strong> (mymemory.translated.net), only when the word must be translated to English to search
+        a symbol: it only receives that word.</li>
+      <li><strong>jsDelivr</strong> (cdn.jsdelivr.net), only with Twemoji emoji turned on: the search runs on the device,
+        jsDelivr does not receive the word but sees which emoji are shown.</li>
+      <li>With online search off (Settings › General › Internet and data usage) these search services are never
+        contacted.</li>
+      <li>The <strong>voices</strong> are the device’s own. Voices marked “internet only” belong to the maker of the
+        browser or system (for example Google, Microsoft, Apple), which receives the text to read: to avoid this, choose a
+        voice without that label.</li>
+    </ul>
+
+    <h2>Online backup (Dropbox)</h2>
+    <ul>
       <li>If the adult connects the <strong>online backup</strong>, PicSpeak saves a copy only in the
         <code>Apps/PicSpeak</code> folder of their Dropbox, and only for the profiles they turn it on for. The copy goes
         directly from the device to Dropbox: nobody else receives it. PicSpeak cannot see or touch the other files in
@@ -32,7 +64,6 @@
         to Dropbox; the copies already saved stay in the adult’s Dropbox, and they can delete them whenever they like.</li>
       <li>The copies on Dropbox have no password of their own: the Dropbox account protects them. Use a strong password
         and turn on Dropbox two-step verification.</li>
-      <li>When searching for new symbols online, only the searched word (or the emoji code) leaves the device.</li>
     </ul>
     <p class="lang-switch"><a href="privacy.html" hreflang="it" lang="it">Leggi in italiano</a></p>
   </main>

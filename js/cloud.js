@@ -1348,6 +1348,44 @@
     return name;
   }
 
+  // Copie che l'adulto può cancellare: con nome, del giorno, prima di un'operazione grande. Mai la copia attuale, le
+  // abitudini né gli altri file della cartella (servono alla sincronizzazione)
+  const DELETABLE = ['photo', 'daily', 'before'];
+
+  function canDeleteCopy(copy) {
+    return Boolean(copy && DELETABLE.includes(copy.kind) && FILE_NAMES[copy.kind].test(copy.name));
+  }
+
+  /*
+   * Cancella da Dropbox una copia del profilo in uso (solo del profilo in uso: la cartella viene dal suo collegamento,
+   * non da una scelta fatta nell'elenco). Per una copia con nome si toglie anche il suo nome da fotografie.json.
+   */
+  async function deleteCopy(copy) {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere()) throw new CloudError('auth');
+    if (profileId === holding) throw new CloudError('held');
+    if (!canDeleteCopy(copy)) throw new CloudError('path');
+    if (running) await running.catch(() => {});
+    const folder = folderOf(profileId);
+    if (!(await findFolder(folder, true))) throw new CloudError('not-found');
+    if (await excludedNow(profileId, folder, profileState(profileId))) throw new CloudError('excluded');
+    try {
+      await remove(folder, copy.name);
+    } catch (error) {
+      // Già cancellata (da un altro dispositivo o dal sito di Dropbox): va bene così
+      if (!(error instanceof CloudError) || error.message !== 'not-found') throw error;
+    }
+    if (copy.kind !== 'photo') return;
+    try {
+      const names = await readPhotoNames(folder);
+      if (!Object.prototype.hasOwnProperty.call(names, copy.name)) return;
+      delete names[copy.name];
+      await upload(checkPath(folder, 'fotografie.json'), new Blob([JSON.stringify(names)], { type: 'application/json' }));
+    } catch (error) {
+      // Il nome rimasto in fotografie.json non dà fastidio: si ignora quando la copia non c'è più
+    }
+  }
+
   // Nomi delle copie con nome salvati su Dropbox (dato non affidabile: solo nomi di file validi e testo ripulito)
   async function readPhotoNames(profileId) {
     let raw = null;
@@ -1753,6 +1791,8 @@
     listProfiles,
     listCopies,
     openCopy,
+    canDeleteCopy,
+    deleteCopy,
     // Per i test
     _test: { classify, checkPath, slug, parseStamp, rotate, markDirty, due, start, setLink: (value) => { link = normalizeLink(value); accessByAccount.clear(); }, normalizeLink, state: () => state, link: () => link, FILE_NAMES, pullNow, pullAndApply, restoreLayers, loadLink },
   };

@@ -1199,6 +1199,9 @@
         nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.
         L’unica eccezione la decidete voi: se collegate il <a href="#backup-online">backup online</a>, una copia va nel
         <strong>vostro</strong> Dropbox, e solo lì.</p>
+      <p>PicSpeak <strong>non usa cookie</strong> e non ha statistiche né pubblicità: per questo non compare nessuna
+        richiesta di consenso. Le voci segnate «solo con internet» sono del produttore del browser, che riceve il testo
+        da leggere. Tutti i dettagli sono nella pagina della privacy (Impostazioni › Backup online › Privacy › Leggi).</p>
       <h4 id="conservazione">Conservazione dei dati</h4>
       <p>Quando lo spazio sul dispositivo scarseggia, il browser può cancellare da solo i dati dei siti. Per questo
         PicSpeak chiede <strong>sempre</strong> al browser di conservare i suoi dati. È una scelta fissa, per la massima
@@ -1353,7 +1356,7 @@
           Si tengono le ultime 10; le più vecchie si cancellano da sole.</li>
         <li><strong>Copie con nome</strong>: con <strong>Salva una copia</strong> fate una copia di tutto com’è adesso,
           con un nome se volete (per esempio «prima delle vacanze»). Resta su Dropbox finché non la cancellate voi
-          dalla cartella <code>Applicazioni/PicSpeak</code>.</li>
+          (vedi <a href="#cancellare-copie-online">Cancellare le copie che non servono</a>).</li>
         <li>Prima di un ripristino o di <strong>Cancella tutto</strong> PicSpeak salva anche una copia di sicurezza
           (si tengono le ultime 5).</li>
       </ul>
@@ -1386,6 +1389,34 @@
       </ol>
       <p>Su un dispositivo nuovo, o dopo <strong>Cancella tutto</strong>, collegate Dropbox e usate
         <strong>Una copia su Dropbox</strong> come sopra. Poi scegliete un PIN nuovo.</p>
+      <h4 id="cancellare-copie-online">Cancellare le copie che non servono</h4>
+      <p>Le copie con nome restano finché non le cancellate, e anche le copie del giorno e quelle di sicurezza si possono
+        togliere prima che si cancellino da sole. Dall’app potete cancellare solo le copie del profilo che state usando:
+        quelle degli altri profili si possono ripristinare, ma non cancellare.</p>
+      <ol class="steps">
+        <li>In <strong>Ripristina</strong> toccate <strong>Ripristina…</strong> e scegliete <strong>Una copia su Dropbox</strong>.</li>
+        <li>Se su Dropbox ci sono più profili, scegliete quello in uso (è segnato «questo profilo»).</li>
+        <li>Accanto a ogni copia che si può cancellare c’è il <strong>cestino</strong>. Toccatelo e confermate con
+          <strong>Cancella</strong>. L’elenco si aggiorna e potete cancellarne altre, oppure chiudere.</li>
+      </ol>
+      <p>La copia più recente non ha il cestino: serve a tenere aggiornato il profilo e agli altri dispositivi. Per
+        smettere di usare Dropbox c’è <strong>Scollega</strong>. Cancellare una copia non cambia nulla sul dispositivo.
+        Se vi siete sbagliati, la copia resta per un po’ nel cestino di Dropbox (di solito 30 giorni) e da lì la potete
+        recuperare.</p>
+      <p><strong>Dal sito o dall’app di Dropbox</strong> potete cancellare le copie di qualsiasi profilo:</p>
+      <ol class="steps">
+        <li>Entrate nel vostro Dropbox e aprite la cartella <code>Applicazioni/PicSpeak</code> (in inglese
+          <code>Apps/PicSpeak</code>).</li>
+        <li>Aprite la cartella con il nome del profilo, per esempio <code>Luca B</code>.</li>
+        <li>Cancellate i file che non vi servono: <code>foto-…</code> sono le copie con nome, <code>giorno-…</code> le
+          copie del giorno, <code>prima-…</code> le copie di sicurezza. Nel nome c’è la data, per esempio
+          <code>foto-2026-11-25-…</code>.</li>
+      </ol>
+      <p class="tip">Se quel profilo è ancora collegato a Dropbox su qualche dispositivo, non cancellate
+        <code>profilo.json</code>, <code>attuale-completo.picspeak</code>, <code>attuale-abitudini.picspeak</code> né i
+        file <code>abitudini-…</code>: servono per le copie e per la sincronizzazione. Un profilo che non usate più
+        potete toglierlo tutto, cancellando la sua cartella. I file cancellati restano nel cestino di Dropbox per un
+        po’ (di solito 30 giorni).</p>
       <h4>Lo stesso profilo su più dispositivi</h4>
       <p>Se il bambino usa PicSpeak su più dispositivi (per esempio il tablet di casa e quello di scuola), potete fare in
         modo che abbiano le stesse schede e che i suggerimenti tengano conto delle parole usate su tutti.</p>
@@ -1581,6 +1612,7 @@
         <li><a href="#aspetto">Bianco e nero</a></li>
         <li><a href="#posizioni">Blocco delle posizioni</a></li>
         <li><a href="#ripristino">Cancella tutto</a></li>
+        <li><a href="#cancellare-copie-online">Cancellare le copie su Dropbox</a></li>
         <li><a href="#cartelle">Cartella</a></li>
         <li><a href="#cartelle">Cartella senza voce</a></li>
         <li><a href="#simboli">Cerca simbolo</a></li>

@@ -651,7 +651,25 @@
     wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', off));
   }
 
-  // Elenco di scelte (profili o copie) in una finestra; risolve con il valore scelto o null
+  // Icona del cestino (disegnata senza innerHTML)
+  function trashIcon() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    [['width', '26'], ['height', '26'], ['viewBox', '0 0 24 24'], ['fill', 'none'], ['stroke', 'currentColor'],
+      ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']]
+      .forEach(([k, v]) => svg.setAttribute(k, v));
+    ['M4 7h16', 'M10 11v6', 'M14 11v6', 'M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12', 'M9 7V4h6v3'].forEach((d) => {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      svg.append(path);
+    });
+    return svg;
+  }
+
+  /*
+   * Elenco di scelte (profili o copie) in una finestra; risolve con il valore scelto o null.
+   * Una scelta con deletable ha accanto il cestino: toccarlo risolve con { remove: valore }.
+   */
   function askChoice(title, help, choices) {
     return ui.runPanelDialog({
       title,
@@ -665,7 +683,16 @@
           btn.append(el('strong', null, opt.label));
           if (opt.help) btn.append(el('small', null, opt.help));
           btn.addEventListener('click', () => close(opt.value));
-          options.append(btn);
+          if (!opt.deletable) { options.append(btn); return; }
+          const row = el('div', 'cloud-copy-row');
+          const del = el('button', 'cloud-copy-delete');
+          del.type = 'button';
+          del.setAttribute('aria-label', format('cloudDeleteCopyLabel', { name: opt.label }));
+          del.title = t('cloudDeleteCopyBtn');
+          del.append(trashIcon());
+          del.addEventListener('click', () => close({ remove: opt.value }));
+          row.append(btn, del);
+          options.append(row);
         });
         return options;
       },
@@ -692,7 +719,8 @@
       await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
       return;
     }
-    const hereId = data.profile && data.profile.id;
+    // Cartella del profilo in uso (per un profilo sincronizzato con un altro è quella dell'altro)
+    const hereId = (cloud.isEnabledHere() && cloud.folder()) || (data.profile && data.profile.id);
     const profileId = profiles.length === 1 ? profiles[0].id : await askChoice(t('cloudRestoreTitle'), t('cloudPickProfile'),
       profiles.map((p) => ({
         value: p.id,
@@ -701,34 +729,63 @@
         className: p.id === hereId ? 'is-primary' : '',
       })));
     if (!profileId) return;
+    // Si possono cancellare solo le copie del profilo in uso (con il suo account), mai quelle di altri profili
+    const own = account === '' && cloud.isEnabledHere() && profileId === cloud.folder();
     let copies;
-    try {
-      copies = await viaAccount(account, () => cloud.listCopies(profileId));
-    } catch (error) {
-      showNotice(cloudErrorText(error), true, 'restore');
-      return;
+    let picked;
+    for (;;) {
+      try {
+        copies = await viaAccount(account, () => cloud.listCopies(profileId));
+      } catch (error) {
+        showNotice(cloudErrorText(error), true, 'restore');
+        return;
+      }
+      ui.render();
+      if (!copies.length) {
+        await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
+        return;
+      }
+      // Copia più recente del profilo in uso: è quasi uguale a quello che c'è già sul dispositivo, quindi va in fondo,
+      // non evidenziata, con la spiegazione di quando serve (dispositivo nuovo, dopo «Cancella tutto»)
+      const same = profileId === hereId;
+      const choices = copies.map((c, index) => {
+        const kind = c.kind === 'latest' && same ? 'latestHere' : c.kind;
+        return {
+          value: String(index),
+          kind,
+          label: c.kind === 'photo' && c.label ? format('cloudKind_photoNamed', { name: c.label }) : t(`cloudKind_${kind}`),
+          // Data e, sotto, a cosa serve quella copia
+          help: format(`cloudExplain_${kind}`, { when: c.kind === 'daily' && c.date ? dateText(c.date) : whenText(c.date) }),
+          className: kind === 'latest' ? 'is-primary' : '',
+          deletable: own && cloud.canDeleteCopy(c),
+        };
+      });
+      const ordered = [...choices.filter((c) => c.kind !== 'latestHere'), ...choices.filter((c) => c.kind === 'latestHere')];
+      const help = ordered.some((c) => c.deletable) ? `${t('cloudPickCopy')} ${t('cloudPickCopyDelete')}` : t('cloudPickCopy');
+      picked = await askChoice(t('cloudRestoreTitle'), help, ordered);
+      if (picked === null || picked === undefined) return;
+      if (typeof picked !== 'object') break;
+      // Cestino: conferma, cancellazione e di nuovo l'elenco aggiornato
+      const index = Number(picked.remove);
+      const target = copies[index];
+      const choice = choices[index];
+      if (!target || !choice) return;
+      const ok = await ui.runDialog({
+        title: t('cloudDeleteCopyTitle'),
+        help: format('cloudDeleteCopyHelp', { name: choice.label, when: target.kind === 'daily' && target.date ? dateText(target.date) : whenText(target.date) }),
+        primary: t('cloudDeleteCopyBtn'),
+        secondary: t('cancel'),
+      });
+      if (!ok) continue;
+      showBusy(t('cloudDeleting'), 'restore');
+      try {
+        await cloud.deleteCopy(target);
+      } catch (error) {
+        showNotice(cloudErrorText(error), true, 'restore');
+        return;
+      }
+      showBusy(t('cloudListing'), 'restore');
     }
-    if (!copies.length) {
-      await ui.runDialog({ title: t('cloudRestoreTitle'), help: t('cloudNoCopies'), primary: t('close') });
-      return;
-    }
-    // Copia più recente del profilo in uso: è quasi uguale a quello che c'è già sul dispositivo, quindi va in fondo,
-    // non evidenziata, con la spiegazione di quando serve (dispositivo nuovo, dopo «Cancella tutto»)
-    const same = profileId === hereId;
-    const choices = copies.map((c, index) => {
-      const kind = c.kind === 'latest' && same ? 'latestHere' : c.kind;
-      return {
-        value: String(index),
-        kind,
-        label: c.kind === 'photo' && c.label ? format('cloudKind_photoNamed', { name: c.label }) : t(`cloudKind_${kind}`),
-        // Data e, sotto, a cosa serve quella copia
-        help: format(`cloudExplain_${kind}`, { when: c.kind === 'daily' && c.date ? dateText(c.date) : whenText(c.date) }),
-        className: kind === 'latest' ? 'is-primary' : '',
-      };
-    });
-    const ordered = [...choices.filter((c) => c.kind !== 'latestHere'), ...choices.filter((c) => c.kind === 'latestHere')];
-    const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
-    if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
     showBusy(t('cloudDownloading'), 'restore');
     let result;
