@@ -455,6 +455,8 @@ a.link-btn { display: inline-flex; align-items: center; justify-content: center;
 .tutorial-body { display: flex; flex-direction: column; gap: 8px; min-height: 7.5em; }
 .tutorial-text { margin: 0; line-height: 1.45; font-size: 17px; }
 .tutorial-again { margin: 0; color: var(--text-muted); line-height: 1.4; font-size: 15px; }
+.tutorial-steps { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; font-size: 17px; }
+.tutorial-install-btn { align-self: flex-start; min-height: 64px; }
 .tutorial-dots { display: flex; justify-content: center; gap: 8px; padding: 4px 0; }
 .tutorial-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
 .tutorial-dot.is-current { background: var(--focus); }

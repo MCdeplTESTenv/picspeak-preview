@@ -612,15 +612,8 @@
         renderSettings();
       }, true));
     }
-    const steps = {
-      ios: 'installIos',
-      android: 'installAndroid',
-      'mac-safari': 'installMacSafari',
-      firefox: 'installFirefox',
-      chromium: 'installChromium',
-    }[install.platform()];
-    if (!install.canPrompt() || install.platform() === 'chromium') {
-      wrap.append(list(t(steps), true));
+    if (install.showSteps()) {
+      wrap.append(list(t(install.stepsKey()), true));
     }
   }
 

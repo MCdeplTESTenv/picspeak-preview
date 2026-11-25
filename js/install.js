@@ -44,6 +44,22 @@
     return 'chromium';
   }
 
+  // Chiave i18n con i passi manuali per il dispositivo in uso (impostazioni e tutorial «Come iniziare»)
+  function stepsKey() {
+    return {
+      ios: 'installIos',
+      android: 'installAndroid',
+      'mac-safari': 'installMacSafari',
+      firefox: 'installFirefox',
+      chromium: 'installChromium',
+    }[platform()];
+  }
+
+  // I passi manuali servono quando manca il pulsante del browser; su Chrome/Edge del PC restano come aiuto
+  function showSteps() {
+    return !deferredPrompt || platform() === 'chromium';
+  }
+
   async function prompt() {
     if (!deferredPrompt) return false;
     deferredPrompt.prompt();
@@ -66,8 +82,11 @@
   window.PicSpeak.install = {
     isStandalone,
     platform,
+    stepsKey,
+    showSteps,
     prompt,
     canPrompt: () => Boolean(deferredPrompt),
-    onChange: (fn) => listeners.add(fn),
+    // Restituisce la funzione che toglie l'ascolto
+    onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();
