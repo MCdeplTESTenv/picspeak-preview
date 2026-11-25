@@ -185,7 +185,32 @@
         }
         // Chrome/Edge annunciano il pulsante «Installa» anche dopo l'apertura: si ridisegna il passo
         if (install) stopListening = install.onChange(() => { if (box.isConnected && list[index].id === 'install') show(); });
+        // Altezza fissa: la finestra prende l'altezza del passo più alto, così sfogliando non cambia misura.
+        // Si misurano tutti i passi una volta aperta la finestra e di nuovo quando cambia la misura dello schermo.
+        function fixHeight() {
+          if (!box.isConnected) {
+            window.removeEventListener('resize', onResize);
+            return;
+          }
+          const current = index;
+          box.style.minHeight = '';
+          let tallest = 0;
+          for (index = 0; index < list.length; index += 1) {
+            show();
+            tallest = Math.max(tallest, box.offsetHeight);
+          }
+          index = current;
+          show();
+          box.style.minHeight = `${tallest}px`;
+        }
+        let resizeTimer = null;
+        function onResize() {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(fixHeight, 150);
+        }
+        window.addEventListener('resize', onResize);
         show();
+        requestAnimationFrame(fixHeight);
         return box;
       },
     });

@@ -453,6 +453,9 @@ a.link-btn { display: inline-flex; align-items: center; justify-content: center;
 .tutorial-icon { display: flex; justify-content: center; color: var(--focus); padding: 4px 0; }
 .tutorial-step-title { margin: 0; font-size: 20px; }
 .tutorial-body { display: flex; flex-direction: column; gap: 8px; min-height: 7.5em; }
+/* La finestra ha l'altezza del passo più alto (js/tutorial.js): lo spazio in più va sotto il testo, così punti e
+   pulsanti restano sempre nello stesso posto */
+.tutorial-body { flex: 1 0 auto; }
 .tutorial-text { margin: 0; line-height: 1.45; font-size: 17px; }
 .tutorial-again { margin: 0; color: var(--text-muted); line-height: 1.4; font-size: 15px; }
 .tutorial-steps { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; font-size: 17px; }
