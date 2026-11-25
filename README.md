@@ -9,7 +9,12 @@ utile anche da adulti. Non richiede installazione e funziona anche offline.
 Per provarlo in locale basta aprire `index.html` con doppio clic.
 
 ## Licenza
-Il codice è distribuito con licenza GNU GPL-3.0 (vedi `LICENSE`).
+PicSpeak è gratuito e resterà sempre gratuito: niente funzioni a pagamento, niente pubblicità, niente account.
+
+Il codice è distribuito con licenza GNU AGPL-3.0 (GNU Affero General Public License, versione 3; vedi `LICENSE`).
+Chiunque può usarlo, studiarlo, modificarlo e ridistribuirlo, ma le versioni modificate devono restare libere
+con la stessa licenza, anche quando vengono offerte come sito o servizio online: chi le pubblica deve rendere
+disponibile il loro codice sorgente.
 I simboli hanno licenze proprie, indicate qui sotto e nella pagina Crediti del tool.
 
 ## Crediti dei simboli
