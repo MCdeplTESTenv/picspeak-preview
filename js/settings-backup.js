@@ -351,7 +351,10 @@
     showBusy(t('cloudListing'), 'online');
     let profiles;
     try {
-      profiles = (await viaAccount(account, () => cloud.listProfiles())).filter((p) => p.id !== cloud.folder());
+      // Anche il profilo in uso, in fondo e con la sua nota: la finestra è sempre la stessa, anche con un solo profilo
+      const here = cloud.folder();
+      const all = await viaAccount(account, () => cloud.listProfiles());
+      profiles = [...all.filter((p) => p.id !== here), ...all.filter((p) => p.id === here)];
     } catch (error) {
       notice = null;
       ui.render();
@@ -365,12 +368,18 @@
       await ui.runDialog({ title: t('cloudFollowTitle'), help: t('cloudFollowNone'), primary: t('close') });
       return;
     }
+    const here = cloud.folder();
     const folder = await askChoice(t('cloudFollowTitle'), t('cloudFollowPick'), profiles.map((p) => ({
       value: p.id,
-      label: p.name || t('backupRestoredProfileName'),
-      help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
+      label: (p.name || t('backupRestoredProfileName')) + (p.id === here ? ` ${t('cloudThisProfile')}` : ''),
+      help: p.id === here ? t('cloudFollowSameHelp') : [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
     })));
     if (!folder) return;
+    // Il profilo già in uso: non c'è niente da cambiare, si spiega a cosa serve la scelta
+    if (folder === here) {
+      await ui.runDialog({ title: t('cloudFollowTitle'), help: t('cloudFollowSame'), primary: t('close') });
+      return;
+    }
     const ok = await ui.runDialog({
       title: t('cloudFollowTitle'),
       help: t('cloudFollowConfirm'),
