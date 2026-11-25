@@ -56,9 +56,18 @@
     ui.render();
   }
 
+  /*
+   * Avviso «sto lavorando» (elenco delle copie, scaricamento, salvataggio...): si mostra in basso sopra la pagina,
+   * senza spingere giù il resto della sezione. In cima alla sezione farebbe saltellare il pulsante appena toccato.
+   */
+  function showBusy(text, where = 'local') {
+    notice = { text, error: false, where, busy: true };
+    ui.render();
+  }
+
   function renderNotice(wrap, where) {
     if (!notice || notice.where !== where) return;
-    const box = el('p', `tpl-status${notice.error ? ' is-error' : ''}`, notice.text);
+    const box = el('p', `tpl-status${notice.error ? ' is-error' : ''}${notice.busy ? ' is-busy' : ''}`, notice.text);
     box.setAttribute('role', 'status');
     wrap.append(box);
     notice = null;
@@ -124,7 +133,7 @@
       },
     });
     if (!values) return false;
-    showNotice(t('backupSaving'), false, where);
+    showBusy(t('backupSaving'), where);
     try {
       const file = await backup.create({ name: values.name, password: values.pass, fallbackName: t('backupFileWord') });
       backup.save(file.blob, file.name);
@@ -185,7 +194,7 @@
     const { account } = options && typeof options === 'object' && !(options instanceof Event) ? options : {};
     if (!pkce) {
       prepareLink();
-      showNotice(t('cloudPreparing'), false, 'online');
+      showBusy(t('cloudPreparing'), 'online');
       return;
     }
     const current = pkce;
@@ -271,7 +280,7 @@
       onSubmit: (v) => v,
     });
     if (!values) return;
-    showNotice(t('cloudPhotoSaving'), false, 'online');
+    showBusy(t('cloudPhotoSaving'), 'online');
     try {
       await cloud.saveSnapshot('photo', values.name);
       showNotice(t('cloudPhotoSaved'), false, 'online');
@@ -281,7 +290,7 @@
   }
 
   async function syncDropbox() {
-    showNotice(t('cloudSyncing'), false, 'online');
+    showBusy(t('cloudSyncing'), 'online');
     await cloud.syncNow();
     // Si guarda anche se altri dispositivi hanno inviato qualcosa (le schede arrivano all'uscita dalla modalità adulto)
     await cloud.pullNow();
@@ -318,7 +327,7 @@
         { value: 'theirs', label: t('cloudConflictTheirs'), help: `${there}${info.thereAt ? ` ${whenText(info.thereAt)}` : ''}` },
       ]);
       if (!which) return;
-      showNotice(t('cloudSyncing'), false, 'online');
+      showBusy(t('cloudSyncing'), 'online');
       const reload = await cloud.resolveConflict(which);
       if (reload) { location.reload(); return; }
       showNotice(t('cloudConflictDone'), false, 'online');
@@ -339,17 +348,23 @@
   async function followProfile() {
     const account = await pickAccount();
     if (account === null) return;
-    showNotice(t('cloudListing'), false, 'online');
+    showBusy(t('cloudListing'), 'online');
     let profiles;
     try {
       profiles = (await viaAccount(account, () => cloud.listProfiles())).filter((p) => p.id !== cloud.folder());
     } catch (error) {
-      showNotice(cloudErrorText(error), true, 'online');
+      notice = null;
+      ui.render();
+      await ui.runDialog({ title: t('cloudFollowTitle'), help: cloudErrorText(error), primary: t('close') });
       return;
     }
     notice = null;
     ui.render();
-    if (!profiles.length) { showNotice(t('cloudFollowNone'), true, 'online'); return; }
+    // Niente da scegliere: lo si spiega in una finestra (un avviso in cima alla sezione può restare fuori vista)
+    if (!profiles.length) {
+      await ui.runDialog({ title: t('cloudFollowTitle'), help: t('cloudFollowNone'), primary: t('close') });
+      return;
+    }
     const folder = await askChoice(t('cloudFollowTitle'), t('cloudFollowPick'), profiles.map((p) => ({
       value: p.id,
       label: p.name || t('backupRestoredProfileName'),
@@ -363,7 +378,7 @@
       secondary: t('cancel'),
     });
     if (!ok) return;
-    showNotice(t('cloudFollowing'), false, 'online');
+    showBusy(t('cloudFollowing'), 'online');
     try {
       // La copia di sicurezza di com'è ora la fa cloud.follow (se non riesce, non cambia nulla)
       await viaAccount(account, () => cloud.follow(folder));
@@ -375,7 +390,7 @@
 
   // Dispositivi che usano questo profilo, con «Escludi» per uno perso, rubato o non più usato
   async function showDevices() {
-    showNotice(t('cloudListing'), false, 'online');
+    showBusy(t('cloudListing'), 'online');
     let devices;
     try {
       devices = await cloud.listDevices();
@@ -528,7 +543,7 @@
   async function restoreFromDropbox() {
     const account = await pickAccount();
     if (account === null) return;
-    showNotice(t('cloudListing'), false, 'online');
+    showBusy(t('cloudListing'), 'online');
     let profiles;
     try {
       profiles = await viaAccount(account, () => cloud.listProfiles());
@@ -579,7 +594,7 @@
     const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
     if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
-    showNotice(t('cloudDownloading'), false, 'online');
+    showBusy(t('cloudDownloading'), 'online');
     let result;
     try {
       result = await viaAccount(account, () => cloud.openCopy(profileId, copy));
@@ -839,7 +854,7 @@
   // Copia automatica su Dropbox prima di un'operazione grande (se collegato); non blocca l'operazione se non riesce
   async function cloudSafetyCopy(where) {
     if (!cloud || !cloud.isConnected()) return;
-    showNotice(t('cloudSafetySaving'), false, where);
+    showBusy(t('cloudSafetySaving'), where);
     try {
       await cloud.saveSnapshot('before');
     } catch (error) {
@@ -906,7 +921,7 @@
     }
 
     await cloudSafetyCopy('restore');
-    showNotice(t('backupRestoring'), false, 'restore');
+    showBusy(t('backupRestoring'), 'restore');
     if (channel) channel.postMessage('restoring');
     let report;
     try {
