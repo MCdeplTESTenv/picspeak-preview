@@ -432,6 +432,8 @@
       }
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
+    // Il backup online non vede le immagini da sole: i pittogrammi recuperati vanno nella prossima copia completa
+    if (done > failed && window.PicSpeak.cloud) window.PicSpeak.cloud.markChanged();
     return { total: ids.length, failed };
   }
 

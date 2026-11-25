@@ -63,7 +63,10 @@
     names: /^fotografie\.json$/,
     // Abitudini di un solo dispositivo (sincronizzazione): ognuno scrive solo le sue
     device: /^abitudini-d[0-9a-f]{12}\.picspeak$/,
+    // Dispositivi esclusi dall'adulto (persi, rubati, non più usati): gli altri ignorano i loro file
+    excluded: /^esclusi\.json$/,
   };
+  const DEVICE_CODE = /^d[0-9a-f]{12}$/;
   const LAYERS_PREFIX = 'syncLayers:'; // + id del profilo: abitudini degli altri dispositivi, per l'uso senza rete
   const MAX_DEVICES = 10;
   const MAX_HABITS_DOWNLOAD = 20 * 1024 * 1024; // file delle abitudini di un altro dispositivo
@@ -490,6 +493,7 @@
     if (!id || !link) throw new CloudError('auth');
     if (!Array.isArray(link.profileIds)) link.profileIds = [];
     if (!link.profileIds.includes(id)) link.profileIds.push(id);
+    if (Array.isArray(link.excludedProfiles)) link.excludedProfiles = link.excludedProfiles.filter((x) => x !== id);
     await storage.set(LINK_KEY, link);
     tick(true);
   }
@@ -530,8 +534,15 @@
     saveState().catch(() => {});
   }
 
-  function onStorageChange(storeName, key) {
+  function onStorageChange(storeName, key, owners) {
     if (suppress > 0 || !ready) return;
+    // Scritture che riguardano solo altri profili (per esempio un profilo nuovo creato qui) non sono modifiche di questo
+    // Immagini: sono in comune tra i profili; una foto nuova del profilo in uso arriva sempre con la sua tessera (pagina)
+    if (storeName === 'images') return;
+    const id = currentProfileId();
+    if (Array.isArray(owners) && owners.length && owners.every((o) => typeof o === 'string' && o !== id)) return;
+    const prefixed = /^p:([^:]+):/.exec(String(key));
+    if (storeName === 'settings' && prefixed && prefixed[1] !== id) return;
     const kind = classify(storeName, key);
     if (kind) markDirty(kind);
   }
@@ -600,22 +611,35 @@
     st.dirtyHabits = false;
     st.firstDirtyAt = 0;
     setStatus('syncing');
+    let habitsSent = false;
     try {
       // Cartella con il nome del profilo (rinominata se il nome è cambiato, ritrovata se l'ha rinominata un altro)
       const now = new Date();
+      const exists = await findFolder(folder, true);
+      // Profilo che ne segue un altro: la cartella c'è già, non se ne crea mai una
+      if (!exists && folder !== profileId) throw new CloudError('not-found');
+      // Escluso da un altro dispositivo? Allora non si tocca più nulla (neanche il nome della cartella)
+      if (exists && await excludedNow(profileId, folder, st)) return;
       let created = false;
-      if (folder !== profileId) {
-        // Profilo che ne segue un altro: la cartella c'è già, non se ne crea mai una
-        if (!(await findFolder(folder, true))) throw new CloudError('not-found');
-        if (full) await nameFolder(folder, (data.profile && data.profile.name) || '');
-      } else if (full || !(await findFolder(folder, true))) {
-        created = await nameFolder(folder, (data.profile && data.profile.name) || '');
-      }
+      if (full || !exists) created = await nameFolder(folder, (data.profile && data.profile.name) || '');
       // Cartella nuova: profilo.json per primo, è il file da cui gli altri dispositivi la riconoscono
       if (created) await uploadProfileInfo(folder, now);
       const today = dayStamp(now);
       // Anche mentre si aspetta la scelta dell'adulto: la copia del giorno è di questo dispositivo, non sovrascrive nulla
       const needDaily = st.lastDaily !== today;
+      // Prima le parole usate: non aspettano mai le schede (anche se l'invio delle schede trova un conflitto)
+      if (habits) {
+        // Solo i tocchi fatti su questo dispositivo, nel suo file: gli altri dispositivi li sommano una volta sola
+        const file = await buildFile(['habits']);
+        await upload(checkPath(folder, `abitudini-${deviceId()}.picspeak`), file.blob);
+        st.lastHabitsAt = now.toISOString();
+        habitsSent = true;
+        if (!st.legacyClean) {
+          // Vecchio file unico delle abitudini (prima della sincronizzazione), scritto da questo profilo: ora c'è il suo
+          try { await remove(folder, 'attuale-abitudini.picspeak'); } catch (error) { /* non c'era */ }
+          st.legacyClean = true;
+        }
+      }
       if (full || needDaily) {
         const file = await buildFile(null);
         if (full) await uploadFull(profileId, folder, st, file.blob);
@@ -630,23 +654,12 @@
           await uploadProfileInfo(folder, now);
         }
       }
-      if (habits) {
-        // Solo i tocchi fatti su questo dispositivo, nel suo file: gli altri dispositivi li sommano una volta sola
-        const file = await buildFile(['habits']);
-        await upload(checkPath(folder, `abitudini-${deviceId()}.picspeak`), file.blob);
-        st.lastHabitsAt = now.toISOString();
-        if (!st.legacyClean) {
-          // Vecchio file unico delle abitudini (prima della sincronizzazione), scritto da questo profilo: ora c'è il suo
-          try { await remove(folder, 'attuale-abitudini.picspeak'); } catch (error) { /* non c'era */ }
-          st.legacyClean = true;
-        }
-      }
       st.lastError = null;
       setStatus(st.conflictRev ? 'conflict' : 'idle');
     } catch (error) {
       // Si riprova più tardi: i segni tornano com'erano
       if (full) st.dirtyFull = true;
-      if (habits) st.dirtyHabits = true;
+      if (habits && !habitsSent) st.dirtyHabits = true;
       if (!st.firstDirtyAt) st.firstDirtyAt = Date.now();
       const code = error instanceof CloudError ? error.message : 'server';
       if (code === 'conflict') {
@@ -729,6 +742,125 @@
    * Guarda la cartella del profilo su Dropbox: abitudini nuove degli altri dispositivi (subito, cambiano solo i
    * suggerimenti) e schede cambiate altrove (solo con apply: all'apertura o all'uscita dalla modalità adulto).
    */
+  // Elenco dei dispositivi esclusi (esclusi.json, dato non affidabile): si rilegge solo quando cambia
+  async function readExcluded(folder, entries, st) {
+    const entry = entries.find((e) => FILE_NAMES.excluded.test(e.name));
+    if (!entry) { st.excluded = []; st.excludedRev = null; return []; }
+    if (entry.rev && entry.rev === st.excludedRev && Array.isArray(st.excluded)) return st.excluded;
+    // File troppo grande o illeggibile: vale l'ultima lista valida (gli esclusi non rientrano)
+    const previous = Array.isArray(st.excluded) ? st.excluded : [];
+    let list = previous;
+    if (typeof entry.size !== 'number' || entry.size <= 64 * 1024) {
+      try {
+        const raw = JSON.parse(await (await download(checkPath(folder, 'esclusi.json'), 64 * 1024)).text());
+        if (raw && Array.isArray(raw.devices)) {
+          list = [...new Set([...previous, ...raw.devices.filter((d) => typeof d === 'string' && DEVICE_CODE.test(d))])].slice(-100);
+        }
+      } catch (error) {
+        if (!(error instanceof SyntaxError) && !(error instanceof CloudError && error.message === 'size')) throw error;
+      }
+    }
+    st.excluded = list;
+    st.excludedRev = entry.rev || null;
+    return list;
+  }
+
+  /*
+   * Questo dispositivo è stato escluso: il profilo resta qui com'è, ma non si sincronizza più (né invia né riceve).
+   * Si tolgono le parole degli altri dispositivi scaricate e il codice del dispositivo. L'adulto può ricollegarlo
+   * (con il PIN), e il dispositivo riparte con un codice nuovo.
+   */
+  async function leaveSync(profileId) {
+    await storage.remove(LAYERS_PREFIX + profileId);
+    if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
+    delete state[profileId];
+    await saveState();
+    if (link) {
+      if (Array.isArray(link.profileIds)) link.profileIds = link.profileIds.filter((id) => id !== profileId);
+      if (link.folders) delete link.folders[profileId];
+      if (link.devices) delete link.devices[profileId];
+      link.excludedProfiles = [...new Set([...(Array.isArray(link.excludedProfiles) ? link.excludedProfiles : []), profileId])].slice(-20);
+      await storage.set(LINK_KEY, link);
+    }
+    setStatus('idle');
+  }
+
+  // Controllo prima di ogni invio: se questo dispositivo è stato escluso, smette di sincronizzarsi (true)
+  async function excludedNow(profileId, folder, st) {
+    const files = (await listFolder(dirOf(folder))).filter((e) => e['.tag'] === 'file');
+    if (!(await readExcluded(folder, files, st)).includes(deviceId())) return false;
+    await leaveSync(profileId);
+    return true;
+  }
+
+  function wasExcluded() {
+    const id = currentProfileId();
+    return Boolean(id && link && Array.isArray(link.excludedProfiles) && link.excludedProfiles.includes(id));
+  }
+
+  // Dispositivi che usano il profilo in uso: [{ id, label, at, here }] (questo dispositivo per primo)
+  async function listDevices() {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere()) throw new CloudError('auth');
+    const folder = folderOf(profileId);
+    if (!(await findFolder(folder, true))) return [];
+    const entries = (await listFolder(dirOf(folder))).filter((e) => e['.tag'] === 'file');
+    const st = profileState(profileId);
+    const excluded = await readExcluded(folder, entries, st);
+    const layers = await loadLayers(profileId);
+    const mine = deviceId();
+    const out = entries.filter((e) => FILE_NAMES.device.test(e.name)).map((e) => {
+      const id = e.name.slice('abitudini-'.length, -'.picspeak'.length);
+      const at = Date.parse(e.server_modified || '');
+      return {
+        id,
+        here: id === mine,
+        label: id === mine ? backup.deviceLabel() : ((layers[id] && layers[id].device) || ''),
+        at: Number.isNaN(at) ? null : new Date(at),
+      };
+    }).filter((d) => !excluded.includes(d.id));
+    if (!out.some((d) => d.here)) out.push({ id: mine, here: true, label: backup.deviceLabel(), at: null });
+    return out.sort((x, y) => (y.here - x.here) || ((y.at || 0) - (x.at || 0))).slice(0, MAX_DEVICES + 1);
+  }
+
+  // Esclude un altro dispositivo dal profilo: gli altri ignorano le sue parole, il suo file si cancella da Dropbox
+  async function excludeDevice(id) {
+    const profileId = currentProfileId();
+    if (!profileId || !enabledHere()) throw new CloudError('auth');
+    if (!DEVICE_CODE.test(String(id)) || id === deviceId()) throw new CloudError('path');
+    const folder = folderOf(profileId);
+    if (!(await findFolder(folder, true))) throw new CloudError('not-found');
+    const st = profileState(profileId);
+    st.excludedRev = null; // si rilegge sempre prima di aggiungere
+    let meta = null;
+    let list = [];
+    for (let attempt = 0; attempt < 3 && !meta; attempt += 1) {
+      st.excludedRev = null; // si rilegge sempre prima di aggiungere
+      const entries = (await listFolder(dirOf(folder))).filter((e) => e['.tag'] === 'file');
+      const current = await readExcluded(folder, entries, st);
+      // Questo dispositivo è già stato escluso da un altro: non può escludere nessuno
+      if (current.includes(deviceId())) { await leaveSync(profileId); throw new CloudError('excluded'); }
+      list = [...new Set([...current, id])].slice(-100);
+      const entry = entries.find((e) => FILE_NAMES.excluded.test(e.name));
+      // Solo se nessuno l'ha cambiata nel frattempo: due esclusioni quasi insieme non si cancellano a vicenda
+      const mode = entry && entry.rev ? { '.tag': 'update', update: entry.rev } : 'add';
+      try {
+        meta = await upload(checkPath(folder, 'esclusi.json'),
+          new Blob([JSON.stringify({ format: 'picspeak', kind: 'cloud-excluded', devices: list })], { type: 'application/json' }), mode);
+      } catch (error) {
+        if (!(error instanceof CloudError && error.message === 'conflict')) throw error;
+      }
+    }
+    if (!meta) throw new CloudError('busy');
+    st.excluded = list;
+    st.excludedRev = meta.rev || null;
+    try { await remove(folder, `abitudini-${id}.picspeak`); } catch (error) { /* già tolto */ }
+    const layers = await loadLayers(profileId);
+    if (layers[id]) { delete layers[id]; await storage.set(LAYERS_PREFIX + profileId, layers); }
+    predict.setRemoteLayer(id, null);
+    await saveStateQuiet();
+  }
+
   async function pullNow({ apply }) {
     const profileId = currentProfileId();
     if (!profileId || !enabledHere()) return;
@@ -743,11 +875,15 @@
       throw error;
     }
     const mine = deviceId();
+    // 0. Questo dispositivo è stato escluso da un altro? Allora smette di sincronizzarsi
+    const excluded = await readExcluded(folder, entries, st);
+    if (excluded.includes(mine)) { await leaveSync(profileId); return; }
     // 1. Abitudini degli altri dispositivi: ogni file sostituisce il livello di quel dispositivo
     const layers = await loadLayers(profileId);
     let layersChanged = false;
     const present = new Set();
-    const deviceEntries = entries.filter((x) => FILE_NAMES.device.test(x.name)).sort((x, y) => (x.name < y.name ? -1 : 1));
+    const deviceEntries = entries.filter((x) => FILE_NAMES.device.test(x.name)
+      && !excluded.includes(x.name.slice('abitudini-'.length, -'.picspeak'.length))).sort((x, y) => (x.name < y.name ? -1 : 1));
     deviceEntries.forEach((e) => present.add(e.name.slice('abitudini-'.length, -'.picspeak'.length)));
     for (const e of deviceEntries.slice(0, MAX_DEVICES + 1)) {
       const dev = e.name.slice('abitudini-'.length, -'.picspeak'.length);
@@ -756,10 +892,11 @@
       if (layers[dev] && layers[dev].rev === e.rev) continue;
       try {
         if (typeof e.size === 'number' && e.size > MAX_HABITS_DOWNLOAD) continue;
-        const { parts } = await openRemote(folder, e.name, MAX_HABITS_DOWNLOAD);
+        const { opened, parts } = await openRemote(folder, e.name, MAX_HABITS_DOWNLOAD);
         if (!parts.habits) continue;
         const parsed = { pairs: parts.habits.pairs, days: parts.habits.days, months: parts.habits.months };
-        layers[dev] = { rev: e.rev, parsed };
+        // Tipo di dispositivo (es. «iPad, Safari»), per l'elenco dei dispositivi nelle impostazioni
+        layers[dev] = { rev: e.rev, parsed, device: cleanText(opened.info.device, 60) };
         predict.setRemoteLayer(dev, parsed);
         layersChanged = true;
       } catch (error) {
@@ -823,6 +960,7 @@
     const st = profileState(profileId);
     if (!st.conflictRev) return;
     if (!(await findFolder(folder, true))) throw new CloudError('not-found');
+    if (await excludedNow(profileId, folder, st)) throw new CloudError('excluded');
     const now = new Date();
     const beforeName = `prima-${timeStamp(now)}.picspeak`;
     if (which === 'mine') {
@@ -906,6 +1044,7 @@
     if (!Array.isArray(link.profileIds)) link.profileIds = [];
     if (!link.profileIds.includes(profileId)) link.profileIds.push(profileId);
     link.folders = { ...(link.folders && typeof link.folders === 'object' ? link.folders : {}), [profileId]: folder };
+    if (Array.isArray(link.excludedProfiles)) link.excludedProfiles = link.excludedProfiles.filter((x) => x !== profileId);
     deviceId();
     await storage.set(LINK_KEY, link);
     const st = profileState(profileId);
@@ -957,7 +1096,7 @@
       if (folder !== profileId) throw new CloudError('not-found');
       await nameFolder(folder, data.profile && data.profile.name);
       await uploadProfileInfo(folder, new Date());
-    }
+    } else if (await excludedNow(profileId, folder, profileState(profileId))) throw new CloudError('excluded');
     const now = new Date();
     const extra = kind === 'photo' && slug(label) ? `-${slug(label)}` : '';
     const name = `${kind === 'photo' ? 'foto' : 'prima'}-${timeStamp(now)}${extra}.picspeak`;
@@ -1125,6 +1264,14 @@
    * Scarica una copia e la apre come un file di backup. Per la copia più recente unisce il backup completo e il file
    * delle abitudini, se è più nuovo. Restituisce { opened, parts } (parts null se il file è protetto da password).
    */
+  // File delle abitudini dei dispositivi per il ripristino, senza quelli esclusi
+  async function deviceFilesForRestore(profileId) {
+    const files = (await listFolder(dirOf(profileId))).filter((e) => e['.tag'] === 'file');
+    const excluded = await readExcluded(profileId, files, {});
+    return files.filter((e) => FILE_NAMES.device.test(e.name)
+      && !excluded.includes(e.name.slice('abitudini-'.length, -'.picspeak'.length))).slice(0, MAX_DEVICES);
+  }
+
   async function openCopy(profileId, copy) {
     await findFolder(profileId);
     const opened = await backup.open(await download(checkPath(profileId, copy.name)));
@@ -1132,7 +1279,7 @@
     let parts = await backup.read(opened);
     let info = opened.info;
     const deviceFiles = copy.kind === 'latest'
-      ? (await listFolder(dirOf(profileId))).filter((e) => e['.tag'] === 'file' && FILE_NAMES.device.test(e.name)).slice(0, MAX_DEVICES)
+      ? await deviceFilesForRestore(profileId)
       : [];
     if (deviceFiles.length && parts.habits) {
       /*
@@ -1239,6 +1386,11 @@
     follow,
     isSynced,
     forgetProfile,
+    listDevices,
+    excludeDevice,
+    // Modifica fatta senza toccare le schede (es. pittogrammi recuperati): va nella prossima copia completa
+    markChanged: () => { if (ready) markDirty('full'); },
+    wasExcluded,
     folder: () => (currentProfileId() ? folderOf(currentProfileId()) : null),
     deviceId: () => (enabledHere() ? deviceId() : null),
     lastCopy,

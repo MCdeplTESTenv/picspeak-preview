@@ -327,6 +327,57 @@
     }
   }
 
+  // Dispositivi che usano questo profilo, con «Escludi» per uno perso, rubato o non più usato
+  async function showDevices() {
+    showNotice(t('cloudListing'), false, 'online');
+    let devices;
+    try {
+      devices = await cloud.listDevices();
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+      return;
+    }
+    notice = null;
+    ui.render();
+    const picked = await ui.runPanelDialog({
+      title: t('cloudDevicesTitle'),
+      help: t('cloudDevicesHelp'),
+      className: 'choice-dialog',
+      build(close) {
+        const list = el('div', 'choice-options cloud-choices');
+        devices.forEach((d) => {
+          const row = el('div', 'choice-option cloud-device');
+          const text = el('div', 'cloud-device-text');
+          text.append(el('strong', null, d.label || t('cloudDeviceUnknown')));
+          const when = d.at ? format('cloudDeviceLast', { when: whenText(d.at) }) : '';
+          text.append(el('small', null, [d.here ? t('cloudDeviceHere') : '', when].filter(Boolean).join(' · ')));
+          row.append(text);
+          if (!d.here) {
+            const btn = ui.button(t('cloudDeviceExclude'), () => close(d), false);
+            btn.classList.add('dlg-btn-danger');
+            row.append(btn);
+          }
+          list.append(row);
+        });
+        return list;
+      },
+    });
+    if (!picked) return;
+    const ok = await ui.runDialog({
+      title: t('cloudDeviceExcludeTitle'),
+      help: format('cloudDeviceExcludeHelp', { device: picked.label || t('cloudDeviceUnknown') }),
+      primary: t('cloudDeviceExclude'),
+      secondary: t('cancel'),
+    });
+    if (!ok) return;
+    try {
+      await cloud.excludeDevice(picked.id);
+      showNotice(t('cloudDeviceExcluded'), false, 'online');
+    } catch (error) {
+      showNotice(cloudErrorText(error), true, 'online');
+    }
+  }
+
   function privacyLink() {
     const a = el('a', 'dialog-link', t('cloudPrivacyLink'));
     a.href = 'privacy.html';
@@ -351,7 +402,7 @@
     }
     if (!cloud.isEnabledHere()) {
       // Collegato da un altro profilo: questo profilo non va su Dropbox finché l'adulto non lo decide
-      wrap.append(el('p', 'settings-help backup-last', t('cloudOtherProfile')));
+      wrap.append(el('p', 'settings-help backup-last', t(cloud.wasExcluded() ? 'cloudExcludedHere' : 'cloudOtherProfile')));
       wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', ui.button(t('cloudEnableBtn'), async () => {
         await cloud.enableHere();
         showNotice(t('cloudConnected'), false, 'online');
@@ -380,7 +431,8 @@
     wrap.append(ui.settingRow('cloudSync', 'cloudSyncHelp', ui.button(t('cloudSyncBtn'), syncDropbox, false)));
     wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
     wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
-    if (!cloud.isSynced()) wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
+    if (cloud.isSynced()) wrap.append(ui.settingRow('cloudDevices', 'cloudDevicesRowHelp', ui.button(t('cloudDevicesBtn'), showDevices, false)));
+    else wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
     const control = el('div', 'choice-group');
     const off = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
     off.classList.add('dlg-btn-danger');

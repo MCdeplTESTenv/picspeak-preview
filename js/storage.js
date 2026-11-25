@@ -39,9 +39,10 @@
     return () => listeners.delete(listener);
   }
 
-  function notify(storeName, key) {
+  // owners: profili a cui appartengono i record scritti (se si sanno), per chi deve sapere quale profilo è cambiato
+  function notify(storeName, key, owners) {
     listeners.forEach((listener) => {
-      try { listener(storeName, key); } catch (error) { /* un ascoltatore non blocca il salvataggio */ }
+      try { listener(storeName, key, owners); } catch (error) { /* un ascoltatore non blocca il salvataggio */ }
     });
   }
   const memoryStores = new Map(RECORD_STORES.map((name) => [name, new Map()]));
@@ -249,7 +250,7 @@
     } catch (error) {
       // Resta solo in memoria per questa sessione
     }
-    notify(storeName, record.id);
+    notify(storeName, record.id, [storeName === 'profiles' ? record.id : record.profileId]);
   }
 
   async function putRecords(storeName, records) {
@@ -259,7 +260,7 @@
     } catch (error) {
       // Restano solo in memoria per questa sessione
     }
-    if (records.length) notify(storeName, records[0].id);
+    if (records.length) notify(storeName, records[0].id, records.map((r) => (storeName === 'profiles' ? r.id : r.profileId)));
   }
 
   /*
