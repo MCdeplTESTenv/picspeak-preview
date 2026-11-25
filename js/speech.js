@@ -1,8 +1,11 @@
 /*
  * Sintesi vocale con la Web Speech API del browser.
- * Nessun servizio esterno e nessun file da scaricare: si usano le voci del dispositivo.
- * La qualità dipende dalle voci installate; il tool sceglie la migliore disponibile,
+ * Nessun file da scaricare: si usano le voci del browser e del dispositivo.
+ * La qualità dipende dalle voci installate; il tool sceglie la migliore del dispositivo,
  * oppure quella scelta dall'adulto nelle impostazioni (voce, velocità, tono).
+ * Privacy: le voci «online» (localService falso, es. Google su Chrome, «Online (Natural)» su Edge) mandano il testo al
+ * produttore del browser. La scelta automatica usa solo voci del dispositivo; una voce online si usa solo se l'adulto
+ * la sceglie, o se per quella lingua il dispositivo non ne ha nessuna (altrimenti il tool resterebbe muto).
  */
 (function () {
   'use strict';
@@ -41,32 +44,33 @@
     return voices.filter((v) => normalizeLang(v).startsWith(lang));
   }
 
-  // Punteggio di qualità: le voci "migliorate/naturali" suonano molto meno metalliche
+  // Punteggio di qualità tra voci dello stesso tipo: le voci "migliorate/naturali" suonano molto meno metalliche
   function score(voice, locale) {
     let points = 0;
     const name = voice.name || '';
     if (/premium|enhanced|migliorat|neural|natural|naturale/i.test(name)) points += 4;
-    if (/google/i.test(name)) points += 3; // voci Google di Chrome: buone, ma solo online
     if (/siri/i.test(name)) points += 3;
-    if (/online/i.test(name)) points += 2; // voci "Online (Natural)" di Edge
     if (/compact|eloquence|espeak/i.test(name)) points -= 3; // voci robotiche
     if (normalizeLang(voice) === locale.toLowerCase()) points += 1;
-    // Senza connessione servono le voci installate sul dispositivo
-    if (voice.localService) points += navigator.onLine ? 0 : 6;
-    else if (!navigator.onLine) points -= 10;
     return points;
   }
 
-  function bestVoice(locale) {
-    const pool = voicesFor(locale);
-    const lang = locale.split('-')[0];
-    const chosen = prefs.voiceByLang[lang];
+  // Sceglie la voce tra quelle della lingua (funzione pura, provata dai test):
+  // 1. la voce scelta dall'adulto, se c'è (una voce online solo con la rete);
+  // 2. altrimenti la migliore del dispositivo, così il testo non esce mai senza una scelta dell'adulto;
+  // 3. solo se il dispositivo non ha voci per la lingua, la migliore online (con la rete).
+  function pickVoice(pool, locale, chosen, online) {
     if (chosen) {
       const voice = pool.find((v) => v.name === chosen);
-      // La voce scelta si usa se disponibile (offline, una voce online non funzionerebbe)
-      if (voice && (voice.localService || navigator.onLine)) return voice;
+      if (voice && (voice.localService || online)) return voice;
     }
-    return pool.slice().sort((a, b) => score(b, locale) - score(a, locale))[0] || null;
+    const best = (list) => list.slice().sort((a, b) => score(b, locale) - score(a, locale))[0] || null;
+    return best(pool.filter((v) => v.localService)) || (online ? best(pool) : null);
+  }
+
+  function bestVoice(locale) {
+    const lang = locale.split('-')[0];
+    return pickVoice(voicesFor(locale), locale, prefs.voiceByLang[lang], navigator.onLine);
   }
 
   /*
@@ -83,6 +87,9 @@
   function buildUtterance(text, locale) {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = locale;
+    // Se l'elenco delle voci non è ancora arrivato (Chrome/Edge lo caricano dopo), lo si chiede di nuovo prima di
+    // scegliere: senza una voce indicata il browser userebbe la sua predefinita, che potrebbe essere online
+    if (!voices.length) voices = synth.getVoices();
     const voice = bestVoice(locale);
     if (voice) utterance.voice = voice;
     utterance.rate = prefs.rate;
@@ -184,6 +191,7 @@
     stop,
     voicesFor,
     bestVoice,
+    pickVoice,
     setPrefs,
     getPrefs: () => ({ ...prefs, voiceByLang: { ...prefs.voiceByLang } }),
     onVoicesChanged: (fn) => listeners.add(fn),

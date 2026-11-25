@@ -758,6 +758,8 @@
     field.append(caption, select);
     wrap.append(field);
     if (!available.length) wrap.append(list(t('voiceNone')));
+    // Solo voci online per questa lingua: «Automatica» manderà il testo al produttore del browser, lo si dice
+    else if (available.every((voice) => !voice.localService)) wrap.append(list(t('voiceOnlyOnline')));
 
     // Cursori per velocità e tono
     [['rate', 'rateLabel', 0.5, 1.5], ['pitch', 'pitchLabel', 0.5, 1.5]].forEach(([key, labelKey, min, max]) => {
