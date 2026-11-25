@@ -140,6 +140,7 @@
     try {
       const file = await backup.create({ name: values.name, password: values.pass, fallbackName: t('backupFileWord') });
       backup.save(file.blob, file.name);
+      await refreshReminder();
       showNotice(format('backupSaved', { file: file.name }), false, where);
       return true;
     } catch (error) {
@@ -1210,6 +1211,72 @@
     erase.classList.add('dlg-btn-danger');
     wrap.append(ui.settingRow('resetAll', 'resetAllHelp', erase));
   }
+
+  // ---------- Promemoria del backup ----------
+  // Solo per l'adulto (impostazioni e barra della modalità adulto, mai nella vista del bambino) e solo se il profilo
+  // non ha il backup online attivo qui. Un pallino sul pulsante «Impostazioni» e un avviso in cima alle impostazioni,
+  // con «Salva un backup» e «Più tardi» (una settimana). Le regole sono in backup.reminderDue.
+  let reminder = { due: false, days: null };
+
+  function onlineActive() {
+    return Boolean(cloud && cloud.isConfigured() && cloud.isConnected() && cloud.isEnabledHere());
+  }
+
+  async function refreshReminder() {
+    try {
+      reminder = await backup.reminderState(onlineActive());
+    } catch (error) {
+      reminder = { due: false, days: null };
+    }
+    const btn = document.getElementById('btn-open-settings');
+    if (btn) {
+      btn.classList.toggle('has-reminder', reminder.due);
+      // Chi usa un lettore di schermo sente il motivo del pallino
+      if (reminder.due) {
+        btn.title = reminderText();
+        btn.setAttribute('aria-description', reminderText());
+      } else {
+        btn.removeAttribute('title');
+        btn.removeAttribute('aria-description');
+      }
+    }
+  }
+
+  function reminderText() {
+    return reminder.days === null ? t('backupReminderNever') : format('backupReminderDays', { n: reminder.days });
+  }
+
+  function reminderBanner(categoryId) {
+    if (!reminder.due || categoryId === 'backup') return null;
+    const box = el('div', 'settings-banner');
+    box.setAttribute('role', 'status');
+    const text = reminderText();
+    const hint = cloud && cloud.isConfigured() ? t('backupReminderHintOnline') : t('backupReminderHint');
+    const words = el('p', 'settings-banner-text');
+    words.append(el('strong', '', text), document.createTextNode(` ${hint}`));
+    const actions = el('div', 'settings-banner-actions');
+    actions.append(
+      ui.button(t('backupReminderSave'), async () => {
+        const saved = await saveBackup();
+        await refreshReminder();
+        // Salvato: si va su «Backup e ripristino», dove compare la conferma con il nome del file
+        if (saved) ui.openSettings('backup');
+        else ui.render();
+      }, true),
+      ui.button(t('backupReminderLater'), async () => {
+        await backup.snoozeReminder();
+        await refreshReminder();
+        ui.render();
+      }, false),
+    );
+    box.append(words, actions);
+    return box;
+  }
+
+  ui.addBanner(reminderBanner);
+  // Dropbox collegato o scollegato: il promemoria compare o sparisce
+  if (cloud && cloud.onStatus) cloud.onStatus(() => { refreshReminder(); });
+  document.addEventListener('picspeak:adult-enter', () => { refreshReminder().then(() => ui.render()); });
 
   // Entrando in modalità adulto: se ci sono due versioni delle schede, si chiede subito quale tenere
   document.addEventListener('picspeak:adult-enter', () => { setTimeout(askConflict, 300); });

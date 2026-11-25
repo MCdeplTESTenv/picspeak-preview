@@ -23,7 +23,7 @@
   // Scelte salvate per profilo (vedi sopra e docs/FORMATO-DATI.md)
   const PROFILE_KEYS = [
     'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase',
-    'communication', 'prediction', 'printOptions', 'lockPositions', 'lastBackup',
+    'communication', 'prediction', 'printOptions', 'lockPositions', 'lastBackup', 'backupReminder',
   ];
   const PROFILE_KEY_SET = new Set(PROFILE_KEYS);
   const ACTIVE_KEY = 'activeProfileId';
@@ -70,18 +70,61 @@
   }
 
   /*
-   * Chiede al browser di non cancellare da solo i dati di PicSpeak quando lo spazio scarseggia
-   * (archiviazione «persistente»). Safari e Chrome decidono da soli senza finestre (Safari la concede in genere
-   * all'app aggiunta alla schermata Home); Firefox mostra una richiesta di permesso: per questo si chiede
-   * all'ingresso nella modalità adulto, mai davanti al bambino. Se non è disponibile non cambia nulla.
+   * Archiviazione «persistente»: il browser non cancella da solo i dati di PicSpeak quando lo spazio scarseggia.
+   * Scelta fissa: si chiede sempre (Impostazioni › Sicurezza mostra solo lo stato). Se il browser non ha la funzione
+   * o dice no non succede nulla: i dati restano salvati come sempre, solo senza la protezione in più.
+   * Safari e Chrome decidono da soli senza finestre (la concedono più facilmente all'app aggiunta alla schermata Home);
+   * Firefox mostra una richiesta di permesso: per questo si chiede solo nella modalità adulto, mai davanti al bambino.
+   * Una volta concessa, nessuna funzione del browser permette al sito di ritirarla: si toglie dalle impostazioni del
+   * browser (dati o permessi del sito).
+   * Stato: 'granted' (protetti), 'not' (non ancora), 'unsupported' (il browser non permette di chiederlo).
    */
-  function requestPersistence() {
+  function storageManager() {
     try {
       const sm = navigator.storage;
-      if (!sm || typeof sm.persist !== 'function' || typeof sm.persisted !== 'function') return;
-      sm.persisted().then((already) => (already ? true : sm.persist())).catch(() => {});
+      return sm && typeof sm.persist === 'function' && typeof sm.persisted === 'function' ? sm : null;
     } catch (error) {
-      // Nulla da fare
+      return null;
+    }
+  }
+
+  async function persistenceStatus() {
+    const sm = storageManager();
+    if (!sm) return 'unsupported';
+    try {
+      return (await sm.persisted()) ? 'granted' : 'not';
+    } catch (error) {
+      return 'not';
+    }
+  }
+
+  // Chiede la protezione (se non c'è già) e restituisce lo stato che ne risulta; non lancia mai errori
+  async function requestPersistence() {
+    const sm = storageManager();
+    if (!sm) return 'unsupported';
+    try {
+      if (await sm.persisted()) return 'granted';
+      return (await sm.persist()) ? 'granted' : 'not';
+    } catch (error) {
+      return 'not';
+    }
+  }
+
+  // All'ingresso nella modalità adulto: se non è già concessa la si chiede, ma al massimo una volta ogni 7 giorni
+  // per dispositivo (Firefox mostra una domanda: non va ripetuta a ogni sblocco). Non lancia mai errori.
+  const KEEP_ASKED_KEY = 'keepDataAsked';
+  const KEEP_ASK_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
+
+  async function keepData() {
+    try {
+      const status = await persistenceStatus();
+      if (status !== 'not') return status;
+      const asked = Date.parse(await get(KEEP_ASKED_KEY));
+      if (!Number.isNaN(asked) && Date.now() - asked >= 0 && Date.now() - asked < KEEP_ASK_EVERY_MS) return status;
+      await set(KEEP_ASKED_KEY, new Date().toISOString());
+      return await requestPersistence();
+    } catch (error) {
+      return 'not';
     }
   }
 
@@ -310,7 +353,7 @@
 
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
-    name: DB_NAME, get, set, remove, clearAll, requestPersistence, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
+    name: DB_NAME, get, set, remove, clearAll, requestPersistence, persistenceStatus, keepData, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
     getRecordsByPrefix, deleteRecords, onChange,
     PROFILE_KEYS, activeProfileId, setActiveProfileId, newProfileId,
     getProfileSettings, setProfileSettings, removeProfileSettings,

@@ -2248,3 +2248,32 @@ body > .adult-bar { order: 0; }
 @media (max-width: 520px) {
   .adult-profile { max-width: 20vw; padding: 4px 8px; font-size: 14px; }
 }
+
+/* =====================================================================
+ * Promemoria del backup (solo modalità adulto): pallino sul pulsante «Impostazioni» e avviso in cima alle impostazioni
+ * ===================================================================== */
+#btn-open-settings { position: relative; }
+#btn-open-settings.has-reminder::after {
+  content: "";
+  position: absolute; top: 6px; right: 6px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #e8710a; box-shadow: 0 0 0 2px var(--adult-bg, #1d1d1f);
+}
+.settings-banner {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  margin: 0 0 4px; padding: 12px 16px;
+  background: #fff4e5; color: #4a2c00;
+  border: 1px solid #f3c98b; border-radius: 12px;
+}
+.settings-banner-text { margin: 0; flex: 1 1 280px; line-height: 1.4; }
+.settings-banner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-layout > .settings-banner + .settings-nav { margin-top: 0; }
+@media (max-width: 720px) {
+  .settings-banner { margin-bottom: 12px; }
+}
+/* Conservazione dei dati (Sicurezza): scelta fissa, mostrata come etichetta e non come interruttore */
+.setting-status.keep-data-on {
+  align-self: flex-start; padding: 6px 12px; border-radius: 999px;
+  background: #e6f4ea; color: #1e5e2f; white-space: nowrap;
+}

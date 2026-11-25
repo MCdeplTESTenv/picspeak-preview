@@ -192,6 +192,54 @@
     return { at: new Date(saved.at), name: cleanName(saved.name) };
   }
 
+  // ---------- Promemoria del backup (solo per chi non ha il backup online) ----------
+
+  // Primo promemoria dopo una settimana di uso, poi un mese dopo l'ultimo backup; «Più tardi» rimanda di una settimana
+  const REMINDER_KEY = 'backupReminder';
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const REMINDER_FIRST_DAYS = 7;
+  const REMINDER_EVERY_DAYS = 30;
+  const REMINDER_SNOOZE_DAYS = 7;
+
+  function validDate(value) {
+    const ms = typeof value === 'string' ? Date.parse(value) : NaN;
+    return Number.isNaN(ms) ? null : ms;
+  }
+
+  /*
+   * Decide se mostrare il promemoria (funzione pura, per i test). Date in millisecondi o null:
+   * now, last (ultimo backup da questo dispositivo), since (creazione del profilo), until (rimandato fino a).
+   * online: il profilo ha il backup online attivo su questo dispositivo, e allora non serve.
+   */
+  function reminderDue({ now, last: savedLast, since, until, online }) {
+    if (online) return false;
+    // Date nel futuro (orologio spostato avanti e poi corretto, valore rovinato): un rinvio non dura più di 7 giorni,
+    // un backup «nel futuro» vale come fatto adesso
+    if (until && now < until && until - now <= REMINDER_SNOOZE_DAYS * DAY_MS) return false;
+    const last = savedLast ? Math.min(savedLast, now) : savedLast;
+    if (last) return now - last >= REMINDER_EVERY_DAYS * DAY_MS;
+    // Mai salvato: si aspetta una settimana dalla nascita del profilo (data sconosciuta: si mostra)
+    return !since || now - since >= REMINDER_FIRST_DAYS * DAY_MS;
+  }
+
+  // Stato per il profilo in uso: { due, days } (days = giorni dall'ultimo backup, null se mai salvato)
+  async function reminderState(online) {
+    const now = Date.now();
+    const lastInfo = await lastBackup();
+    const last = lastInfo ? lastInfo.at.getTime() : null;
+    const saved = await storage.get(REMINDER_KEY);
+    const until = saved && typeof saved === 'object' ? validDate(saved.until) : null;
+    const since = data.profile ? validDate(data.profile.createdAt) : null;
+    return {
+      due: reminderDue({ now, last, since, until, online: Boolean(online) }),
+      days: last ? Math.max(0, Math.floor((now - last) / DAY_MS)) : null,
+    };
+  }
+
+  async function snoozeReminder() {
+    await storage.set(REMINDER_KEY, { until: new Date(Date.now() + REMINDER_SNOOZE_DAYS * DAY_MS).toISOString() });
+  }
+
   async function setProfileName(name) {
     const profile = data.profile;
     if (!profile) return;
@@ -734,6 +782,9 @@
     MAX_TEMPLATES,
     cryptoAvailable,
     lastBackup,
+    reminderDue,
+    reminderState,
+    snoozeReminder,
     setProfileName,
     create,
     save,

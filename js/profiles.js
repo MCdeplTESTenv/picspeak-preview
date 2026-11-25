@@ -142,7 +142,7 @@
       createdAt: stamp,
       updatedAt: stamp,
     };
-    const { lastBackup, ...choices } = settings; // la data dell'ultimo backup non si copia
+    const { lastBackup, backupReminder, ...choices } = settings; // ultimo backup e promemoria rimandato non si copiano
 
     await storage.putRecords('contexts', contexts);
     await storage.putRecords('pages', pages);

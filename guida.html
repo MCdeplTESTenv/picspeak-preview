@@ -1102,6 +1102,8 @@
           Installa pagina come app».</li>
         <li>L’icona compare nella schermata Home: PicSpeak si apre a schermo intero e funziona anche senza connessione.</li>
       </ol>
+      <p>Installato come app, PicSpeak ottiene più facilmente dal browser la
+        <a href="#conservazione">conservazione dei dati</a>.</p>
       <h4>Internet e consumo dati</h4>
       <p>PicSpeak funziona sempre senza internet con i simboli già salvati. Internet serve solo per cercare simboli nuovi e
         per gli aggiornamenti (pochi KB). In <span class="where"><span>Impostazioni</span><span>Generale</span><span>Ricerca online di nuovi simboli</span></span>
@@ -1173,9 +1175,24 @@
         nessun dato della persona viene inviato su internet: quando cercate un simbolo esce soltanto la parola cercata.
         L’unica eccezione la decidete voi: se collegate il <a href="#backup-online">backup online</a>, una copia va nel
         <strong>vostro</strong> Dropbox, e solo lì.</p>
-      <p class="warn">Cancellare i dati di navigazione del browser per questo sito cancella anche le tessere personalizzate.
-        Salvate ogni tanto un backup completo (vedi <a href="#backup">Fare un backup e ripristinarlo</a>) e
-        conservatelo in un posto sicuro.</p>
+      <h4 id="conservazione">Conservazione dei dati</h4>
+      <p>Quando lo spazio sul dispositivo scarseggia, il browser può cancellare da solo i dati dei siti. Per questo
+        PicSpeak chiede <strong>sempre</strong> al browser di conservare i suoi dati. È una scelta fissa, per la massima
+        sicurezza: non si spegne. Su Firefox può comparire una domanda del browser, che va accettata.</p>
+      <p><strong>Installare PicSpeak come app</strong> (o aggiungerlo alla schermata Home, che è la stessa cosa; vedi
+        <a href="#installare">Installare come app</a>) aiuta il browser a concedere la conservazione dei dati.</p>
+      <p>Per vedere se il browser l’ha concessa aprite
+        <span class="where"><span>Impostazioni</span><span>Sicurezza</span><span>Conservare i dati</span></span>:</p>
+      <ul>
+        <li><strong>Protetti</strong>: il browser non cancella i dati da solo.</li>
+        <li><strong>Non ancora protetti</strong>: per ora il browser non l’ha concesso. Installate PicSpeak come app,
+          se non l’avete già fatto; PicSpeak lo richiede da solo una volta a settimana.</li>
+        <li><strong>Questo browser non permette di chiederlo</strong>: tutto funziona lo stesso, ma senza questa
+          protezione in più.</li>
+      </ul>
+      <p class="warn">La conservazione non protegge da una cancellazione fatta a mano: cancellare i dati di navigazione
+        del browser per questo sito cancella anche le tessere personalizzate. Salvate ogni tanto un backup completo (vedi
+        <a href="#backup">Fare un backup e ripristinarlo</a>) e conservatelo in un posto sicuro.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -1203,6 +1220,12 @@
         non riesce nemmeno così compare un avviso e il file non viene salvato.</p>
       <p>Sotto il pulsante compare la data dell’ultimo backup salvato da questo dispositivo per il profilo in uso. Il nome del profilo si può
         cambiare anche con <strong>Cambia…</strong>, accanto a «Nome del profilo».</p>
+      <h4 id="promemoria-backup">Promemoria del backup</h4>
+      <p>Se il profilo non ha il <a href="#backup-online">backup online</a> collegato su questo dispositivo, PicSpeak
+        ricorda di salvare un backup: la prima volta dopo una settimana d’uso, poi quando l’ultimo backup ha più di un
+        mese. Il promemoria lo vede solo l’adulto, mai il bambino: un pallino arancione sul pulsante
+        <strong>Impostazioni</strong> e un riquadro in cima alle impostazioni con <strong>Salva un backup</strong> e
+        <strong>Più tardi</strong>. «Più tardi» lo rimanda di una settimana; dopo un backup sparisce da solo.</p>
       <p class="warn">Il file contiene foto e abitudini del bambino: conservatelo con cura. Se mettete una password e la
         dimenticate, il backup non si può più aprire: nessuno può recuperarla.</p>
       <h4>Ripristinare un backup</h4>
@@ -1539,6 +1562,7 @@
         <li><a href="#pin">Codice di recupero</a></li>
         <li><a href="#colori">Colori per tipo di parola</a></li>
         <li><a href="#contesti">Contesti</a></li>
+        <li><a href="#conservazione">Conservazione dei dati</a></li>
         <li><a href="#crediti">Crediti</a></li>
         <li><a href="#dati">Dati e privacy</a></li>
         <li><a href="#modelli">Esporta</a></li>
@@ -1571,6 +1595,7 @@
         <li><a href="#profili">Più persone sullo stesso dispositivo</a></li>
         <li><a href="#previsione">Previsione</a></li>
         <li><a href="#profili">Profili</a></li>
+        <li><a href="#promemoria-backup">Promemoria del backup</a></li>
         <li><a href="#frase">Pronuncia</a></li>
         <li><a href="#schede-pronte">Recupero</a></li>
         <li><a href="#ripristino">Ripristino delle impostazioni</a></li>
