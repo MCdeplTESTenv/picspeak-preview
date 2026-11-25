@@ -800,9 +800,9 @@
       <p class="warn">Il file contiene le abitudini del bambino: condividetelo solo con persone di fiducia.</p>
       <h4>Spostare le abitudini e i contesti su un altro dispositivo</h4>
       <p>Abitudini d’uso e contesti viaggiano con il <a href="#backup">backup completo</a>, insieme alle schede. Sul
-        nuovo dispositivo aprite il backup con <strong>Apri backup…</strong>; se volete riportare solo questa parte,
+        nuovo dispositivo aprite il backup con <strong>Ripristina…</strong>; se volete riportare solo questa parte,
         scegliete <strong>Scegli cosa ripristinare</strong> e tenete solo <strong>Abitudini d’uso e contesti</strong>. Con
-        <strong>Apri backup…</strong> si aprono anche i file «storico e contesti» salvati con le versioni precedenti di
+        <strong>Ripristina…</strong> si aprono anche i file «storico e contesti» salvati con le versioni precedenti di
         PicSpeak.</p>
       <h4 id="previsione-esempi">Come funziona, con qualche esempio</h4>
       <p>PicSpeak tiene un solo archivio delle <strong>abitudini</strong>: per ogni giorno e per ogni ora, quante volte
@@ -962,7 +962,7 @@
         potete tenere sia l’originale sia la versione personalizzata. Le abitudini registrate non cambiano con
         l’importazione. Per spostare <strong>tutti</strong> i contesti insieme alle abitudini usate il
         <a href="#backup">backup completo</a>; se scegliete per sbaglio un file di backup o un vecchio file «storico e
-        contesti», PicSpeak vi ricorda di aprirlo da <strong>Apri backup…</strong>.</p>
+        contesti», PicSpeak vi ricorda di aprirlo da <strong>Ripristina…</strong>.</p>
       <p class="tip">Eliminare un contesto non cancella lo storico d’uso del bambino.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
@@ -1207,8 +1207,8 @@
         dimenticate, il backup non si può più aprire: nessuno può recuperarla.</p>
       <h4>Ripristinare un backup</h4>
       <ol class="steps">
-        <li>In <strong>Ripristina un backup</strong> toccate <strong>Apri backup…</strong> e scegliete il file
-          .picspeak.</li>
+        <li>In <strong>Ripristina</strong> toccate <strong>Ripristina…</strong>. Se avete collegato Dropbox, scegliete
+          <strong>Un file sul dispositivo</strong>; poi scegliete il file .picspeak.</li>
         <li>Se il backup ha una password, scrivetela.</li>
         <li>PicSpeak mostra di chi è il backup, quando e da quale dispositivo è stato salvato e cosa contiene, e chiede
           dove ripristinarlo:
@@ -1254,6 +1254,10 @@
         copia. Basta un account Dropbox, anche gratuito.</p>
       <p>PicSpeak usa <strong>solo la sua cartella</strong> <code>Applicazioni/PicSpeak</code> nel vostro Dropbox: non
         vede, non modifica e non cancella nessun altro file. Lo garantisce Dropbox stesso.</p>
+      <p class="tip">Le copie su Dropbox non hanno una password propria: le protegge il vostro account Dropbox. Usate una
+        password sicura e attivate la verifica in due passaggi di Dropbox. Le copie occupano spazio (fino a 10 copie del
+        giorno, più le copie con nome): se Dropbox è pieno, PicSpeak lo dice e smette di salvare finché non liberate
+        spazio.</p>
       <h4>Collegare Dropbox</h4>
       <ol class="steps">
         <li><a href="#pin">Sbloccate le impostazioni</a> e aprite
@@ -1280,7 +1284,7 @@
       <p>In <strong>Aggiornamento</strong> scegliete come si salva la copia. Si parte da <strong>Manuale</strong>.</p>
       <ul>
         <li><strong>Manuale</strong>: PicSpeak non invia e non riceve nulla da solo. Toccate <strong>Aggiorna adesso</strong>
-          quando volete salvare le modifiche su Dropbox e prendere subito quelle degli altri dispositivi; anche <strong>Salva una fotografia</strong> salva una copia. Se vi dimenticate, la
+          quando volete salvare le modifiche su Dropbox e prendere subito quelle degli altri dispositivi; anche <strong>Salva una copia</strong> salva una copia con nome. Se vi dimenticate, la
           copia su Dropbox resta indietro: la riga in alto dice «Modifiche in attesa di invio».</li>
         <li><strong>Automatico</strong>: la copia si salva da sola e, con più dispositivi, le modifiche arrivano da sole
           anche sugli altri.</li>
@@ -1298,7 +1302,7 @@
           <strong>Aggiorna adesso</strong>.</li>
         <li><strong>Copie del giorno</strong>: ogni giorno in cui si salva la copia resta anche una copia di quel giorno.
           Si tengono le ultime 10; le più vecchie si cancellano da sole.</li>
-        <li><strong>Fotografie</strong>: con <strong>Salva una fotografia</strong> fate una copia di tutto com’è adesso,
+        <li><strong>Copie con nome</strong>: con <strong>Salva una copia</strong> fate una copia di tutto com’è adesso,
           con un nome se volete (per esempio «prima delle vacanze»). Resta su Dropbox finché non la cancellate voi
           dalla cartella <code>Applicazioni/PicSpeak</code>.</li>
         <li>Prima di un ripristino o di <strong>Cancella tutto</strong> PicSpeak salva anche una copia di sicurezza
@@ -1313,7 +1317,7 @@
         attesa. PicSpeak non chiede a Dropbox né il vostro nome né la vostra email.</p>
       <h4>Tornare a una copia</h4>
       <ol class="steps">
-        <li>Toccate <strong>Ripristina da Dropbox</strong>.</li>
+        <li>In <strong>Ripristina</strong> toccate <strong>Ripristina…</strong> e scegliete <strong>Una copia su Dropbox</strong>.</li>
         <li>Se su Dropbox ci sono più profili, scegliete quello da ripristinare.</li>
         <li>Scegliete la copia. Sotto ogni voce c’è la data e a cosa serve:
           <ul>
@@ -1321,7 +1325,7 @@
               riavere tutto su un dispositivo nuovo o dopo <strong>Cancella tutto</strong>. Se ripristinate il profilo
               che state usando, compare in fondo come <strong>Ultima copia (uguale a ora)</strong>, perché è quasi
               uguale a quello che avete già.</li>
-            <li><strong>Fotografia «…»</strong>: le copie salvate da voi, con il nome che avete scritto.</li>
+            <li><strong>Copia «…»</strong>: le copie salvate da voi, con il nome che avete scritto.</li>
             <li><strong>Copia del giorno</strong>: com’era la mattina di quel giorno, per tornare a prima di una
               modifica sbagliata.</li>
             <li><strong>Copia automatica prima di un ripristino o di una cancellazione</strong>: per annullare
@@ -1332,7 +1336,7 @@
           uso, tutto o parte per parte.</li>
       </ol>
       <p>Su un dispositivo nuovo, o dopo <strong>Cancella tutto</strong>, collegate Dropbox e usate
-        <strong>Ripristina da Dropbox</strong>. Poi scegliete un PIN nuovo.</p>
+        <strong>Una copia su Dropbox</strong> come sopra. Poi scegliete un PIN nuovo.</p>
       <h4>Lo stesso profilo su più dispositivi</h4>
       <p>Se il bambino usa PicSpeak su più dispositivi (per esempio il tablet di casa e quello di scuola), potete fare in
         modo che abbiano le stesse schede e che i suggerimenti tengano conto delle parole usate su tutti.</p>
@@ -1383,7 +1387,7 @@
           <strong>PicSpeak</strong>. Il collegamento si toglie così a tutti i dispositivi: sugli altri toccate di nuovo
           <strong>Collega Dropbox</strong> (le copie su Dropbox restano).</li>
         <li>Se qualcuno ha cambiato le schede (solo con il PIN), tornate a una <strong>Copia del giorno</strong> di
-          prima con <strong>Ripristina da Dropbox</strong>.</li>
+          prima con <strong>Ripristina…</strong> → <strong>Una copia su Dropbox</strong>.</li>
       </ol>
       <p>Il profilo sul dispositivo escluso resta com’era. Se lo ritrovate, su quel dispositivo toccate
         <strong>Apri un profilo</strong> e riaprite il profilo del bambino; quello vecchio si può eliminare da
@@ -1406,7 +1410,7 @@
       <h3>Azzerare l’app</h3>
       <p>Nella sezione <strong>Azzera l’app</strong> di
         <span class="where"><span>Impostazioni</span><span>Backup e ripristino</span></span> ci sono due comandi. Per
-        recuperare un backup si usa invece <a href="#backup">Ripristina un backup</a>.</p>
+        recuperare un backup si usa invece <a href="#backup">Ripristina</a>.</p>
       <h4>Tornare alle impostazioni iniziali</h4>
       <p>Se avete provato molte regolazioni e volete ripartire da capo:</p>
       <ol class="steps">
@@ -1477,7 +1481,7 @@
             <li>Create un PIN nuovo e annotate il nuovo codice di recupero.</li>
             <li>Con il backup online: collegate lo stesso Dropbox e, alla domanda «Profili già su Dropbox», scegliete il
               profilo del bambino (vedi <a href="#backup-online">Backup online su Dropbox</a>). Con un file di backup:
-              usate <strong>Ripristina un backup</strong>.</li>
+              usate <strong>Ripristina…</strong>.</li>
           </ol>
           Tornano schede, foto, abitudini, contesti e impostazioni; resta solo il PIN nuovo.</dd>
         <dt>Il bambino ha aperto il menu.</dt>
@@ -1506,7 +1510,7 @@
         <dt>Ho cambiato troppe impostazioni e non ritrovo quelle di partenza.</dt>
         <dd>Vedi <a href="#ripristino">Tornare alle impostazioni iniziali</a>: schede, foto e PIN restano.</dd>
         <dt>Ho cambiato tablet, oppure ho cancellato i dati del browser.</dt>
-        <dd>Se avete un backup, aprite <a href="#backup">Ripristina un backup</a> sul nuovo dispositivo e scegliete
+        <dd>Se avete un backup, usate <a href="#backup">Ripristina</a> sul nuovo dispositivo e scegliete
           «Ripristina tutto». Il PIN si crea di nuovo.</dd>
         <dt>Ho sostituito le schede per sbaglio.</dt>
         <dd><span class="where"><span>Impostazioni</span><span>Schede</span><span>Recupero</span><span>Ripristina le schede di prima</span></span>.</dd>

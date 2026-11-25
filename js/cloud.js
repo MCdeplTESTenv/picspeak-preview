@@ -13,9 +13,9 @@
  *   attuale-abitudini.picspeak  solo abitudini e contesti, aggiornato più spesso
  *   giorno-AAAA-MM-GG.picspeak  copia del giorno (la prima sincronizzazione del giorno), si tengono le ultime 10
  *   prima-AAAA-MM-GG-HHMMSS.picspeak  copia automatica prima di un ripristino o di «Cancella tutto», ultime 5
- *   foto-AAAA-MM-GG-HHMMSS[-nome].picspeak  fotografie salvate a mano dall'adulto, mai cancellate dal tool
+ *   foto-AAAA-MM-GG-HHMMSS[-nome].picspeak  copie con nome salvate dall'adulto, mai cancellate dal tool
  *   profilo.json                nome del profilo, data dell'ultima copia e dispositivo (per l'elenco del ripristino)
- *   fotografie.json             nomi delle fotografie esattamente come li ha scritti l'adulto (nome del file → nome)
+ *   fotografie.json             nomi delle copie con nome esattamente come li ha scritti l'adulto (nome del file → nome)
  * Ogni percorso si controlla prima di scrivere o cancellare (solo questi nomi); il tool cancella solo le sue copie
  * automatiche più vecchie.
  *
@@ -107,6 +107,10 @@
   // finché aspetta non si invia nulla, così su Dropbox non nasce una cartella che poi non serve. Solo in memoria:
   // se l'app si chiude prima della risposta, alla riapertura il profilo si salva come gli altri.
   let holding = null;
+  // Dopo un errore che non è di rete (Dropbox pieno, errore del server) le copie automatiche aspettano sempre di più:
+  // 5, 10, 20, 40, poi 60 minuti. «Aggiorna adesso» non aspetta e, se riesce, azzera l'attesa.
+  let failures = 0;
+  let retryAt = 0;
   const watchers = new Set();
 
   function isConfigured() {
@@ -260,7 +264,7 @@
     return `${dayStamp(date)}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   }
 
-  // Nome facoltativo di una fotografia: solo lettere e numeri senza accenti, trattini
+  // Nome facoltativo di una copia con nome: solo lettere e numeri senza accenti, trattini
   function slug(text) {
     return String(text || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30).replace(/-+$/g, '');
@@ -427,6 +431,9 @@
       if (res.status === 409) {
         let text = '';
         try { text = await (await readLimited(res, 64 * 1024)).text(); } catch (error) { text = ''; }
+        // Dropbox pieno: lo si dice all'adulto (non è una copia mancante); troppe scritture insieme: si riprova
+        if (/insufficient_space/.test(text)) throw new CloudError('full');
+        if (/too_many_write_operations/.test(text)) throw new CloudError('busy');
         throw new CloudError(/conflict/.test(text) ? 'conflict' : 'not-found');
       }
       if (res.status === 429 || res.status >= 500) throw new CloudError('busy');
@@ -634,7 +641,7 @@
 
   /*
    * Aggiornamento automatico (scelta dell'adulto, per profilo e per dispositivo). Spento, che è la partenza: si invia
-   * e si riceve solo con «Aggiorna adesso», una fotografia o un'altra azione dell'adulto. Il primo invio dopo il
+   * e si riceve solo con «Aggiorna adesso», una copia con nome o un'altra azione dell'adulto. Il primo invio dopo il
    * collegamento parte comunque, perché l'adulto ha appena chiesto il backup.
    */
   function isAuto(id = currentProfileId()) {
@@ -743,6 +750,7 @@
     const st = profileState(id);
     const needFirst = (!st.lastFullAt && !st.conflictRev) || !st.legacyClean;
     if (!st.dirtyFull && !st.dirtyHabits && !needFirst) return false;
+    if (Date.now() < retryAt) return false;
     if (!hasNetwork() || cellularOnly()) { setStatus('waiting'); return false; }
     if (status === 'reconnect') return false;
     if (st.conflictRev && !st.dirtyHabits) return false;
@@ -841,6 +849,8 @@
         }
       }
       st.lastError = null;
+      failures = 0;
+      retryAt = 0;
       setStatus(st.conflictRev ? 'conflict' : 'idle');
     } catch (error) {
       // Si riprova più tardi: i segni tornano com'erano
@@ -863,7 +873,11 @@
         return;
       }
       st.lastError = code;
-      setStatus(code === 'auth' ? 'reconnect' : (code === 'network' ? 'waiting' : 'error'));
+      if (code !== 'network' && code !== 'auth') {
+        failures += 1;
+        retryAt = Date.now() + Math.min(60, 5 * 2 ** (failures - 1)) * 60 * 1000;
+      }
+      setStatus({ auth: 'reconnect', network: 'waiting', full: 'full' }[code] || 'error');
     } finally {
       lastSyncAt = Date.now();
       await saveStateQuiet();
@@ -1300,7 +1314,7 @@
     return Boolean(st && (st.dirtyFull || st.dirtyHabits));
   }
 
-  // Copia completa con un nome proprio: fotografia dell'adulto ('photo') o copia prima di un'operazione grande ('before')
+  // Copia completa con un nome proprio: copia con nome dell'adulto ('photo') o copia prima di un'operazione grande ('before')
   async function saveSnapshot(kind, label) {
     const profileId = currentProfileId();
     if (!profileId || !enabledHere()) throw new CloudError('auth');
@@ -1334,7 +1348,7 @@
     return name;
   }
 
-  // Nomi delle fotografie salvati su Dropbox (dato non affidabile: solo nomi di file validi e testo ripulito)
+  // Nomi delle copie con nome salvati su Dropbox (dato non affidabile: solo nomi di file validi e testo ripulito)
   async function readPhotoNames(profileId) {
     let raw = null;
     try {

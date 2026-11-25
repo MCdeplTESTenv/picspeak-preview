@@ -3,9 +3,11 @@
  * - Backup locale: nome del profilo, «Salva un backup adesso» (file .picspeak, password facoltativa), data dell'ultimo
  *   backup salvato da questo dispositivo. La logica del file è in backup.js.
  * - Backup online su Dropbox (logica in cloud.js): «Collega Dropbox» (si incolla il codice mostrato da Dropbox), stato
- *   dell'ultima copia, «Salva una fotografia adesso», «Ripristina da Dropbox», «Scollega». Il link alla pagina sulla
+ *   dell'ultima copia, aggiornamento manuale o automatico, «Aggiorna adesso», «Salva una copia» (con nome),
+ *   «Apri un profilo», dispositivi, «Scollega». Il link alla pagina sulla
  *   privacy compare solo qui, all'adulto, quando collega Dropbox.
- * - Ripristina un backup: apre un file .picspeak, mostra di chi è, quando è stato salvato e cosa contiene, poi
+ * - Ripristina: un file .picspeak dal dispositivo o una copia su Dropbox; mostra di chi è, quando è stato salvato e
+ *   cosa contiene, poi
  *   «Ripristina tutto» (sostituisce) oppure «Scegli cosa ripristinare» (per ogni parte: no, sostituisci, aggiungi o unisci).
  * - Azzera l'app: «Torna alle impostazioni iniziali» (solo le scelte delle impostazioni; restano schede, immagini,
  *   abitudini, modelli, pacchetti scaricati, uso di Internet e PIN) e «Cancella tutto e ricomincia da zero» (svuota
@@ -429,7 +431,7 @@
     showNotice(t('cloudDisconnected'), false, 'online');
   }
 
-  async function savePhoto() {
+  async function saveNamedCopy() {
     const values = await ui.runDialog({
       title: t('cloudPhotoTitle'),
       help: t('cloudPhotoHelp'),
@@ -612,10 +614,9 @@
       enableRow.append(ui.button(t('cloudEnableBtn'), enableProfile, true), privacyLink());
       wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', enableRow));
       wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
-      wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
       return;
     }
-    const status = el('p', `settings-help backup-last${['error', 'reconnect'].includes(cloud.status()) ? ' is-error' : ''}`,
+    const status = el('p', `settings-help backup-last${['error', 'reconnect', 'full'].includes(cloud.status()) ? ' is-error' : ''}`,
       `${t('cloudConnectedPlain')} ${cloudStatusText()}`);
     status.setAttribute('role', 'status');
     wrap.append(status);
@@ -641,8 +642,7 @@
       },
     )));
     wrap.append(ui.settingRow('cloudSync', auto ? 'cloudSyncHelp' : 'cloudSyncHelpManual', ui.button(t('cloudSyncBtn'), syncDropbox, !auto && cloud.pending())));
-    wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
-    wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
+    wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), saveNamedCopy, true)));
     wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
     if (cloud.isSynced()) wrap.append(ui.settingRow('cloudDevices', 'cloudDevicesRowHelp', ui.button(t('cloudDevicesBtn'), showDevices, false)));
     const control = el('div', 'choice-group');
@@ -680,12 +680,12 @@
   async function restoreFromDropbox() {
     const account = await pickAccount();
     if (account === null) return;
-    showBusy(t('cloudListing'), 'online');
+    showBusy(t('cloudListing'), 'restore');
     let profiles;
     try {
       profiles = await viaAccount(account, () => cloud.listProfiles());
     } catch (error) {
-      showNotice(cloudErrorText(error), true, 'online');
+      showNotice(cloudErrorText(error), true, 'restore');
       return;
     }
     ui.render();
@@ -706,7 +706,7 @@
     try {
       copies = await viaAccount(account, () => cloud.listCopies(profileId));
     } catch (error) {
-      showNotice(cloudErrorText(error), true, 'online');
+      showNotice(cloudErrorText(error), true, 'restore');
       return;
     }
     if (!copies.length) {
@@ -731,13 +731,13 @@
     const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
     if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
-    showBusy(t('cloudDownloading'), 'online');
+    showBusy(t('cloudDownloading'), 'restore');
     let result;
     try {
       result = await viaAccount(account, () => cloud.openCopy(profileId, copy));
     } catch (error) {
       if (error instanceof backup.BackupError) await showError(error);
-      else showNotice(cloudErrorText(error), true, 'online');
+      else showNotice(cloudErrorText(error), true, 'restore');
       return;
     }
     ui.render();
@@ -972,9 +972,38 @@
     };
   }
 
+  /*
+   * Un solo «Ripristina»: con Dropbox collegato si sceglie da dove (un file sul dispositivo o una copia su Dropbox),
+   * altrimenti si apre subito la scelta del file.
+   */
   async function restoreBackup() {
-    // Il file si sceglie subito, dentro il tocco
-    const file = await pickFile();
+    let filePicked = null;
+    if (cloud && cloud.isConfigured() && cloud.listAccounts().length) {
+      const from = await ui.runPanelDialog({
+        title: t('restoreFromTitle'),
+        className: 'choice-dialog',
+        build(close) {
+          const options = el('div', 'choice-options');
+          [['file', 'restoreFromFile', 'restoreFromFileHelp'], ['dropbox', 'restoreFromDropbox', 'restoreFromDropboxHelp']]
+            .forEach(([value, labelKey, helpKey]) => {
+              const btn = el('button', 'choice-option');
+              btn.type = 'button';
+              btn.append(el('strong', null, t(labelKey)), el('small', null, t(helpKey)));
+              btn.addEventListener('click', () => {
+                // La scelta del file si apre dentro il tocco (Safari non la apre più tardi)
+                if (value === 'file') filePicked = pickFile();
+                close(value);
+              });
+              options.append(btn);
+            });
+          return options;
+        },
+      });
+      if (!from) return;
+      if (from === 'dropbox') { await restoreFromDropbox(); return; }
+    }
+    // Senza Dropbox il file si sceglie subito, dentro il tocco
+    const file = await (filePicked || pickFile());
     if (!file) return;
     let opened;
     let parts;
