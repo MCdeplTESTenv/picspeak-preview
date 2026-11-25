@@ -3,7 +3,7 @@
  * Strategia "prima la rete": online si riceve sempre l'ultima versione,
  * offline si usa la copia salvata. Cambiare CACHE_VERSION quando si aggiungono file.
  */
-const CACHE_VERSION = 'picspeak-anteprima-v82';
+const CACHE_VERSION = 'picspeak-anteprima-v83';
 // I pacchetti di simboli scaricati dall'adulto (Mulberry, OpenMoji) e gli indici delle fonti online (Twemoji)
 // stanno in cache separate ("picspeak-pack-…"), mai cancellate dagli aggiornamenti
 
@@ -15,8 +15,9 @@ const APP_FILES = [
   'css/style.css',
   // Guida all'uso per gli adulti (aperta dal menu dei tre puntini)
   'guida.html',
-  // Pagina sulla privacy del backup online (aperta solo dalla voce «Privacy» di «Backup online» nelle impostazioni)
+  // Pagine sulla privacy del backup online, in italiano e in inglese (aperte dalla voce «Privacy» di «Backup online»)
   'privacy.html',
+  'privacy-en.html',
   'css/guida.css',
   'js/guida.js',
   // Immagini della guida (schermate con dati di prova)

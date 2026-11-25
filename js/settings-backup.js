@@ -587,10 +587,12 @@
   }
 
   // Riga «Privacy» tra le prime voci della sezione, sempre visibile: cosa succede ai dati con il backup online.
-  // Il testo è generico (oggi Dropbox, domani anche altri servizi): la pagina privacy.html elenca i servizi usati.
+  // Il testo è generico (oggi Dropbox, domani anche altri servizi): la pagina della privacy elenca i servizi usati.
+  // Una pagina per lingua: si apre quella della lingua del tool (privacy.html in italiano, privacy-en.html in inglese).
+  const PRIVACY_PAGES = { it: 'privacy.html', en: 'privacy-en.html' };
   function privacyRow() {
     const a = el('a', 'dlg-btn link-btn', t('cloudPrivacyBtn'));
-    a.href = 'privacy.html';
+    a.href = PRIVACY_PAGES[i18n.language] || PRIVACY_PAGES.it;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     return ui.settingRow('cloudPrivacy', 'cloudPrivacyHelp', a);
