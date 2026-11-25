@@ -70,10 +70,11 @@
     await storage.set(SEEN_KEY, 1);
   }
 
-  // Si propone da solo solo se: mai visto prima su questo dispositivo e nessun PIN creato
+  // Si propone da solo solo se: mai visto prima su questo dispositivo e nessuna protezione scelta oltre alla
+  // pressione lunga (con un PIN o un'operazione davanti potrebbe esserci il bambino)
   async function shouldAutoStart() {
     if (await storage.get(SEEN_KEY)) return false;
-    if (security && security.supported && (await security.hasPin())) return false;
+    if (security && (await security.getLock()).mode !== 'hold') return false;
     return true;
   }
 
@@ -92,6 +93,8 @@
   }
 
   let running = false;
+  // Durata della pressione sui tre puntini, scritta nel passo del menu
+  let holdSeconds = 3;
   // Ascolto del pulsante «Installa» del browser, tolto quando la finestra si chiude
   let stopListening = null;
 
@@ -110,8 +113,10 @@
     running = true;
     let result = null;
     try {
-      // Sull'ultimo passo, se il PIN non c'è ancora, si può crearlo subito
-      const offerPin = Boolean(security && security.supported) && !(await security.hasPin());
+      // Sull'ultimo passo, se c'è solo la pressione lunga, si può scegliere subito una protezione
+      const lock = security ? await security.getLock() : { mode: 'hold', holdSeconds: 3 };
+      const offerPin = lock.mode === 'hold';
+      holdSeconds = lock.holdSeconds;
       // Controllo ripetuto dopo l'attesa: nel frattempo l'adulto può aver aperto il menu
       const app = window.PicSpeak.app;
       if (busy() || (auto && app && app.mode === 'adult')) return;
@@ -124,7 +129,7 @@
       stopListening = null;
       running = false;
     }
-    if (result === 'pin' && adult.requestAccess) adult.requestAccess();
+    if (result === 'pin' && adult.openSecurity) adult.openSecurity();
   }
 
   function runSteps(adult, list, offerPin) {
@@ -153,7 +158,7 @@
           // innerHTML solo con icone costanti scritte qui sopra
           icon.innerHTML = `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[step.id] || ICONS.sentence}</svg>`;
           heading.textContent = step.title;
-          body.replaceChildren(...step.text.map((line) => el('p', 'tutorial-text', line)));
+          body.replaceChildren(...step.text.map((line) => el('p', 'tutorial-text', line.replace('{n}', holdSeconds))));
           if (step.id === 'install') body.append(...installBlock(show));
           if (last) body.append(el('p', 'tutorial-again', t('tutorialAgain')));
           dots.replaceChildren(...list.map((_, i) => el('span', i === index ? 'tutorial-dot is-current' : 'tutorial-dot')));
@@ -167,7 +172,7 @@
             buttons.push(main);
           } else if (offerPin) {
             buttons.push(stepButton(t('tutorialDone'), () => close('done')));
-            main = stepButton(t('tutorialCreatePin'), () => close('pin'), true);
+            main = stepButton(t('tutorialProtect'), () => close('pin'), true);
             buttons.push(main);
           } else {
             main = stepButton(t('tutorialDone'), () => close('done'), true);

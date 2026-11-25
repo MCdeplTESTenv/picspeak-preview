@@ -1,4 +1,9 @@
 /*
+ * Protezione delle impostazioni: pressione lunga sui tre puntini, poi (a scelta dell'adulto) niente, un'operazione
+ * da risolvere oppure il PIN. Scelta e durata della pressione sono del dispositivo (chiave «adultLock»), fuori dal
+ * backup come il PIN. Senza scelta salvata: PIN se ne esiste già uno (chi aveva il PIN lo tiene), altrimenti solo
+ * la pressione lunga di 3 secondi.
+ *
  * PIN dell'adulto e codice di recupero.
  * Il PIN non viene mai salvato: si conserva solo un'impronta (PBKDF2-SHA256 con sale casuale).
  * Nessun limite di tentativi e nessuna attesa: un bambino che prova più volte il PIN non deve mai bloccare
@@ -102,7 +107,62 @@
     return check(normalizeCode(code), 'recoverySalt', 'recoveryHash');
   }
 
+  // Toglie PIN e codice di recupero (quando l'adulto sceglie un'altra protezione)
+  async function clearPin() {
+    await storage.remove('security');
+    await storage.remove(OLD_ATTEMPTS_KEY);
+  }
+
+  // ---------- Protezione scelta e durata della pressione ----------
+
+  const LOCK_KEY = 'adultLock';
+  const LOCK_MODES = ['hold', 'math', 'pin'];
+  const HOLD_SECONDS = { min: 1, max: 10, def: 3 };
+
+  // Legge la scelta salvata, controllando i valori (dati letti dal dispositivo: non affidabili)
+  async function getLock() {
+    const saved = await storage.get(LOCK_KEY);
+    let mode = saved && LOCK_MODES.includes(saved.mode) ? saved.mode : null;
+    // Nessuna scelta salvata: chi ha già un PIN continua a usarlo
+    if (!mode) mode = (await hasPin()) ? 'pin' : 'hold';
+    // Il PIN scelto ma non più presente (es. archivio cambiato a mano): resta solo la pressione
+    if (mode === 'pin' && !(await hasPin())) mode = 'hold';
+    const seconds = saved && Number.isInteger(saved.holdSeconds) ? saved.holdSeconds : HOLD_SECONDS.def;
+    return { mode, holdSeconds: Math.min(HOLD_SECONDS.max, Math.max(HOLD_SECONDS.min, seconds)) };
+  }
+
+  async function setLock(changes) {
+    const current = await getLock();
+    const next = { ...current };
+    if (changes && LOCK_MODES.includes(changes.mode)) next.mode = changes.mode;
+    if (changes && Number.isInteger(changes.holdSeconds)) {
+      next.holdSeconds = Math.min(HOLD_SECONDS.max, Math.max(HOLD_SECONDS.min, changes.holdSeconds));
+    }
+    await storage.set(LOCK_KEY, next);
+    return next;
+  }
+
+  // Numero intero casuale tra min e max (compresi)
+  function randomInt(min, max) {
+    const value = crypto.getRandomValues(new Uint32Array(1))[0];
+    return min + (value % (max - min + 1));
+  }
+
+  // Operazione da risolvere: somma semplice di due numeri di due cifre, senza riporto (es. 23 + 14): immediata per un
+  // adulto, difficile per un bambino piccolo. Ogni volta diversa.
+  function makeChallenge() {
+    const a = randomInt(1, 5) * 10 + randomInt(1, 4);
+    const b = randomInt(1, 4) * 10 + randomInt(1, 5);
+    return { text: `${a} + ${b}`, answer: a + b };
+  }
+
+  function checkChallenge(challenge, value) {
+    const typed = String(value || '').trim();
+    return /^\d{1,4}$/.test(typed) && Number(typed) === challenge.answer;
+  }
+
   window.PicSpeak.security = {
-    supported, isValidPin, hasPin, setPin, verifyPin, verifyRecovery,
+    supported, isValidPin, hasPin, setPin, verifyPin, verifyRecovery, clearPin,
+    getLock, setLock, makeChallenge, checkChallenge, LOCK_MODES, HOLD_SECONDS,
   };
 })();

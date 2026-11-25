@@ -1303,7 +1303,7 @@ body > .adult-bar { order: 0; }
   transform: scaleX(0);
   transform-origin: left center;
 }
-.hold-indicator.is-running .hold-bar { transform: scaleX(1); transition: transform 3s linear !important; }
+.hold-indicator.is-running .hold-bar { transform: scaleX(1); transition: transform var(--hold-duration, 3s) linear !important; }
 .hold-hint {
   margin: 0;
   padding: 8px 16px;
@@ -2308,4 +2308,16 @@ body > .adult-bar { order: 0; }
 .setting-status.keep-data-on {
   align-self: flex-start; padding: 6px 12px; border-radius: 999px;
   background: #e6f4ea; color: #1e5e2f; white-space: nowrap;
+}
+/* Accanto al titolo di una categoria che vale per tutti i profili (es. Sicurezza): diverso dal nome del profilo */
+.settings-device-tag {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #e3f1e6;
+  color: #1f5130;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }

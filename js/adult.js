@@ -1,5 +1,5 @@
 /*
- * Modalità adulto: accesso protetto (lucchetto da tenere premuto + PIN),
+ * Modalità adulto: accesso protetto (tre puntini da tenere premuti, poi a scelta niente, un'operazione o il PIN),
  * uscita manuale o automatica per inattività, pagina delle impostazioni.
  */
 (function () {
@@ -8,7 +8,8 @@
   const { i18n, storage, security, install, app, speech, data, symbols, kiosk } = window.PicSpeak;
   const t = i18n.t;
 
-  const HOLD_MS = 3000;
+  // Durata della pressione sui tre puntini: scelta dall'adulto in Sicurezza (security.getLock), 3 secondi all'inizio
+  let holdMs = security.HOLD_SECONDS.def * 1000;
   const INACTIVITY_MS = 5 * 60 * 1000;
 
   // Modalità colori disponibili (vedi css/style.css, attributo data-color-mode su <html>)
@@ -138,6 +139,11 @@
           input.autocomplete = 'off';
           input.spellcheck = false;
           input.maxLength = 400;
+        } else if (field.number) {
+          // Risultato di un'operazione: cifre visibili, tastiera numerica
+          input.type = 'text';
+          input.inputMode = 'numeric';
+          input.maxLength = 4;
         } else if (field.text) {
           input.type = 'text';
         } else {
@@ -411,16 +417,36 @@
     }
   }
 
+  // Operazione da risolvere: ogni apertura ne propone una nuova; si può riprovare quante volte si vuole
+  async function mathFlow() {
+    const challenge = security.makeChallenge();
+    const ok = await runDialog({
+      title: t('mathTitle'),
+      help: t('mathHelp').replace('{op}', challenge.text),
+      fields: [{ id: 'answer', label: t('mathLabel'), number: true }],
+      primary: t('confirm'),
+      secondary: t('cancel'),
+      onSubmit: async (values) => (security.checkChallenge(challenge, values.answer) ? true : t('mathWrong')),
+    });
+    return ok === true;
+  }
+
   async function requestAdultAccess() {
     // Se PicSpeak è aperto dentro un'altra pagina (iframe), le impostazioni restano chiuse:
     // evita che un sito esterno induca a digitare il PIN dentro una cornice ingannevole
     if (window.top !== window.self) return;
-    if (!security.supported) {
-      await runDialog({ title: t('adultMode'), help: t('cryptoUnavailable'), primary: t('close') });
+    const lock = await security.getLock();
+    // Solo pressione lunga: la pressione è già stata fatta per aprire il menu
+    if (lock.mode === 'hold') {
+      enterAdult();
       return;
     }
-    if (!(await security.hasPin())) {
-      if (await createPinFlow()) enterAdult();
+    if (lock.mode === 'math') {
+      if (await mathFlow()) enterAdult();
+      return;
+    }
+    if (!security.supported) {
+      await runDialog({ title: t('adultMode'), help: t('cryptoUnavailable'), primary: t('close') });
       return;
     }
     const result = await runDialog({
@@ -476,7 +502,7 @@
     inactivityTimer = setTimeout(exitAdult, INACTIVITY_MS);
   }
 
-  // Tre puntini: serve una pressione continua di 3 secondi (un tocco veloce non fa nulla),
+  // Tre puntini: serve una pressione continua (3 secondi all'inizio, durata scelta in Sicurezza; un tocco veloce non fa nulla),
   // poi si apre il menu con Impostazioni (con PIN), Crediti e Guida
   function bindLock() {
     let holdTimer = null;
@@ -494,12 +520,15 @@
       el.lock.classList.add('is-holding');
       // La barra parte in cima allo schermo, dove il dito non la copre
       indicator.hidden = false;
+      // La barra si riempie nel tempo scelto dall'adulto (proprietà CSS impostata da script: ammessa dalla CSP)
+      const bar = indicator.querySelector('.hold-bar');
+      if (bar) bar.style.setProperty('--hold-duration', `${holdMs}ms`);
       void indicator.offsetWidth;
       indicator.classList.add('is-running');
       holdTimer = setTimeout(() => {
         cancel();
         openMainMenu();
-      }, HOLD_MS);
+      }, holdMs);
     };
     el.lock.addEventListener('pointerdown', start);
     ['pointerup', 'pointerleave', 'pointercancel'].forEach((name) => el.lock.addEventListener(name, cancel));
@@ -784,9 +813,55 @@
     wrap.append(guide, list(t('voiceGuide')));
   }
 
+  // Protezione delle impostazioni: si cambia senza chiedere nulla (chi è qui è già entrato)
+  const LOCK_CHOICES = [['hold', 'lockHold'], ['math', 'lockMath'], ['pin', 'lockPin']];
+
+  async function chooseLock(mode) {
+    const current = await security.getLock();
+    if (mode === current.mode) return;
+    if (mode === 'pin') {
+      // Il PIN va creato subito; se l'adulto annulla resta la protezione di prima
+      if (!(await createPinFlow())) return;
+    } else if (current.mode === 'pin') {
+      // Tolto il PIN, non resta un PIN dimenticato che tornerebbe sceglendolo di nuovo
+      await security.clearPin();
+    }
+    await security.setLock({ mode });
+    renderSettings();
+  }
+
   function renderSecuritySection() {
     const wrap = section('secSecurityTitle', 'secSecurityHelp');
-    wrap.append(button(t('changePin'), changePinFlow, false));
+    const body = document.createElement('div');
+    wrap.append(body);
+    security.getLock().then((lock) => {
+      const choices = security.supported ? LOCK_CHOICES : LOCK_CHOICES.filter(([value]) => value !== 'pin');
+      body.append(settingRow('optLock', `lockDesc_${lock.mode}`, segmented(choices, lock.mode, chooseLock)));
+      if (lock.mode === 'pin') body.append(button(t('changePin'), changePinFlow, false));
+
+      // Durata della pressione sui tre puntini: da 1 a 10 secondi
+      const row = document.createElement('label');
+      row.className = 'settings-field';
+      const text = document.createElement('span');
+      const value = document.createElement('output');
+      text.textContent = t('holdSecondsLabel');
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = String(security.HOLD_SECONDS.min);
+      range.max = String(security.HOLD_SECONDS.max);
+      range.step = '1';
+      range.value = String(lock.holdSeconds);
+      const show = () => { value.textContent = t('holdSecondsValue').replace('{n}', range.value); };
+      show();
+      range.addEventListener('input', show);
+      range.addEventListener('change', async () => {
+        const saved = await security.setLock({ holdSeconds: Number(range.value) });
+        holdMs = saved.holdSeconds * 1000;
+      });
+      text.append(' ', value);
+      row.append(text, range);
+      body.append(row);
+    });
   }
 
   // Conservare i dati: PicSpeak chiede sempre al browser di non cancellarli da solo (scelta fissa, non modificabile);
@@ -1515,7 +1590,7 @@
       render: [renderSourcesSection] },
     { id: 'voice', icon: '<path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>', titleKey: 'catVoice', introKey: 'catVoiceIntro',
       render: [renderVoiceSection] },
-    { id: 'security', icon: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>', titleKey: 'catSecurity', introKey: 'catSecurityIntro',
+    { id: 'security', icon: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>', titleKey: 'catSecurity', introKey: 'catSecurityIntro', deviceWide: true,
       render: [renderSecuritySection, renderKeepDataSection, renderGuidedSection] },
     { id: 'coming', icon: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/>', titleKey: 'catComing', introKey: 'catComingIntro',
       render: [renderComingSection] },
@@ -1580,6 +1655,13 @@
     const title = document.createElement('h3');
     title.className = 'settings-panel-title';
     title.textContent = t(category.titleKey);
+    // Categoria che vale per il dispositivo (non per il profilo in uso): lo si dice accanto al titolo
+    if (category.deviceWide) {
+      const tag = document.createElement('span');
+      tag.className = 'settings-device-tag';
+      tag.textContent = t('deviceWideTag');
+      title.append(tag);
+    }
     const intro = document.createElement('p');
     intro.className = 'settings-panel-intro';
     intro.textContent = t(category.introKey);
@@ -1770,6 +1852,11 @@
     runDialog,
     runPanelDialog,
     requestAccess: requestAdultAccess,
+    // Dal tutorial: entra (con la protezione in uso) e apre la scelta della protezione
+    async openSecurity() {
+      await requestAdultAccess();
+      if (app.mode === 'adult') openSettings('security');
+    },
     render: () => { if (!el.settings.hidden) renderSettings(); },
     closeSettings,
     openSettings,
@@ -1783,6 +1870,7 @@
   };
 
   bindEvents();
+  security.getLock().then((lock) => { holdMs = lock.holdSeconds * 1000; }).catch(() => {});
   restoreSectionState();
   restoreOnlineSearch();
   restorePageBackground();
