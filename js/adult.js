@@ -221,7 +221,8 @@
    * Finestra informativa o di scelta, senza campi: contenuto già costruito con createElement,
    * pulsante "Chiudi" in fondo. Risolve con il valore passato a close (null se chiusa).
    */
-  function runPanelDialog({ title, help, build, className }) {
+  // actions: false = nessun pulsante «Chiudi» in fondo (i pulsanti li mette build, es. il tutorial)
+  function runPanelDialog({ title, help, build, className, actions: withClose = true }) {
     return new Promise((resolve) => {
       const dialog = el.dialog;
       const box = document.createElement('div');
@@ -247,15 +248,17 @@
 
       box.append(build(close));
 
-      const actions = document.createElement('div');
-      actions.className = 'dialog-actions';
-      const closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.className = 'dlg-btn';
-      closeBtn.textContent = t('close');
-      closeBtn.addEventListener('click', () => close(null));
-      actions.append(closeBtn);
-      box.append(actions);
+      if (withClose) {
+        const actions = document.createElement('div');
+        actions.className = 'dialog-actions';
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'dlg-btn';
+        closeBtn.textContent = t('close');
+        closeBtn.addEventListener('click', () => close(null));
+        actions.append(closeBtn);
+        box.append(actions);
+      }
 
       dialog.oncancel = (event) => {
         event.preventDefault();
@@ -263,7 +266,7 @@
       };
       dialog.replaceChildren(box);
       dialog.showModal();
-      const first = box.querySelector('button');
+      const first = box.querySelector('button[data-autofocus]') || box.querySelector('button');
       if (first) first.focus();
     });
   }
@@ -278,6 +281,8 @@
       icon: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5a3.5 3.5 0 1 0 0 5"/>' },
     { id: 'guide', labelKey: 'menuGuide', descKey: 'menuGuideDesc',
       icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/>' },
+    { id: 'tutorial', labelKey: 'menuTutorial', descKey: 'menuTutorialDesc',
+      icon: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/>' },
   ];
 
   async function openMainMenu() {
@@ -314,6 +319,12 @@
     if (choice === 'settings') requestAdultAccess();
     else if (choice === 'credits') showCredits();
     else if (choice === 'guide') openGuide();
+    else if (choice === 'tutorial') openTutorial();
+  }
+
+  // Tutorial «Come iniziare» (js/tutorial.js), senza PIN come la guida
+  function openTutorial() {
+    if (window.PicSpeak.tutorial) window.PicSpeak.tutorial.open();
   }
 
   // Crediti senza PIN: sono solo da leggere e devono restare sempre raggiungibili (obbligo delle licenze)
@@ -1058,7 +1069,7 @@
 
   function renderGuideSection() {
     const wrap = section('secGuideTitle', 'secGuideHelp');
-    wrap.append(button(t('guideOpen'), openGuide));
+    wrap.append(button(t('guideOpen'), openGuide), button(t('menuTutorial'), openTutorial));
   }
 
   function renderComingSection() {
@@ -1763,6 +1774,7 @@
     list,
     runDialog,
     runPanelDialog,
+    requestAccess: requestAdultAccess,
     render: () => { if (!el.settings.hidden) renderSettings(); },
     closeSettings,
     openSettings,

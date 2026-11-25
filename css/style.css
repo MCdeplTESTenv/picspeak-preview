@@ -444,6 +444,28 @@ a.link-btn { display: inline-flex; align-items: center; justify-content: center;
 .credits-dialog .credits-list li + li { margin-top: 8px; }
 .credit-url { font-weight: 600; overflow-wrap: anywhere; }
 
+/* ---------- «Come iniziare»: tutorial per l'adulto (js/tutorial.js) ---------- */
+
+.pin-dialog:has(.tutorial-dialog) { width: min(94vw, 520px); }
+.tutorial-dialog { max-height: 92vh; overflow-y: auto; }
+.tutorial { display: flex; flex-direction: column; gap: 10px; }
+.tutorial-count { margin: 0; color: var(--text-muted); font-size: 15px; font-weight: 600; }
+.tutorial-icon { display: flex; justify-content: center; color: var(--focus); padding: 4px 0; }
+.tutorial-step-title { margin: 0; font-size: 20px; }
+.tutorial-body { display: flex; flex-direction: column; gap: 8px; min-height: 7.5em; }
+.tutorial-text { margin: 0; line-height: 1.45; font-size: 17px; }
+.tutorial-again { margin: 0; color: var(--text-muted); line-height: 1.4; font-size: 15px; }
+.tutorial-dots { display: flex; justify-content: center; gap: 8px; padding: 4px 0; }
+.tutorial-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+.tutorial-dot.is-current { background: var(--focus); }
+.tutorial-actions { margin-top: 4px; }
+.tutorial-actions .dlg-btn { flex: 1 1 auto; }
+/* Telefono in orizzontale: senza icona e senza altezza minima, così i pulsanti restano visibili */
+@media (max-height: 500px) {
+  .tutorial-icon { display: none; }
+  .tutorial-body { min-height: 0; }
+}
+
 /* ---------- Impostazioni ---------- */
 
 .settings-screen {

@@ -3,7 +3,7 @@
  * Strategia "prima la rete": online si riceve sempre l'ultima versione,
  * offline si usa la copia salvata. Cambiare CACHE_VERSION quando si aggiungono file.
  */
-const CACHE_VERSION = 'picspeak-anteprima-v81';
+const CACHE_VERSION = 'picspeak-anteprima-v82';
 // I pacchetti di simboli scaricati dall'adulto (Mulberry, OpenMoji) e gli indici delle fonti online (Twemoji)
 // stanno in cache separate ("picspeak-pack-…"), mai cancellate dagli aggiornamenti
 
@@ -22,6 +22,7 @@ const APP_FILES = [
   // Immagini della guida (schermate con dati di prova)
   'guida/barra-adulto.webp',
   'guida/cerca-simbolo.webp',
+  'guida/come-iniziare.webp',
   'guida/colori-parole.webp',
   'guida/contesti.webp',
   'guida/disposizione.webp',
@@ -64,6 +65,7 @@ const APP_FILES = [
   'js/symbol-search.js',
   'js/editor.js',
   'js/reorder.js',
+  'js/tutorial.js',
   'js/lexicon.js',
   'js/prediction-base.js',
   'js/predict.js',
