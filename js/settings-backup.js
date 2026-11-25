@@ -367,8 +367,19 @@
   async function syncDropbox() {
     showBusy(t('cloudSyncing'), 'online');
     await cloud.syncNow();
-    // Si guarda anche se altri dispositivi hanno inviato qualcosa (le schede arrivano all'uscita dalla modalità adulto)
-    await cloud.pullNow();
+    if (cloud.isAuto()) {
+      // Si guarda anche se altri dispositivi hanno inviato qualcosa (le schede arrivano all'uscita dalla modalità adulto)
+      await cloud.pullNow();
+    } else {
+      // Manuale: è l'unico momento in cui arrivano le modifiche degli altri dispositivi, quindi si applicano subito
+      let changed = false;
+      try { changed = await cloud.applyNow(); } catch (error) { /* senza rete: lo dice la riga di stato */ }
+      if (changed) {
+        // Ricarica la pagina e riapre questa sezione delle impostazioni
+        ui.reopenAfterReload('backup');
+        return;
+      }
+    }
     if (cloud.hasConflict()) { await askConflict(); return; }
     const st = cloud.status();
     showNotice(st === 'idle' ? t('cloudSynced') : t(`cloudStatus_${st}`), st !== 'idle', 'online');
@@ -587,7 +598,17 @@
       control.append(ui.button(t('cloudReconnectBtn'), () => connectDropbox({ account: own && own.key }), true));
       wrap.append(ui.settingRow('cloudReconnect', 'cloudReconnectHelp', control));
     }
-    wrap.append(ui.settingRow('cloudSync', 'cloudSyncHelp', ui.button(t('cloudSyncBtn'), syncDropbox, false)));
+    // Aggiornamento automatico o manuale (si parte da manuale): vale per questo profilo su questo dispositivo
+    const auto = cloud.isAuto();
+    wrap.append(ui.settingRow('cloudAuto', 'cloudAutoHelp', ui.segmented(
+      [['manual', 'valCloudManual'], ['auto', 'valCloudAuto']], auto ? 'auto' : 'manual',
+      async (value) => {
+        if ((value === 'auto') === auto) return;
+        await cloud.setAuto(value === 'auto');
+        ui.render();
+      },
+    )));
+    wrap.append(ui.settingRow('cloudSync', auto ? 'cloudSyncHelp' : 'cloudSyncHelpManual', ui.button(t('cloudSyncBtn'), syncDropbox, !auto && cloud.pending())));
     wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
     wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
     if (cloud.isSynced()) wrap.append(ui.settingRow('cloudDevices', 'cloudDevicesRowHelp', ui.button(t('cloudDevicesBtn'), showDevices, false)));

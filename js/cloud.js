@@ -527,7 +527,7 @@
       });
       Object.entries(raw.profiles && typeof raw.profiles === 'object' ? raw.profiles : {}).forEach(([id, p]) => {
         if (!PROFILE_ID.test(id) || !p || !out.accounts[p.account]) return;
-        out.profiles[id] = { account: p.account, folder: okFolder(p.folder), device: okDevice(p.device), deviceName: cleanText(p.deviceName, 30) || undefined };
+        out.profiles[id] = { account: p.account, folder: okFolder(p.folder), device: okDevice(p.device), deviceName: cleanText(p.deviceName, 30) || undefined, auto: p.auto === true ? true : undefined };
       });
     } else if (typeof raw.refreshToken === 'string' && raw.refreshToken) {
       // Formato 1 (fino al 25/11/2026): un solo permesso per tutto il dispositivo
@@ -608,6 +608,27 @@
     const old = link.profiles[id];
     link.profiles[id] = { account, ...(old && old.account === account ? { device: old.device, deviceName: old.deviceName } : {}), ...extra };
     link.excludedProfiles = link.excludedProfiles.filter((x) => x !== id);
+  }
+
+  /*
+   * Aggiornamento automatico (scelta dell'adulto, per profilo e per dispositivo). Spento, che è la partenza: si invia
+   * e si riceve solo con «Aggiorna adesso», una fotografia o un'altra azione dell'adulto. Il primo invio dopo il
+   * collegamento parte comunque, perché l'adulto ha appena chiesto il backup.
+   */
+  function isAuto(id = currentProfileId()) {
+    const p = profileLink(id);
+    return Boolean(p && p.auto);
+  }
+
+  async function setAuto(on) {
+    const p = profileLink(currentProfileId());
+    if (!p) throw new CloudError('auth');
+    p.auto = on ? true : undefined;
+    await saveLink();
+    if (on) {
+      await tick(true);
+      pullAndApply(false);
+    }
   }
 
   // Attiva il backup online per il profilo in uso con un account già collegato (scelta dell'adulto, con PIN)
@@ -1076,6 +1097,25 @@
       }
       await saveStateQuiet();
     }
+  }
+
+  /*
+   * «Aggiorna adesso» (scelta dell'adulto, dalle impostazioni): prende subito anche le schede arrivate da altri
+   * dispositivi. Risolve con true se sono cambiate (la pagina va ricaricata).
+   */
+  async function applyNow() {
+    if (!enabledHere() || status === 'reconnect' || accountOverride) return false;
+    if (running) await running.catch(() => {});
+    if (pulling) await pulling.catch(() => {});
+    pulling = pullNow({ apply: true });
+    try {
+      await pulling;
+    } finally {
+      pulling = null;
+    }
+    const changed = reloadNeeded;
+    reloadNeeded = false;
+    return changed;
   }
 
   // Ricontrolla e, se sono arrivate schede nuove, ricarica la pagina (mai mentre il bambino le sta usando)
@@ -1593,27 +1633,32 @@
     storage.onChange(onStorageChange);
     ready = true;
     setStatus(link ? 'idle' : 'off');
-    setInterval(() => tick(false), TICK_MS);
-    window.addEventListener('online', () => tick(true));
+    // Invii e arrivi da soli solo con l'aggiornamento automatico (isAuto); in manuale nulla parte da solo:
+    // «Aggiorna adesso» invia e applica subito gli arrivi (applyNow)
+    setInterval(() => { if (isAuto()) tick(false); }, TICK_MS);
+    window.addEventListener('online', () => { if (isAuto()) tick(true); });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && pending()) tick(true);
+      if (document.visibilityState === 'hidden' && isAuto() && pending()) tick(true);
     });
     document.addEventListener('picspeak:adult-exit', async () => {
+      if (!isAuto()) return;
       // Prima si inviano le modifiche dell'adulto, poi si prendono quelle arrivate dagli altri dispositivi
       if (pending()) await tick(true);
       pullAndApply(true);
     });
-    setTimeout(() => tick(false), 5000);
+    setTimeout(() => { if (isAuto()) tick(false); }, 5000);
     // Abitudini degli altri dispositivi già scaricate: valgono subito, anche senza rete
     await restoreLayers().catch(() => {});
     // Appena aperta l'app si possono applicare le schede arrivate da altri dispositivi (poi solo all'uscita dall'adulto)
-    setTimeout(() => pullAndApply(Date.now() - startedAt < APPLY_AT_START_MS && !isAdult()), 2000);
+    setTimeout(() => {
+      if (isAuto()) pullAndApply(Date.now() - startedAt < APPLY_AT_START_MS && !isAdult());
+    }, 2000);
     setInterval(() => {
-      if (document.visibilityState === 'visible' && !running) pullAndApply(false);
+      if (isAuto() && document.visibilityState === 'visible' && !running) pullAndApply(false);
     }, PULL_MS);
     document.addEventListener('visibilitychange', () => {
       // Il bambino riapre l'app dopo una pausa: è come un'apertura
-      if (document.visibilityState === 'visible') pullAndApply(!isAdult() && hasPendingApply());
+      if (document.visibilityState === 'visible' && isAuto()) pullAndApply(!isAdult() && hasPendingApply());
     });
   }
 
@@ -1655,6 +1700,9 @@
     conflictInfo,
     follow,
     release,
+    isAuto,
+    setAuto,
+    applyNow,
     isSynced,
     forgetProfile,
     listDevices,
