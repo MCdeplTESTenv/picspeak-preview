@@ -5,7 +5,7 @@
  * - Backup online su Dropbox (logica in cloud.js): «Collega Dropbox» (si incolla il codice mostrato da Dropbox), stato
  *   dell'ultima copia, aggiornamento manuale o automatico, «Aggiorna adesso», «Salva una copia» (con nome),
  *   «Apri un profilo», dispositivi, «Scollega». Il link alla pagina sulla
- *   privacy compare solo qui, all'adulto, quando collega Dropbox.
+ *   privacy compare solo qui, all'adulto, tra le prime voci di «Backup online».
  * - Ripristina: un file .picspeak dal dispositivo o una copia su Dropbox; mostra di chi è, quando è stato salvato e
  *   cosa contiene, poi
  *   «Ripristina tutto» (sostituisce) oppure «Scegli cosa ripristinare» (per ogni parte: no, sostituisci, aggiungi o unisci).
@@ -585,12 +585,14 @@
     }
   }
 
-  function privacyLink() {
-    const a = el('a', 'dialog-link', t('cloudPrivacyLink'));
+  // Riga «Privacy» tra le prime voci della sezione, sempre visibile: cosa succede ai dati con il backup online.
+  // Il testo è generico (oggi Dropbox, domani anche altri servizi): la pagina privacy.html elenca i servizi usati.
+  function privacyRow() {
+    const a = el('a', 'dlg-btn link-btn', t('cloudPrivacyBtn'));
     a.href = 'privacy.html';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    return a;
+    return ui.settingRow('cloudPrivacy', 'cloudPrivacyHelp', a);
   }
 
   function renderOnlineSection() {
@@ -602,24 +604,20 @@
     }
     if (!cloud.isConnected()) {
       prepareLink();
-      const control = el('div', 'choice-group');
-      control.append(ui.button(t('cloudConnectBtn'), connectDropbox, true), privacyLink());
-      wrap.append(ui.settingRow('cloudDropbox', 'cloudDropboxHelp', control));
+      wrap.append(ui.settingRow('cloudDropbox', 'cloudDropboxHelp', ui.button(t('cloudConnectBtn'), connectDropbox, true)), privacyRow());
       return;
     }
     if (!cloud.isEnabledHere()) {
       // Collegato da un altro profilo: questo profilo non va su Dropbox finché l'adulto non lo decide
       wrap.append(el('p', 'settings-help backup-last', t(cloud.wasExcluded() ? 'cloudExcludedHere' : 'cloudOtherProfile')));
-      const enableRow = el('div', 'choice-group');
-      enableRow.append(ui.button(t('cloudEnableBtn'), enableProfile, true), privacyLink());
-      wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', enableRow));
+      wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', ui.button(t('cloudEnableBtn'), enableProfile, true)), privacyRow());
       wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
       return;
     }
     const status = el('p', `settings-help backup-last${['error', 'reconnect', 'full'].includes(cloud.status()) ? ' is-error' : ''}`,
       `${t('cloudConnectedPlain')} ${cloudStatusText()}`);
     status.setAttribute('role', 'status');
-    wrap.append(status);
+    wrap.append(status, privacyRow());
     if (cloud.hasConflict()) {
       wrap.append(ui.settingRow('cloudConflictRow', 'cloudConflictRowHelp', ui.button(t('cloudConflictRowBtn'), askConflict, true)));
     }
@@ -645,11 +643,9 @@
     wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), saveNamedCopy, true)));
     wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
     if (cloud.isSynced()) wrap.append(ui.settingRow('cloudDevices', 'cloudDevicesRowHelp', ui.button(t('cloudDevicesBtn'), showDevices, false)));
-    const control = el('div', 'choice-group');
     const off = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
     off.classList.add('dlg-btn-danger');
-    control.append(off, privacyLink());
-    wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', control));
+    wrap.append(ui.settingRow('cloudDisconnect', 'cloudDisconnectRowHelp', off));
   }
 
   // Elenco di scelte (profili o copie) in una finestra; risolve con il valore scelto o null

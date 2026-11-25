@@ -406,6 +406,9 @@ button:focus-visible {
   font-weight: 600;
 }
 
+/* Link con l'aspetto di un pulsante (es. «Privacy» nel backup online) */
+a.link-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
 .dlg-btn-primary { background: var(--focus); border-color: var(--focus); color: #fff; }
 .dlg-btn:disabled { opacity: 0.5; }
 
