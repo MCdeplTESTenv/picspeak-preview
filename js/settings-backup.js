@@ -31,8 +31,9 @@
   // Avviso da mostrare nella sezione del backup locale al prossimo disegno della pagina
   let notice = null;
 
+  // Un solo passaggio: un nome che contiene «{here}» resta com'è, non viene sostituito a sua volta
   function format(key, values) {
-    return Object.entries(values).reduce((text, [name, value]) => text.split(`{${name}}`).join(String(value)), t(key));
+    return t(key).replace(/\{(\w+)\}/g, (all, name) => (Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : all));
   }
 
   function el(tag, className, text) {
@@ -212,8 +213,9 @@
       secondary: t('cancel'),
       onSubmit: async (v) => {
         try {
-          const result = await cloud.connect(v.code, current, { name: v.name, account });
-          return result && result.sameAs ? { sameAs: result.sameAs } : true;
+          // hold: prima di salvare questo profilo si chiede se continuare con uno già su Dropbox
+          const result = await cloud.connect(v.code, current, { name: v.name, account, hold: true });
+          return result && (result.sameAs || result.held) ? result : true;
         } catch (error) {
           return cloudErrorText(error);
         }
@@ -221,9 +223,82 @@
     });
     // Ogni collegamento usa una coppia nuova
     pkce = null;
-    if (done && done.sameAs) showNotice(format('cloudAccountSame', { name: done.sameAs }), false, 'online');
+    if (done && done.held) await offerExisting();
+    else if (done && done.sameAs) showNotice(format('cloudAccountSame', { name: done.sameAs }), false, 'online');
     else if (done) showNotice(t('cloudConnected'), false, 'online');
     else ui.render();
+  }
+
+  /*
+   * Appena collegato Dropbox: se ci sono già dei profili (per esempio dopo aver perso o cambiato il dispositivo),
+   * si propone di continuare con uno di quelli. Così si scaricano i suoi dati e non si carica il profilo di qui.
+   * Finché l'adulto non sceglie, cloud non invia nulla (connect con hold).
+   */
+  async function offerExisting() {
+    showBusy(t('cloudListing'), 'online');
+    let profiles;
+    try {
+      profiles = (await cloud.listProfiles()).filter((p) => p.id !== cloud.folder());
+    } catch (error) {
+      await existingFailed(error);
+      return;
+    }
+    notice = null;
+    if (!profiles.length) {
+      cloud.release();
+      showNotice(t('cloudConnected'), false, 'online');
+      return;
+    }
+    ui.render();
+    const here = (data.profile && data.profile.name) || t('backupRestoredProfileName');
+    for (;;) {
+      const folder = await askChoice(t('cloudExistingTitle'), t('cloudExistingHelp'), [
+        ...profiles.map((p) => ({
+          value: p.id,
+          label: p.name || t('backupRestoredProfileName'),
+          help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
+        })),
+        { value: 'new', label: format('cloudExistingNew', { name: here }), help: t('cloudExistingNewHelp') },
+      ]);
+      // Chiusa senza scegliere oppure «No»: questo profilo si salva su Dropbox come profilo a sé
+      if (!folder || folder === 'new') {
+        cloud.release();
+        showNotice(t('cloudConnected'), false, 'online');
+        return;
+      }
+      const picked = profiles.find((p) => p.id === folder);
+      const ok = await ui.runDialog({
+        title: t('cloudExistingTitle'),
+        help: format('cloudExistingConfirm', { name: (picked && picked.name) || t('backupRestoredProfileName'), here }),
+        primary: t('cloudExistingBtn'),
+        secondary: t('cancel'),
+      });
+      if (!ok) continue;
+      showBusy(t('cloudFollowing'), 'online');
+      try {
+        // Solo download: niente copia di sicurezza di questo profilo su Dropbox
+        await cloud.follow(folder, { safety: false });
+        location.reload();
+      } catch (error) {
+        await existingFailed(error);
+      }
+      return;
+    }
+  }
+
+  // Errore mentre si sceglie: «Riprova» oppure si salva come profilo nuovo (il backup non resta mai fermo in silenzio)
+  async function existingFailed(error) {
+    notice = null;
+    ui.render();
+    const again = await ui.runDialog({
+      title: t('cloudExistingTitle'),
+      help: cloudErrorText(error),
+      primary: t('cloudExistingRetry'),
+      secondary: t('cloudExistingSaveNew'),
+    });
+    if (again) { await offerExisting(); return; }
+    cloud.release();
+    showNotice(t('cloudConnected'), false, 'online');
   }
 
   /*
