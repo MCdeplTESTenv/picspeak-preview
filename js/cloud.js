@@ -380,6 +380,22 @@
     return accessByAccount.get(key).token;
   }
 
+  /*
+   * Esegue fn (per esempio il passaggio a un altro profilo) senza copie automatiche in corso o in partenza: una copia
+   * del profilo di prima non deve leggere le schede del profilo nuovo.
+   */
+  let paused = 0;
+  async function pauseDuring(fn) {
+    paused += 1;
+    try {
+      if (running) await running.catch(() => {});
+      if (pulling) await pulling.catch(() => {});
+      return await fn();
+    } finally {
+      paused -= 1;
+    }
+  }
+
   // Esegue fn con un account scelto (es. per guardare i profili di un altro Dropbox già collegato)
   async function withAccount(key, fn) {
     if (!link || !link.accounts[key]) throw new CloudError('auth');
@@ -559,6 +575,12 @@
   }
 
   // Cartella su Dropbox del profilo: la sua, oppure quella del profilo seguito da un altro dispositivo
+  // Un profilo di questo dispositivo è già collegato a quella cartella di Dropbox (come suo o seguendola)?
+  function linkedHere(folder) {
+    if (!link) return false;
+    return Object.entries(link.profiles).some(([id, p]) => id === folder || p.folder === folder);
+  }
+
   function folderOf(localId) {
     const p = profileLink(localId);
     return p && typeof p.folder === 'string' && PROFILE_ID.test(p.folder) ? p.folder : localId;
@@ -1122,7 +1144,7 @@
   let pulling = null; // lettura degli arrivi in corso (withAccount la aspetta)
 
   async function pullAndApply(apply) {
-    if (!enabledHere() || !hasNetwork() || cellularOnly() || status === 'reconnect' || accountOverride || pulling) return;
+    if (!enabledHere() || !hasNetwork() || cellularOnly() || status === 'reconnect' || accountOverride || pulling || paused) return;
     if (running) await running.catch(() => {});
     if (accountOverride) return;
     pulling = pullNow({ apply: apply && !isAdult() });
@@ -1264,7 +1286,7 @@
   }
 
   async function tick(force) {
-    if (!ready || accountOverride) return;
+    if (!ready || accountOverride || paused) return;
     if (due(force)) await runSync();
   }
 
@@ -1703,6 +1725,8 @@
     isAuto,
     setAuto,
     applyNow,
+    linkedHere,
+    pauseDuring,
     isSynced,
     forgetProfile,
     listDevices,

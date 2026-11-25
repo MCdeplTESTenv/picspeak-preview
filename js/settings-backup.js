@@ -645,6 +645,32 @@
     return date ? format('cloudWhen', { date: dateText(date), time: timeText(date) }) : '';
   }
 
+  // Profilo nuovo che prende la copia più recente e resta sincronizzato con quella cartella (solo download)
+  async function restoreSynced(account, folder, name) {
+    // Account vero (quello scelto, o quello del profilo in uso): il profilo nuovo non ne ha ancora uno
+    const own = cloud.listAccounts().find((a) => a.here);
+    const key = account || (own && own.key);
+    if (!key) { showNotice(t('cloudErr_auth'), true, 'online'); return; }
+    showBusy(t('cloudDownloading'), 'online');
+    let created = false;
+    try {
+      // withAccount ferma le copie automatiche: nessuna copia del profilo di prima mentre si cambia profilo
+      await cloud.withAccount(key, async () => {
+        if (!(await window.PicSpeak.profiles.startRestoredProfile(name))) throw new cloud.CloudError('server');
+        created = true;
+        await cloud.follow(folder, { safety: false });
+      });
+    } catch (error) {
+      notice = null;
+      ui.render();
+      const help = created ? `${cloudErrorText(error)} ${format('cloudRestoreSyncedFailed', { name })}` : cloudErrorText(error);
+      await ui.runDialog({ title: t('cloudRestoreTitle'), help, primary: t('close') });
+      if (created) ui.reopenAfterReload('backup');
+      return;
+    }
+    ui.reopenAfterReload('backup');
+  }
+
   async function restoreFromDropbox() {
     const account = await pickAccount();
     if (account === null) return;
@@ -699,6 +725,22 @@
     const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
     if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
+    // Copia più recente di un profilo che qui non c'è: si può creare il profilo e tenerlo sincronizzato con la sua
+    // cartella (dispositivo nuovo, un altro bambino da seguire), senza creare prima un profilo vuoto
+    const profilesUi = window.PicSpeak.profiles;
+    if (copy.kind === 'latest' && profileId !== hereId && !cloud.linkedHere(profileId)
+      && profilesUi && (await profilesUi.canAddProfile())) {
+      const name = (profiles.find((p) => p.id === profileId) || {}).name || t('backupRestoredProfileName');
+      const how = await askChoice(t('cloudRestoreTitle'), t('cloudRestoreHowHelp'), [
+        { value: 'sync', label: format('cloudRestoreSynced', { name }), help: t('cloudRestoreSyncedHelp'), className: 'is-primary' },
+        { value: 'other', label: t('cloudRestoreOther'), help: t('cloudRestoreOtherHelp') },
+      ]);
+      if (!how) return;
+      if (how === 'sync') {
+        await restoreSynced(account, profileId, name);
+        return;
+      }
+    }
     showBusy(t('cloudDownloading'), 'online');
     let result;
     try {
@@ -997,7 +1039,10 @@
     if (!target) return;
     let mode;
     if (target === 'new') {
-      if (!(await window.PicSpeak.profiles.startRestoredProfile(opened.info.name))) {
+      const started = cloud && cloud.pauseDuring
+        ? await cloud.pauseDuring(() => window.PicSpeak.profiles.startRestoredProfile(opened.info.name))
+        : await window.PicSpeak.profiles.startRestoredProfile(opened.info.name);
+      if (!started) {
         await showError(new backup.BackupError('damaged'));
         return;
       }
