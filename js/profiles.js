@@ -502,5 +502,5 @@
     return true;
   }
 
-  window.PicSpeak.profiles = { cleanName, displayName, showProfileInBar, canAddProfile, startRestoredProfile };
+  window.PicSpeak.profiles = { cleanName, displayName, showProfileInBar, canAddProfile, startRestoredProfile, MAX_PROFILES };
 })();

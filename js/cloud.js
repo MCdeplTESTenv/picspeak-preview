@@ -1240,24 +1240,18 @@
   /*
    * Il profilo in uso (appena creato vuoto) segue la cartella di un altro profilo su Dropbox: schede, foto,
    * impostazioni e contesti arrivano da lì; i conteggi degli altri dispositivi restano a parte (livelli).
-   * safety: false quando l'adulto ha appena collegato Dropbox per riprendere un profilo (dispositivo nuovo): non si
-   * carica nulla di questo dispositivo, si scarica soltanto.
+   * Solo download: su Dropbox non si scrive nulla di questo profilo.
    */
-  async function follow(folder, { safety = true } = {}) {
+  async function follow(folder) {
     const profileId = currentProfileId();
     const account = accountForNewUse();
     if (!profileId || !link || !account || !PROFILE_ID.test(folder)) throw new CloudError('path');
     // Le chiamate di follow usano questo account anche prima che il profilo sia collegato
-    if (!accountOverride || accountOverride !== account) return withAccount(account, () => follow(folder, { safety }));
+    if (!accountOverride || accountOverride !== account) return withAccount(account, () => follow(folder));
     if (!(await findFolder(folder, true))) throw new CloudError('not-found');
     const entries = await listFolder(dirOf(folder));
     const fullEntry = entries.find((e) => FILE_NAMES.full.test(e.name));
     if (!fullEntry) throw new CloudError('not-found');
-    // Copia di sicurezza di com'era questo profilo, nella cartella scelta: se non riesce, non si cambia nulla
-    if (safety) {
-      const before = await buildFile(null);
-      await upload(checkPath(folder, `prima-${timeStamp(new Date())}.picspeak`), before.blob, 'add');
-    }
     // Prima si scarica e si legge la copia: se non riesce, il profilo resta com'era e non si collega a quella cartella
     const { opened, parts } = await openRemote(folder, fullEntry.name);
     // Stato «già allineato» salvato prima del collegamento: se l'app si chiude o le schede non si salvano a metà,
@@ -1377,8 +1371,10 @@
   /*
    * hold: se il profilo in uso si collega ora per la prima volta, non si invia nulla finché non si chiama release()
    * (l'adulto sceglie prima se continuare con un profilo già su Dropbox). Risponde con held: true in quel caso.
+   * attach: false aggiunge solo l'account (per aprire un profilo da un altro Dropbox), senza toccare il profilo in uso.
+   * Risponde anche con la chiave dell'account (key).
    */
-  async function connect(code, pkce, { name, account, hold } = {}) {
+  async function connect(code, pkce, { name, account, hold, attach = true } = {}) {
     const clean = String(code || '').trim();
     if (!clean || clean.length > 400 || !/^[A-Za-z0-9_\-.~]+$/.test(clean) || !pkce) throw new CloudError('code');
     let body;
@@ -1422,16 +1418,17 @@
     // Il backup online parte solo per il profilo in uso: gli altri si attivano uno per uno
     const id = currentProfileId();
     // Un altro profilo di qui usa già questo Dropbox (sameAs): è un profilo in più, non serve chiedere
-    const held = Boolean(hold && id && !profileLink(id) && !sameAs);
-    if (id && (!profileLink(id) || !account)) attachProfile(id, key);
+    const held = Boolean(attach && hold && id && !profileLink(id) && !sameAs);
+    if (attach && id && (!profileLink(id) || !account)) attachProfile(id, key);
     if (held) holding = id;
     keepAccess(body, key);
     // Di proposito non si chiede nulla dell'account Dropbox (nome, email): al tool serve solo la sua cartella
     await saveLink();
     deviceId();
-    setStatus('idle');
-    if (!held) tick(true);
-    return { sameAs, held };
+    // Solo un account in più: lo stato del profilo in uso (per esempio «ricollega») resta com'è
+    if (attach) setStatus('idle');
+    if (!held && attach) tick(true);
+    return { sameAs, held, key };
   }
 
   // Fine dell'attesa dopo connect({ hold }): il profilo si salva su Dropbox come gli altri

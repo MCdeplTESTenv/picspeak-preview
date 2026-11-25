@@ -192,7 +192,8 @@
    * senza, se ne aggiunge uno nuovo (con un nome dato dall'adulto, se sul dispositivo ce n'è già un altro).
    */
   async function connectDropbox(options = {}) {
-    const { account } = options && typeof options === 'object' && !(options instanceof Event) ? options : {};
+    // addOnly: solo un account in più (per aprire un profilo da un altro Dropbox); risolve con la sua chiave
+    const { account, addOnly } = options && typeof options === 'object' && !(options instanceof Event) ? options : {};
     if (!pkce) {
       prepareLink();
       showBusy(t('cloudPreparing'), 'online');
@@ -207,15 +208,15 @@
       fields: [
         { id: 'code', label: t('cloudCodeField'), raw: true },
         // Più account sullo stesso dispositivo: un nome per riconoscerlo (PicSpeak non chiede a Dropbox nome o email)
-        ...(!account && cloud.listAccounts().length ? [{ id: 'name', label: t('cloudAccountName'), plain: true, maxLength: 40 }] : []),
+        ...((!account && cloud.listAccounts().length) || addOnly ? [{ id: 'name', label: t('cloudAccountName'), plain: true, maxLength: 40 }] : []),
       ],
       primary: t('cloudCodeBtn'),
       secondary: t('cancel'),
       onSubmit: async (v) => {
         try {
           // hold: prima di salvare questo profilo si chiede se continuare con uno già su Dropbox
-          const result = await cloud.connect(v.code, current, { name: v.name, account, hold: true });
-          return result && (result.sameAs || result.held) ? result : true;
+          const result = await cloud.connect(v.code, current, { name: v.name, account, hold: true, attach: !addOnly });
+          return result || true;
         } catch (error) {
           return cloudErrorText(error);
         }
@@ -223,6 +224,7 @@
     });
     // Ogni collegamento usa una coppia nuova
     pkce = null;
+    if (addOnly) return done && done.key ? done.key : null;
     if (done && done.held) await offerExisting();
     else if (done && done.sameAs) showNotice(format('cloudAccountSame', { name: done.sameAs }), false, 'online');
     else if (done) showNotice(t('cloudConnected'), false, 'online');
@@ -230,37 +232,121 @@
   }
 
   /*
-   * Appena collegato Dropbox: se ci sono già dei profili (per esempio dopo aver perso o cambiato il dispositivo),
-   * si propone di continuare con uno di quelli. Così si scaricano i suoi dati e non si carica il profilo di qui.
-   * Finché l'adulto non sceglie, cloud non invia nulla (connect con hold).
+   * Profili su Dropbox che su questo dispositivo non ci sono ancora. Risolve con l'elenco (anche vuoto) oppure lancia
+   * l'errore di rete. Mostra l'avviso di attesa mentre legge.
+   */
+  async function dropboxProfiles(account) {
+    showBusy(t('cloudListing'), 'online');
+    try {
+      return (await viaAccount(account, () => cloud.listProfiles())).filter((p) => !cloud.linkedHere(p.id));
+    } finally {
+      notice = null;
+      ui.render();
+    }
+  }
+
+  function profileChoices(profiles) {
+    return profiles.map((p) => ({
+      value: p.id,
+      label: p.name || t('backupRestoredProfileName'),
+      help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
+    }));
+  }
+
+  /*
+   * «Apri un profilo»: un profilo che è su Dropbox (secondo dispositivo, dispositivo nuovo, un altro bambino da
+   * seguire, anche da un altro account) diventa un profilo nuovo qui, sincronizzato. Il profilo in uso non cambia.
+   */
+  async function openProfile() {
+    if (!(await window.PicSpeak.profiles.canAddProfile())) {
+      await ui.runDialog({ title: format('profileTooMany', { n: window.PicSpeak.profiles.MAX_PROFILES }), primary: t('close') });
+      return;
+    }
+    prepareLink(); // se servirà collegare un altro Dropbox
+    let account = await pickAccount();
+    if (account === null) return;
+    for (;;) {
+      let profiles;
+      try {
+        profiles = await dropboxProfiles(account);
+      } catch (error) {
+        await ui.runDialog({ title: t('cloudOpenTitle'), help: cloudErrorText(error), primary: t('close') });
+        return;
+      }
+      // In fondo, sempre: un altro Dropbox (per esempio quello dei genitori)
+      const folder = await askChoice(t('cloudOpenTitle'), t(profiles.length ? 'cloudOpenPick' : 'cloudOpenNone'), [
+        ...profileChoices(profiles),
+        { value: 'other', label: t('cloudOpenOther'), help: t('cloudOpenOtherHelp') },
+      ]);
+      if (!folder) return;
+      if (folder !== 'other') {
+        const picked = profiles.find((p) => p.id === folder);
+        await openSynced(account, folder, (picked && picked.name) || t('backupRestoredProfileName'));
+        return;
+      }
+      const current = account || (cloud.listAccounts().find((a) => a.here) || {}).key;
+      const others = cloud.listAccounts().filter((a) => a.key !== current);
+      const next = await askChoice(t('cloudAccountTitle'), t('cloudAccountPick'), [
+        ...others.map((a) => ({ value: a.key, label: a.name })),
+        { value: 'new', label: t('cloudAccountNew'), help: t('cloudAccountNewHelp') },
+      ]);
+      if (!next) return;
+      account = next === 'new' ? await connectDropbox({ addOnly: true }) : next;
+      if (!account) { ui.render(); return; }
+    }
+  }
+
+  // Profilo nuovo legato alla cartella scelta, solo download; poi la pagina si ricarica su questa sezione
+  async function openSynced(account, folder, name) {
+    // Account vero (quello scelto, o quello del profilo in uso): il profilo nuovo non ne ha ancora uno
+    const own = cloud.listAccounts().find((a) => a.here);
+    const key = account || (own && own.key);
+    if (!key) { showNotice(t('cloudErr_auth'), true, 'online'); return; }
+    showBusy(t('cloudDownloading'), 'online');
+    let created = false;
+    try {
+      // withAccount ferma le copie automatiche: nessuna copia del profilo di prima mentre si cambia profilo
+      await cloud.withAccount(key, async () => {
+        if (!(await window.PicSpeak.profiles.startRestoredProfile(name))) throw new cloud.CloudError('server');
+        created = true;
+        await cloud.follow(folder);
+      });
+    } catch (error) {
+      notice = null;
+      ui.render();
+      const help = created ? `${cloudErrorText(error)} ${format('cloudOpenFailed', { name })}` : cloudErrorText(error);
+      await ui.runDialog({ title: t('cloudOpenTitle'), help, primary: t('close') });
+      if (created) ui.reopenAfterReload('backup');
+      return;
+    }
+    ui.reopenAfterReload('backup');
+  }
+
+  /*
+   * Appena collegato Dropbox: se ci sono già dei profili (dispositivo nuovo, perso o cambiato) si propone di
+   * continuare con uno di quelli nel profilo appena collegato, solo scaricando. Finché l'adulto non sceglie, cloud non
+   * invia nulla (connect con hold); «No», finestra chiusa o un errore lasciato così: il profilo si salva come nuovo.
    */
   async function offerExisting() {
-    showBusy(t('cloudListing'), 'online');
     let profiles;
     try {
-      profiles = (await cloud.listProfiles()).filter((p) => p.id !== cloud.folder());
+      // Il profilo appena collegato non c'è: dropboxProfiles toglie quelli già collegati qui
+      profiles = await dropboxProfiles('');
     } catch (error) {
       await existingFailed(error);
       return;
     }
-    notice = null;
     if (!profiles.length) {
       cloud.release();
       showNotice(t('cloudConnected'), false, 'online');
       return;
     }
-    ui.render();
     const here = (data.profile && data.profile.name) || t('backupRestoredProfileName');
     for (;;) {
       const folder = await askChoice(t('cloudExistingTitle'), t('cloudExistingHelp'), [
-        ...profiles.map((p) => ({
-          value: p.id,
-          label: p.name || t('backupRestoredProfileName'),
-          help: [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
-        })),
+        ...profileChoices(profiles),
         { value: 'new', label: format('cloudExistingNew', { name: here }), help: t('cloudExistingNewHelp') },
       ]);
-      // Chiusa senza scegliere oppure «No»: questo profilo si salva su Dropbox come profilo a sé
       if (!folder || folder === 'new') {
         cloud.release();
         showNotice(t('cloudConnected'), false, 'online');
@@ -274,10 +360,9 @@
         secondary: t('cancel'),
       });
       if (!ok) continue;
-      showBusy(t('cloudFollowing'), 'online');
+      showBusy(t('cloudDownloading'), 'online');
       try {
-        // Solo download: niente copia di sicurezza di questo profilo su Dropbox
-        await cloud.follow(folder, { safety: false });
+        await cloud.follow(folder);
         location.reload();
       } catch (error) {
         await existingFailed(error);
@@ -430,59 +515,6 @@
     }
   }
 
-  // Questo profilo usa le schede di un profilo già su Dropbox (per esempio quello del tablet di scuola)
-  async function followProfile() {
-    const account = await pickAccount();
-    if (account === null) return;
-    showBusy(t('cloudListing'), 'online');
-    let profiles;
-    try {
-      // Anche il profilo in uso, in fondo e con la sua nota: la finestra è sempre la stessa, anche con un solo profilo
-      const here = cloud.folder();
-      const all = await viaAccount(account, () => cloud.listProfiles());
-      profiles = [...all.filter((p) => p.id !== here), ...all.filter((p) => p.id === here)];
-    } catch (error) {
-      notice = null;
-      ui.render();
-      await ui.runDialog({ title: t('cloudFollowTitle'), help: cloudErrorText(error), primary: t('close') });
-      return;
-    }
-    notice = null;
-    ui.render();
-    // Niente da scegliere: lo si spiega in una finestra (un avviso in cima alla sezione può restare fuori vista)
-    if (!profiles.length) {
-      await ui.runDialog({ title: t('cloudFollowTitle'), help: t('cloudFollowNone'), primary: t('close') });
-      return;
-    }
-    const here = cloud.folder();
-    const folder = await askChoice(t('cloudFollowTitle'), t('cloudFollowPick'), profiles.map((p) => ({
-      value: p.id,
-      label: (p.name || t('backupRestoredProfileName')) + (p.id === here ? ` ${t('cloudThisProfile')}` : ''),
-      help: p.id === here ? t('cloudFollowSameHelp') : [whenText(p.updatedAt), p.device].filter(Boolean).join(' · '),
-    })));
-    if (!folder) return;
-    // Il profilo già in uso: non c'è niente da cambiare, si spiega a cosa serve la scelta
-    if (folder === here) {
-      await ui.runDialog({ title: t('cloudFollowTitle'), help: t('cloudFollowSame'), primary: t('close') });
-      return;
-    }
-    const ok = await ui.runDialog({
-      title: t('cloudFollowTitle'),
-      help: t('cloudFollowConfirm'),
-      primary: t('cloudFollowBtn'),
-      secondary: t('cancel'),
-    });
-    if (!ok) return;
-    showBusy(t('cloudFollowing'), 'online');
-    try {
-      // La copia di sicurezza di com'è ora la fa cloud.follow (se non riesce, non cambia nulla)
-      await viaAccount(account, () => cloud.follow(folder));
-      location.reload();
-    } catch (error) {
-      showNotice(cloudErrorText(error), true, 'online');
-    }
-  }
-
   // Dispositivi che usano questo profilo, con «Escludi» per uno perso, rubato o non più usato
   async function showDevices() {
     showBusy(t('cloudListing'), 'online');
@@ -579,7 +611,7 @@
       const enableRow = el('div', 'choice-group');
       enableRow.append(ui.button(t('cloudEnableBtn'), enableProfile, true), privacyLink());
       wrap.append(ui.settingRow('cloudEnable', 'cloudEnableHelp', enableRow));
-      wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
+      wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
       wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
       return;
     }
@@ -611,8 +643,8 @@
     wrap.append(ui.settingRow('cloudSync', auto ? 'cloudSyncHelp' : 'cloudSyncHelpManual', ui.button(t('cloudSyncBtn'), syncDropbox, !auto && cloud.pending())));
     wrap.append(ui.settingRow('cloudPhoto', 'cloudPhotoRowHelp', ui.button(t('cloudPhotoRowBtn'), savePhoto, true)));
     wrap.append(ui.settingRow('cloudRestore', 'cloudRestoreHelp', ui.button(t('cloudRestoreBtn'), restoreFromDropbox, false)));
+    wrap.append(ui.settingRow('cloudOpen', 'cloudOpenHelp', ui.button(t('cloudOpenBtn'), openProfile, false)));
     if (cloud.isSynced()) wrap.append(ui.settingRow('cloudDevices', 'cloudDevicesRowHelp', ui.button(t('cloudDevicesBtn'), showDevices, false)));
-    else wrap.append(ui.settingRow('cloudFollow', 'cloudFollowHelp', ui.button(t('cloudFollowBtn'), followProfile, false)));
     const control = el('div', 'choice-group');
     const off = ui.button(t('cloudDisconnectBtn'), disconnectDropbox, false);
     off.classList.add('dlg-btn-danger');
@@ -643,32 +675,6 @@
 
   function whenText(date) {
     return date ? format('cloudWhen', { date: dateText(date), time: timeText(date) }) : '';
-  }
-
-  // Profilo nuovo che prende la copia più recente e resta sincronizzato con quella cartella (solo download)
-  async function restoreSynced(account, folder, name) {
-    // Account vero (quello scelto, o quello del profilo in uso): il profilo nuovo non ne ha ancora uno
-    const own = cloud.listAccounts().find((a) => a.here);
-    const key = account || (own && own.key);
-    if (!key) { showNotice(t('cloudErr_auth'), true, 'online'); return; }
-    showBusy(t('cloudDownloading'), 'online');
-    let created = false;
-    try {
-      // withAccount ferma le copie automatiche: nessuna copia del profilo di prima mentre si cambia profilo
-      await cloud.withAccount(key, async () => {
-        if (!(await window.PicSpeak.profiles.startRestoredProfile(name))) throw new cloud.CloudError('server');
-        created = true;
-        await cloud.follow(folder, { safety: false });
-      });
-    } catch (error) {
-      notice = null;
-      ui.render();
-      const help = created ? `${cloudErrorText(error)} ${format('cloudRestoreSyncedFailed', { name })}` : cloudErrorText(error);
-      await ui.runDialog({ title: t('cloudRestoreTitle'), help, primary: t('close') });
-      if (created) ui.reopenAfterReload('backup');
-      return;
-    }
-    ui.reopenAfterReload('backup');
   }
 
   async function restoreFromDropbox() {
@@ -725,22 +731,6 @@
     const picked = await askChoice(t('cloudRestoreTitle'), t('cloudPickCopy'), ordered);
     if (picked === null || picked === undefined) return;
     const copy = copies[Number(picked)];
-    // Copia più recente di un profilo che qui non c'è: si può creare il profilo e tenerlo sincronizzato con la sua
-    // cartella (dispositivo nuovo, un altro bambino da seguire), senza creare prima un profilo vuoto
-    const profilesUi = window.PicSpeak.profiles;
-    if (copy.kind === 'latest' && profileId !== hereId && !cloud.linkedHere(profileId)
-      && profilesUi && (await profilesUi.canAddProfile())) {
-      const name = (profiles.find((p) => p.id === profileId) || {}).name || t('backupRestoredProfileName');
-      const how = await askChoice(t('cloudRestoreTitle'), t('cloudRestoreHowHelp'), [
-        { value: 'sync', label: format('cloudRestoreSynced', { name }), help: t('cloudRestoreSyncedHelp'), className: 'is-primary' },
-        { value: 'other', label: t('cloudRestoreOther'), help: t('cloudRestoreOtherHelp') },
-      ]);
-      if (!how) return;
-      if (how === 'sync') {
-        await restoreSynced(account, profileId, name);
-        return;
-      }
-    }
     showBusy(t('cloudDownloading'), 'online');
     let result;
     try {
