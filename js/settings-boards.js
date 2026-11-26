@@ -151,6 +151,41 @@
     }
   }
 
+  /*
+   * Salva un modello tra «I miei modelli». Se ce n'è già uno con lo stesso nome chiede se sostituirlo
+   * (così non si accumulano doppioni) o tenerli tutti e due. Restituisce false se l'adulto annulla.
+   */
+  async function storeTemplate(template) {
+    const name = templates.localized(template.name);
+    const existing = await templates.findUserTemplateByName(name);
+    if (existing) {
+      const choice = await choose(format('tplSameNameTitle', { name }), t('tplSameNameHelp'), [
+        { value: 'replace', label: t('tplSameNameReplace'), help: t('tplSameNameReplaceHelp'), primary: true },
+        { value: 'both', label: t('tplSameNameBoth'), help: t('tplSameNameBothHelp') },
+      ]);
+      if (!choice) return false;
+      if (choice === 'replace') {
+        await templates.replaceUserTemplate(existing.id, template);
+        return true;
+      }
+    }
+    await templates.saveUserTemplate(template);
+    return true;
+  }
+
+  // «Salva come modello» dalla modifica di una cartella: la cartella con le sue sottocartelle
+  async function saveFolderAsTemplate(pageId, folderName) {
+    try {
+      const name = await askName(t('tplSaveFolder'), t('tplSaveFolderHelp'), folderName || '');
+      if (!name) return;
+      const template = await templates.fromCurrentPages(name, { embed: false, rootPageId: pageId });
+      if (!(await storeTemplate(template))) return;
+      app.notice(format('tplSaved', { name }));
+    } catch (error) {
+      app.notice(errorText(error));
+    }
+  }
+
   // ---------- Sezioni della categoria «Schede» ----------
 
   function renderStatus() {
@@ -246,7 +281,7 @@
         const name = await askName(t('tplSaveCurrent'), t('tplNameHelp'), '');
         if (!name) return;
         const template = await templates.fromCurrentPages(name, { embed: false });
-        await templates.saveUserTemplate(template);
+        if (!(await storeTemplate(template))) return;
         notice = { text: format('tplSaved', { name }) };
         ui.render();
       })),
@@ -709,6 +744,8 @@
       () => { if (!contextEditing()) renderHowSection(); },
     ],
   }, 'boards');
+
+  window.PicSpeak.boardsUi = { saveFolderAsTemplate };
 
   restoreLock();
 })();

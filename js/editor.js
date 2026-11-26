@@ -143,6 +143,16 @@
         close();
         app.openFolder(cell.targetPageId);
       }, 'dlg-btn-primary editor-open-folder'));
+      // Copia della cartella (con le sottocartelle) tra «I miei modelli»
+      const boardsUi = window.PicSpeak.boardsUi;
+      if (boardsUi) {
+        openRow.append(actionButton(t('tplSaveFolder'), () => {
+          // Si propone il nome appena scritto, se c'è
+          const name = labelInput.value.trim() || cell.label;
+          close();
+          boardsUi.saveFolderAsTemplate(cell.targetPageId, name);
+        }, 'editor-save-template'));
+      }
       form.append(openRow, el('small', 'editor-hint', t('editorFolderTapHint')));
     }
 

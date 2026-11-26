@@ -275,6 +275,26 @@
     return entry;
   }
 
+  // Nome confrontato senza maiuscole e spazi in più (per trovare un modello con lo stesso nome)
+  function sameName(a, b) {
+    const norm = (value) => localized(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    return norm(a) !== '' && norm(a) === norm(b);
+  }
+
+  // Modello salvato con lo stesso nome (null se non c'è)
+  async function findUserTemplateByName(name) {
+    return (await userTemplates()).find((entry) => entry && entry.template && sameName(entry.template.name, name)) || null;
+  }
+
+  // Sostituisce un modello salvato con uno nuovo: va in cima all'elenco con la data di oggi
+  async function replaceUserTemplate(id, template) {
+    const list = (await userTemplates()).filter((entry) => entry.id !== id);
+    const entry = { id: data.newId('tpl'), savedAt: new Date().toISOString(), template };
+    list.unshift(entry);
+    await storage.set(USER_TEMPLATES_KEY, list);
+    return entry;
+  }
+
   async function deleteUserTemplate(id) {
     const list = (await userTemplates()).filter((entry) => entry.id !== id);
     await storage.set(USER_TEMPLATES_KEY, list);
@@ -494,9 +514,27 @@
   /*
    * Modello dalle schede attuali. embed = true: le immagini sono dentro il file (per esportare);
    * false: riferimenti alle immagini già sul dispositivo (per «I miei modelli»).
+   * rootPageId: solo una cartella con le sue sottocartelle (la cartella diventa la Home del modello).
+   * Il modello è una copia: cambiando poi la cartella il modello resta com'era.
    */
-  async function fromCurrentPages(name, { embed }) {
-    const pages = data.profilePages();
+  async function fromCurrentPages(name, { embed, rootPageId = null }) {
+    const homeId = rootPageId && data.page(rootPageId) ? rootPageId : data.homePageId;
+    let pages = data.profilePages();
+    if (rootPageId) {
+      // Solo la cartella e ciò che sta dentro: una cartella che riporta più in alto (es. alla Home) non porta con sé
+      // il resto delle schede (diventa una tessera semplice nel modello)
+      const above = new Set((data.pathTo(homeId) || []).filter((id) => id !== homeId));
+      const seen = new Set();
+      const queue = [homeId];
+      while (queue.length) {
+        const id = queue.shift();
+        const p = data.page(id);
+        if (!p || seen.has(id) || above.has(id)) continue;
+        seen.add(id);
+        p.cells.forEach((c) => { if (c.kind === 'folder' && c.targetPageId) queue.push(c.targetPageId); });
+      }
+      pages = [...seen].map((id) => data.page(id));
+    }
     const images = {};
     const imageKeys = new Map();
     for (const p of pages) {
@@ -539,10 +577,11 @@
       app: 'PicSpeak',
       createdAt: new Date().toISOString(),
       name,
-      homePage: pageKey(data.homePageId),
+      homePage: pageKey(homeId),
       pages: pages.map((p) => ({
         key: pageKey(p.id),
-        title: p.title,
+        // La cartella salvata prende il nome del modello (la sua scheda può avere ancora un titolo vecchio)
+        title: rootPageId && p.id === homeId ? name : p.title,
         grid: { cols: p.grid.cols, rows: p.grid.rows, fixed: data.isFixed(p) },
         cells: data.orderedCells(p, { includeHidden: true }).map((c) => ({
           row: c.row,
@@ -626,6 +665,8 @@
     loadBuiltIn,
     userTemplates,
     saveUserTemplate,
+    findUserTemplateByName,
+    replaceUserTemplate,
     deleteUserTemplate,
     loadUserTemplate,
     apply,
