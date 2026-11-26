@@ -8,7 +8,7 @@
  *   images/N.ext    immagini e foto (PNG, JPEG o WebP), ognuna salvata una volta sola anche se la usano schede e modelli
  *   habits.json     abitudini d'uso, pesi di partenza e contesti (stesso formato di «Esporta storico e contesti»)
  *   templates.json  i modelli salvati dall'adulto («I miei modelli»), immagini come in boards.json
- *   appearance.json aspetto: stile, colori, sfondo, zoom
+ *   appearance.json aspetto: stile, colori (anche quelli scelti per i tipi di parola), sfondo, zoom
  *   settings.json   altre impostazioni: voce, lingua, tocco e frase, previsione, stampa, simboli, schermo
  * Con la password facoltativa gli ultimi cinque file stanno in un secondo zip, cifrato con AES-GCM
  * (chiave ricavata dalla password con PBKDF2-SHA-256, tutto con la crittografia già presente nel browser):
@@ -54,7 +54,7 @@
   const PARTS = ['boards', 'habits', 'templates', 'appearance', 'settings'];
   // Chiavi dell'archivio «settings» che entrano nel backup, divise tra aspetto e altre impostazioni
   const GROUP_KEYS = {
-    appearance: ['colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase'],
+    appearance: ['colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase', 'typeColors'],
     settings: ['language', 'voice', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
       'keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState'],
   };

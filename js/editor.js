@@ -18,6 +18,16 @@
   const IMAGE_SIZE = 256;
   const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
   const SWATCHES = ['#e0ac00', '#2e9a47', '#e57a12', '#2a6fd6', '#d0468f', '#cf3439', '#7a4fc9', '#6b717b'];
+  const SWATCH_TYPES = ['pronoun', 'verb', 'noun', 'adjective', 'social', 'negation', 'question'];
+
+  // Colori proposti: quelli dei tipi di parola scelti nelle impostazioni (di Fitzgerald se non cambiati), più il grigio
+  function swatchColors() {
+    const colors = window.PicSpeak.typeColors;
+    if (!colors) return SWATCHES;
+    const list = SWATCH_TYPES.map((type, i) => colors.colorOf(type) || SWATCHES[i]);
+    list.push(SWATCHES[SWATCHES.length - 1]);
+    return list.filter((color, i) => list.indexOf(color) === i); // due tipi con lo stesso colore: uno solo
+  }
 
   const dialog = document.createElement('dialog');
   dialog.className = 'pin-dialog editor-dialog';
@@ -195,7 +205,7 @@
     const typeChoice = segmentedChoice(
       data.WORD_TYPES.map((type) => [type, t(`wordType_${type}`)]),
       draft.wordType,
-      (value) => { draft.wordType = value; typeTouched = true; },
+      (value) => { draft.wordType = value; typeTouched = true; renderSwatches(); },
     );
     typeChoice.classList.add('word-type-choice');
     typeChoice.querySelectorAll('button').forEach((b) => b.classList.add(`type-${b.dataset.value}`));
@@ -204,6 +214,7 @@
       if (typeTouched || !type || !data.WORD_TYPES.includes(type)) return;
       draft.wordType = type;
       typeChoice.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.value === type)));
+      renderSwatches();
     };
     labelInput.addEventListener('input', () => setWordType(lexicon && lexicon.guess(labelInput.value)));
     form.append(typeField);
@@ -221,7 +232,10 @@
       auto.setAttribute('aria-pressed', String(!draft.color));
       auto.addEventListener('click', () => { draft.color = null; renderSwatches(); });
       swatches.append(auto);
-      SWATCHES.forEach((color) => {
+      // «A» mostra nel bordo il colore che la tessera prende dal suo tipo
+      const typeColor = window.PicSpeak.typeColors && window.PicSpeak.typeColors.colorOf(draft.wordType);
+      if (typeColor) auto.style.borderColor = typeColor;
+      swatchColors().forEach((color) => {
         const sw = el('button', 'editor-swatch');
         sw.type = 'button';
         sw.style.background = color;

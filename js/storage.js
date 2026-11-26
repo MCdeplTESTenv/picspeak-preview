@@ -23,7 +23,7 @@
   // Scelte salvate per profilo (vedi sopra e docs/FORMATO-DATI.md)
   const PROFILE_KEYS = [
     'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase',
-    'communication', 'prediction', 'printOptions', 'lockPositions', 'lastBackup', 'backupReminder',
+    'communication', 'prediction', 'printOptions', 'lockPositions', 'lastBackup', 'backupReminder', 'typeColors',
   ];
   const PROFILE_KEY_SET = new Set(PROFILE_KEYS);
   const ACTIVE_KEY = 'activeProfileId';

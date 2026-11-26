@@ -25,7 +25,7 @@
   // userTemplates (modelli salvati), symbolPacks (pacchetti già scaricati), lastBackup e onlineSearch: una scelta
   // di privacy sull'uso di internet non deve tornare «Attiva» senza che l'adulto se ne accorga.
   const SETTINGS_KEYS = [
-    'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset',
+    'language', 'voice', 'colorMode', 'pageBackground', 'appearance', 'preset', 'typeColors',
     'labelCase', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
     'keepScreenOn', 'autoFullscreen', 'sectionState', 'openSections',
   ];

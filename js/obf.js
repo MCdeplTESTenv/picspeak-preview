@@ -531,7 +531,14 @@
     if (cell.color && /^#[0-9a-f]{6}$/i.test(cell.color)) {
       return { background: hexToRgb(mixWithWhite(cell.color, 0.25)), border: hexToRgb(cell.color) };
     }
-    const [line, fill] = TYPE_COLORS[cell.kind === 'folder' ? 'folder' : (cell.wordType || 'noun')] || TYPE_COLORS.noun;
+    const type = cell.kind === 'folder' ? 'folder' : (cell.wordType || 'noun');
+    // Colore scelto dall'adulto per questo tipo di parola (Impostazioni › Schede), se diverso da Fitzgerald
+    const chosen = window.PicSpeak.typeColors;
+    if (type !== 'folder' && chosen && chosen.isCustom(type)) {
+      const color = chosen.colorOf(type);
+      return { background: hexToRgb(mixWithWhite(color, 0.25)), border: hexToRgb(color) };
+    }
+    const [line, fill] = TYPE_COLORS[type] || TYPE_COLORS.noun;
     return { background: hexToRgb(fill), border: hexToRgb(line) };
   }
 
