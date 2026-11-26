@@ -1,5 +1,5 @@
 /*
- * Tocco e frase: opzioni di accesso (selezione al tocco o al rilascio, tempo di pressione, tocchi
+ * Tocco (pagina «Tocco») e Frase (sezione in «Voce e frase»): opzioni di accesso (selezione al tocco o al rilascio, tempo di pressione, tocchi
  * ripetuti), gesti (sezione dell'aspetto, vedi adult.js), comportamento della frase (pronuncia, cancellazione dopo la lettura, ritorno alla Home)
  * e pulsanti rapidi («Ops», «Aiuto», frasi rapide sempre raggiungibili).
  * Le scelte si salvano sul dispositivo (chiave «communication»). Testi solo con textContent.
@@ -170,6 +170,43 @@
     seg('speakWords', [['each', 'valEachWord'], ['sentence', 'valOnlySentence']], 'optSpeakWords', 'optSpeakWordsHelp', wrap);
     seg('clearAfter', [[false, 'valNo'], [true, 'valYes']], 'optClearAfter', 'optClearAfterHelp', wrap);
     seg('autoHome', [[false, 'valNo'], [true, 'valYes']], 'optAutoHome', 'optAutoHomeHelp', wrap);
+    renderFolderNames(wrap);
+  }
+
+  // Nome delle cartelle letto quando si aprono: la scelta è di ogni cartella (Modifica cartella);
+  // qui si vede quante lo leggono e si può dare la stessa scelta a tutte, dopo una conferma.
+  function renderFolderNames(wrap) {
+    const data = window.PicSpeak.data;
+    if (!data || !data.profile) return;
+    const { folders, silent } = data.folderSpeechSummary();
+    let help = folders
+      ? t('optFolderNamesHelp').replace('{spoken}', String(folders - silent)).replace('{total}', String(folders))
+      : t('optFolderNamesNone');
+    if (settings.speakWords === 'sentence') help = `${help} ${t('optFolderNamesSentence')}`;
+    const actions = document.createElement('div');
+    actions.className = 'folder-names-actions';
+    const choose = async (makeSilent) => {
+      const ok = await ui.runDialog({
+        title: t(makeSilent ? 'folderNamesOffTitle' : 'folderNamesOnTitle'),
+        help: t('folderNamesConfirmHelp').replace('{total}', String(folders)),
+        primary: t('folderNamesApply'),
+        secondary: t('cancel'),
+      });
+      if (ok !== true) return;
+      await data.setAllFoldersSilent(makeSilent);
+      ui.render();
+    };
+    const allOn = ui.button(t('folderNamesAllOn'), () => choose(false));
+    const allOff = ui.button(t('folderNamesAllOff'), () => choose(true));
+    // Pulsante inutile (tutte le cartelle sono già così): disattivato
+    allOn.disabled = !folders || silent === 0;
+    allOff.disabled = !folders || silent === folders;
+    actions.append(allOn, allOff);
+    const row = ui.settingRow('optFolderNames', null, actions);
+    const small = document.createElement('small');
+    small.textContent = help;
+    row.querySelector('.setting-text').append(small);
+    wrap.append(row);
   }
 
   function renderQuickSection() {
@@ -241,8 +278,10 @@
     icon: '<path d="M8.5 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11.5 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14.5 11.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L4 15.5a1.5 1.5 0 0 1 2.5-1.6l2 2.1"/>',
     titleKey: 'catCommunication',
     introKey: 'catCommunicationIntro',
-    render: [renderQuickSection, renderTouchSection, () => ui.renderAppearanceGroup('grpGestures'), renderSentenceSection],
+    render: [renderQuickSection, renderTouchSection, () => ui.renderAppearanceGroup('grpGestures')],
   }, 'appearance');
+  // La sezione «Frase» (pronuncia, cancellazione, ritorno alla Home, nome delle cartelle) sta in Voce e frase
+  ui.addSection('voice', renderSentenceSection);
 
   bindBar();
   restore();

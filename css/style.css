@@ -1286,6 +1286,9 @@ body > .adult-bar { order: 0; }
 
 /* Riga impostazioni: il testo ha sempre spazio sufficiente; se i pulsanti non entrano vanno sotto */
 .setting-row { flex-wrap: wrap; row-gap: 8px; }
+/* Nome delle cartelle (Voce e frase): due pulsanti per dare la stessa scelta a tutte */
+.folder-names-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.folder-names-actions .dlg-btn:disabled { opacity: 0.5; cursor: default; }
 .setting-text { flex: 1 1 220px; }
 
 /* Testo delle tessere sempre scuro sui fondi chiari, in ogni stile e con qualunque impostazione del sistema */

@@ -30,7 +30,7 @@
   };
 
   /*
-   * Opzioni di comunicazione (Impostazioni → Tocco e frase), applicate solo in modalità comunicazione:
+   * Opzioni di comunicazione (Impostazioni → Tocco), applicate solo in modalità comunicazione:
    * - activation: 'release' = la tessera si sceglie quando si alza il dito (comportamento classico),
    *   'press' = appena la si tocca;
    * - holdMs: per scegliere bisogna tenere il dito sulla tessera per questo tempo (0 = no);
@@ -699,7 +699,7 @@
     if (window.PicSpeak.communication) window.PicSpeak.communication.refresh();
   }
 
-  // "Scuoti per tornare alla Home" (opzione in Impostazioni → Tocco e frase → Gesti).
+  // "Scuoti per tornare alla Home" (opzione in Impostazioni → Tocco → Gesti).
   // Servono due scosse decise entro un secondo: un movimento normale del tablet non basta.
   // Effetto: torna alla Home e cancella la frase.
   function bindShakeToHome() {
@@ -741,7 +741,7 @@
       start = { x: event.clientX, y: event.clientY, t: Date.now() };
     });
     el.strip.addEventListener('pointerup', (event) => {
-      // Il gesto è attivo solo se abilitato in Impostazioni → Tocco e frase → Gesti
+      // Il gesto è attivo solo se abilitato in Impostazioni → Tocco → Gesti
       if (document.documentElement.dataset.swipeClear !== 'on') { start = null; return; }
       if (!start || !state.sentence.length) { start = null; return; }
       const dx = event.clientX - start.x;

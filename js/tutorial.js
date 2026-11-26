@@ -159,7 +159,9 @@
           // innerHTML solo con icone costanti scritte qui sopra
           icon.innerHTML = `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[step.id] || ICONS.sentence}</svg>`;
           heading.textContent = step.title;
-          body.replaceChildren(...step.text.map((line) => el('p', 'tutorial-text', line.replace('{n}', holdSeconds))));
+          // Con durata 0 la prima riga del passo sul menu dice di toccare (non di tenere premuto)
+          const lines = step.id === 'pin' && holdSeconds === 0 ? [t('tutorialMenuTap'), ...step.text.slice(1)] : step.text;
+          body.replaceChildren(...lines.map((line) => el('p', 'tutorial-text', line.replace('{n}', holdSeconds))));
           if (step.id === 'install') body.append(...installBlock(show));
           if (last) body.append(el('p', 'tutorial-again', t('tutorialAgain')));
           dots.replaceChildren(...list.map((_, i) => el('span', i === index ? 'tutorial-dot is-current' : 'tutorial-dot')));

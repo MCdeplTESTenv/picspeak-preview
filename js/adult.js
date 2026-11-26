@@ -695,6 +695,11 @@
     const start = (event) => {
       if (event.type === 'pointerdown' && event.button !== 0) return;
       cancel();
+      // Durata 0: niente pressione lunga, il menu si apre al tocco (al rilascio, vedi «click») o con Invio
+      if (holdMs <= 0) {
+        if (event.type === 'keydown') openMainMenu();
+        return;
+      }
       el.lock.classList.add('is-holding');
       // La barra parte in cima allo schermo, dove il dito non la copre
       indicator.hidden = false;
@@ -719,6 +724,7 @@
     el.lock.addEventListener('keyup', (event) => {
       if (event.key === 'Enter' || event.key === ' ') cancel();
     });
+    el.lock.addEventListener('click', () => { if (holdMs <= 0) openMainMenu(); });
     el.lock.addEventListener('contextmenu', (event) => event.preventDefault());
   }
 
@@ -1017,7 +1023,7 @@
       body.append(settingRow('optLock', `lockDesc_${lock.mode}`, segmented(choices, lock.mode, chooseLock)));
       if (lock.mode === 'pin') body.append(button(t('changePin'), changePinFlow, false));
 
-      // Durata della pressione sui tre puntini: da 1 a 10 secondi
+      // Durata della pressione sui tre puntini: da 0 (basta un tocco) a 10 secondi
       const row = document.createElement('label');
       row.className = 'settings-field';
       const text = document.createElement('span');
@@ -1029,7 +1035,9 @@
       range.max = String(security.HOLD_SECONDS.max);
       range.step = '1';
       range.value = String(lock.holdSeconds);
-      const show = () => { value.textContent = t('holdSecondsValue').replace('{n}', range.value); };
+      const show = () => {
+        value.textContent = range.value === '0' ? t('holdSecondsTap') : t('holdSecondsValue').replace('{n}', range.value);
+      };
       show();
       range.addEventListener('input', show);
       range.addEventListener('change', async () => {
@@ -1472,7 +1480,7 @@
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
     ] },
     // Gesti: si salvano con l'aspetto (stessa chiave «appearance», nessun cambio di formato),
-    // ma si mostrano in Impostazioni → Tocco e frase → Gesti (category: 'communication').
+    // ma si mostrano in Impostazioni → Tocco → Gesti (category: 'communication').
     { titleKey: 'grpGestures', helpKey: 'grpGesturesHelp', category: 'communication', options: [
       { key: 'shakeHome', labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
@@ -1761,7 +1769,7 @@
     APPEARANCE_GROUPS.filter((group) => !group.category).forEach(renderAppearanceGroup);
   }
 
-  // Una sezione di opzioni dell'aspetto (usata anche da Tocco e frase per la sezione «Gesti»)
+  // Una sezione di opzioni dell'aspetto (usata anche dalla pagina Tocco per la sezione «Gesti»)
   function renderAppearanceGroup(group) {
     const wrap = section(group.titleKey, group.helpKey);
     if (group.titleKey === 'grpCells') wrap.append(tileZoomRow());
@@ -2128,7 +2136,7 @@
       if (app.mode === 'adult') openSettings('security');
     },
     render: () => { if (!el.settings.hidden) renderSettings(); },
-    // Sezione di opzioni dell'aspetto che appartiene a un'altra pagina (per ora: «Gesti» in Tocco e frase)
+    // Sezione di opzioni dell'aspetto che appartiene a un'altra pagina (per ora: «Gesti» in Tocco)
     renderAppearanceGroup(titleKey) {
       const group = APPEARANCE_GROUPS.find((g) => g.titleKey === titleKey);
       if (group) renderAppearanceGroup(group);
@@ -2138,6 +2146,11 @@
     reopenAfterReload,
     addBanner: (make) => { banners.push(make); },
     // Nuova categoria nel menu delle impostazioni, dopo quella indicata
+    // Sezione in più in una categoria esistente (es. «Frase» in Voce e frase, da communication.js)
+    addSection(categoryId, render) {
+      const category = CATEGORIES.find((cat) => cat.id === categoryId);
+      if (category) category.render.push(render);
+    },
     addCategory(category, afterId) {
       const index = CATEGORIES.findIndex((cat) => cat.id === afterId);
       CATEGORIES.splice(index < 0 ? CATEGORIES.length : index + 1, 0, category);

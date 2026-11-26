@@ -123,7 +123,8 @@
 
   const LOCK_KEY = 'adultLock';
   const LOCK_MODES = ['hold', 'math', 'pin'];
-  const HOLD_SECONDS = { min: 1, max: 10, def: 3 };
+  // 0 = nessuna pressione lunga: basta un tocco sui tre puntini (scelta dell'adulto)
+  const HOLD_SECONDS = { min: 0, max: 10, def: 3 };
 
   // Legge la scelta salvata, controllando i valori (dati letti dal dispositivo: non affidabili)
   async function getLock() {

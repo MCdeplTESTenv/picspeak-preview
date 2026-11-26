@@ -477,6 +477,38 @@
     await savePage(p);
   }
 
+  // ---------- Nome delle cartelle letto all'apertura ----------
+
+  // Cartelle del profilo in uso: quante sono e quante si aprono senza leggere il nome («silent»)
+  function folderSpeechSummary() {
+    let folders = 0;
+    let silent = 0;
+    model.pages.forEach((p) => p.cells.forEach((cell) => {
+      if (cell.kind !== 'folder') return;
+      folders += 1;
+      if (cell.silent === true) silent += 1;
+    }));
+    return { folders, silent };
+  }
+
+  // Stessa scelta per tutte le cartelle del profilo (sostituisce quella fatta cartella per cartella).
+  // Si salvano solo le schede che cambiano; restituisce quante cartelle sono cambiate.
+  async function setAllFoldersSilent(silent) {
+    let changed = 0;
+    for (const p of model.pages.values()) {
+      let touched = false;
+      p.cells.forEach((cell) => {
+        if (cell.kind !== 'folder' || (cell.silent === true) === silent) return;
+        if (silent) cell.silent = true;
+        else delete cell.silent;
+        touched = true;
+        changed += 1;
+      });
+      if (touched) await savePage(p);
+    }
+    return changed;
+  }
+
   // ---------- Schede intere (schede pronte, modelli, ripristino) ----------
 
   function profilePages() {
@@ -588,6 +620,8 @@
     canMoveCellTo,
     moveCellToPage,
     profilePages,
+    folderSpeechSummary,
+    setAllFoldersSilent,
     seedDefaultProfile,
     snapshotPages,
     previousPages,
