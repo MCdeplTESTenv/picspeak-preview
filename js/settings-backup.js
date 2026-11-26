@@ -844,6 +844,8 @@
       const values = { date: dateText(info.createdAt), time: timeText(info.createdAt), device: info.device };
       texts.push(format(info.device ? 'backupSummaryWhenDevice' : 'backupSummaryWhen', values));
     }
+    // Versione di PicSpeak che ha creato il backup (manca nei backup più vecchi)
+    if (info.appVersion) texts.push(format('backupSummaryVersion', { version: info.appVersion }));
     if (issues && (issues.images || issues.parts.length)) texts.push(t('backupSummaryIssues'));
     const here = data.profile && data.profile.name;
     if (here && info.name && here.toLocaleLowerCase() !== info.name.toLocaleLowerCase()) {

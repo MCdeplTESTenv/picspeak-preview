@@ -2,7 +2,7 @@
  * Backup completo di PicSpeak (Tappa 5, primo passo: backup locale in un file).
  *
  * Il file «.picspeak» è un archivio zip (scritto e letto da zip.js, senza librerie):
- *   manifest.json   { format: 'picspeak', kind: 'backup', formatVersion: 1, app, createdAt,
+ *   manifest.json   { format: 'picspeak', kind: 'backup', formatVersion: 1, app, appVersion, createdAt,
  *                     profile: { id, name }, device, parts: [...], encryption: null | {…} }
  *   boards.json     schede del profilo nel formato dei modelli; ogni immagine indica il suo file in images/
  *   images/N.ext    immagini e foto (PNG, JPEG o WebP), ognuna salvata una volta sola anche se la usano schede e modelli
@@ -322,6 +322,9 @@
       kind: KIND,
       formatVersion: FORMAT_VERSION,
       app: 'PicSpeak',
+      // Versione pubblica del tool che ha creato il file (es. «1.0»): solo informativa. Per la compatibilità conta
+      // formatVersion; i backup creati prima del 26/11/2026 non hanno questo campo e si aprono come sempre.
+      appVersion: window.PicSpeak.version ? window.PicSpeak.version.number : undefined,
       createdAt: now.toISOString(),
       profile: { id: data.profile ? data.profile.id : null, name: profileName },
       // Nome del dispositivo scelto dall'adulto per il backup online (es. «Tablet di scuola»), altrimenti il tipo
@@ -395,6 +398,10 @@
     return new BackupError('damaged');
   }
 
+  function cleanAppVersion(value) {
+    return typeof value === 'string' && /^\d{1,4}\.\d{1,4}$/.test(value) ? value : null;
+  }
+
   function cleanManifest(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new BackupError('format');
     if (raw.format !== FORMAT || raw.kind !== KIND) throw new BackupError('format');
@@ -407,6 +414,8 @@
       profileId: typeof profile.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(profile.id) ? profile.id : null,
       name: cleanName(profile.name),
       device: cleanText(raw.device, 60),
+      // Versione del tool che ha creato il file: solo «numero.numero», altrimenti (o se manca) null
+      appVersion: cleanAppVersion(raw.appVersion),
       encryption: null,
     };
     if (raw.encryption) {
@@ -461,7 +470,7 @@
     return {
       info: {
         createdAt: created && !Number.isNaN(created.getTime()) ? created : null,
-        profileId: null, name: '', device: '', encryption: null, legacy: true,
+        profileId: null, name: '', device: '', appVersion: null, encryption: null, legacy: true,
       },
       archive,
     };

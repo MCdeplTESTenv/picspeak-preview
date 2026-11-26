@@ -319,7 +319,13 @@
           btn.addEventListener('click', () => close(item.id));
           listNode.append(btn);
         });
-        return listNode;
+        // Versione pubblica di PicSpeak (js/version.js), in fondo al menu
+        const wrap = document.createElement('div');
+        const versionNode = document.createElement('p');
+        versionNode.className = 'menu-version';
+        versionNode.textContent = appVersionLabel();
+        wrap.append(listNode, versionNode);
+        return wrap;
       },
     });
     if (choice === 'settings') requestAdultAccess();
@@ -606,7 +612,13 @@
           btn.addEventListener('click', () => close(id));
           listNode.append(btn);
         });
-        return listNode;
+        // Versione pubblica di PicSpeak (js/version.js), in fondo al menu
+        const wrap = document.createElement('div');
+        const versionNode = document.createElement('p');
+        versionNode.className = 'menu-version';
+        versionNode.textContent = appVersionLabel();
+        wrap.append(listNode, versionNode);
+        return wrap;
       },
     });
     // Chiusa senza scegliere: si entra (nessuna protezione) e la domanda torna la prossima volta
@@ -1393,6 +1405,21 @@
     wrap.append(await buildCreditsList());
   }
 
+  // Versione pubblica di PicSpeak, scelta dallo Sviluppatore (js/version.js); mai il numero tecnico della cache
+  function appVersionLabel() {
+    const version = window.PicSpeak.version;
+    return version ? version.label : 'PicSpeak';
+  }
+
+  // Accanto ai crediti: la versione in uso e le novità di ogni versione (pagina della guida)
+  function renderVersionSection() {
+    const wrap = section('secVersionTitle', 'secVersionHelp', { collapsible: false });
+    const label = document.createElement('p');
+    label.className = 'settings-version';
+    label.textContent = appVersionLabel();
+    wrap.append(label, button(t('versionNews'), () => window.location.assign('guida.html#novita')));
+  }
+
   function renderGuideSection() {
     const wrap = section('secGuideTitle', 'secGuideHelp');
     wrap.append(button(t('guideOpen'), openGuide), button(t('menuTutorial'), openTutorial));
@@ -1847,7 +1874,7 @@
   // Categorie delle impostazioni: icona, titolo, sezioni contenute
   const CATEGORIES = [
     { id: 'general', icon: '<path d="M19.4 10.1 L21.9 10.3 L21.9 13.7 L19.4 13.9 L18.5 15.9 L20.2 17.8 L17.8 20.2 L15.9 18.5 L13.9 19.4 L13.7 21.9 L10.3 21.9 L10.1 19.4 L8.1 18.5 L6.2 20.2 L3.8 17.8 L5.5 15.9 L4.6 13.9 L2.1 13.7 L2.1 10.3 L4.6 10.1 L5.5 8.1 L3.8 6.2 L6.2 3.8 L8.1 5.5 L10.1 4.6 L10.3 2.1 L13.7 2.1 L13.9 4.6 L15.9 5.5 L17.8 3.8 L20.2 6.2 L18.5 8.1Z"/><circle cx="12" cy="12" r="3"/>', titleKey: 'catGeneral', introKey: 'catGeneralIntro',
-      render: [renderLanguageSection, renderOnlineSection, renderInstallSection, renderGuideSection, renderCreditsSection] },
+      render: [renderLanguageSection, renderOnlineSection, renderInstallSection, renderGuideSection, renderCreditsSection, renderVersionSection] },
     { id: 'appearance', icon: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>', titleKey: 'catAppearance', introKey: 'catAppearanceIntro',
       render: [renderPresetSection, renderColorModeSection, renderBackgroundSection, renderAppearanceGroups] },
     { id: 'sources', icon: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15-4.5-4.5-9 9"/>', titleKey: 'catSources', introKey: 'catSourcesIntro',
@@ -1913,6 +1940,11 @@
       li.append(btn);
       nav.append(li);
     });
+    // In fondo all'elenco delle categorie: la versione di PicSpeak (sola lettura)
+    const versionItem = document.createElement('li');
+    versionItem.className = 'settings-nav-version';
+    versionItem.textContent = appVersionLabel();
+    nav.append(versionItem);
 
     // Contenuto della categoria scelta
     const category = CATEGORIES.find((cat) => cat.id === currentCategory) || CATEGORIES[0];
