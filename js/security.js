@@ -148,11 +148,22 @@
     return min + (value % (max - min + 1));
   }
 
-  // Operazione da risolvere: somma semplice di due numeri di due cifre, senza riporto (es. 23 + 14): immediata per un
-  // adulto, difficile per un bambino piccolo. Ogni volta diversa.
+  // Operazione da risolvere, immediata per un adulto e difficile per un bambino piccolo, ogni volta diversa:
+  // addizione o sottrazione tra un numero di due cifre e uno di una cifra (es. 34 + 7, 52 − 6),
+  // oppure moltiplicazione tra due numeri di una cifra (es. 7 × 8). Mai divisioni.
   function makeChallenge() {
-    const a = randomInt(1, 5) * 10 + randomInt(1, 4);
-    const b = randomInt(1, 4) * 10 + randomInt(1, 5);
+    const kind = randomInt(0, 2);
+    if (kind === 2) {
+      const a = randomInt(2, 9);
+      const b = randomInt(2, 9);
+      return { text: `${a} × ${b}`, answer: a * b };
+    }
+    const b = randomInt(1, 9);
+    if (kind === 1) {
+      const a = randomInt(11, 99);
+      return { text: `${a} − ${b}`, answer: a - b };
+    }
+    const a = randomInt(10, 90);
     return { text: `${a} + ${b}`, answer: a + b };
   }
 
