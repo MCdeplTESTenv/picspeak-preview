@@ -1,6 +1,6 @@
 /*
  * Tocco e frase: opzioni di accesso (selezione al tocco o al rilascio, tempo di pressione, tocchi
- * ripetuti), comportamento della frase (pronuncia, cancellazione dopo la lettura, ritorno alla Home)
+ * ripetuti), gesti (sezione dell'aspetto, vedi adult.js), comportamento della frase (pronuncia, cancellazione dopo la lettura, ritorno alla Home)
  * e pulsanti rapidi («Ops», «Aiuto», frasi rapide sempre raggiungibili).
  * Le scelte si salvano sul dispositivo (chiave «communication»). Testi solo con textContent.
  */
@@ -241,7 +241,7 @@
     icon: '<path d="M8.5 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11.5 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14.5 11.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L4 15.5a1.5 1.5 0 0 1 2.5-1.6l2 2.1"/>',
     titleKey: 'catCommunication',
     introKey: 'catCommunicationIntro',
-    render: [renderQuickSection, renderTouchSection, renderSentenceSection],
+    render: [renderQuickSection, renderTouchSection, () => ui.renderAppearanceGroup('grpGestures'), renderSentenceSection],
   }, 'appearance');
 
   bindBar();

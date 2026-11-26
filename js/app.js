@@ -684,7 +684,7 @@
     if (window.PicSpeak.communication) window.PicSpeak.communication.refresh();
   }
 
-  // "Scuoti per tornare alla Home" (opzione in Impostazioni → Aspetto → Disposizione e tocco).
+  // "Scuoti per tornare alla Home" (opzione in Impostazioni → Tocco e frase → Gesti).
   // Servono due scosse decise entro un secondo: un movimento normale del tablet non basta.
   // Effetto: torna alla Home e cancella la frase.
   function bindShakeToHome() {
@@ -726,7 +726,7 @@
       start = { x: event.clientX, y: event.clientY, t: Date.now() };
     });
     el.strip.addEventListener('pointerup', (event) => {
-      // Il gesto è attivo solo se abilitato in Impostazioni → Aspetto → Disposizione e tocco
+      // Il gesto è attivo solo se abilitato in Impostazioni → Tocco e frase → Gesti
       if (document.documentElement.dataset.swipeClear !== 'on') { start = null; return; }
       if (!start || !state.sentence.length) { start = null; return; }
       const dx = event.clientX - start.x;

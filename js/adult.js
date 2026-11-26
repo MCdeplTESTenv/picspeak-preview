@@ -1210,6 +1210,8 @@
         values: [['rounded', 'valRoundedCorners'], ['square', 'valSquare']] },
       { key: 'cellOpacity', labelKey: 'optCellOpacity', helpKey: 'optCellOpacityHelp',
         values: [['solid', 'valSolid'], ['translucent', 'valTranslucent']] },
+      { key: 'touchFeedback', labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
+        values: [['on', 'valOn'], ['strong', 'valStrong'], ['off', 'valOff']] },
     ] },
     { titleKey: 'grpLayout', options: [
       { key: 'sentencePosition', labelKey: 'optSentencePosition',
@@ -1220,8 +1222,10 @@
         values: [['right', 'valRight'], ['left', 'valLeft']] },
       { key: 'pageTitle', labelKey: 'optPageTitle',
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
-      { key: 'touchFeedback', labelKey: 'optTouchFeedback', helpKey: 'optTouchFeedbackHelp',
-        values: [['on', 'valOn'], ['strong', 'valStrong'], ['off', 'valOff']] },
+    ] },
+    // Gesti: si salvano con l'aspetto (stessa chiave «appearance», nessun cambio di formato),
+    // ma si mostrano in Impostazioni → Tocco e frase → Gesti (category: 'communication').
+    { titleKey: 'grpGestures', helpKey: 'grpGesturesHelp', category: 'communication', options: [
       { key: 'shakeHome', labelKey: 'optShakeHome', helpKey: 'optShakeHomeHelp',
         values: [['off', 'valNo'], ['on', 'valYes']] },
       { key: 'swipeClear', labelKey: 'optSwipeClear', helpKey: 'optSwipeClearHelp',
@@ -1504,28 +1508,32 @@
     return settingRow('optTileZoom', 'optTileZoomHelp', control);
   }
 
+  // Sezioni dell'aspetto mostrate nella pagina Aspetto (i gruppi con «category» stanno in un'altra pagina)
   function renderAppearanceGroups() {
-    APPEARANCE_GROUPS.forEach((group) => {
-      const wrap = section(group.titleKey);
-      if (group.titleKey === 'grpCells') wrap.append(tileZoomRow());
-      group.options.forEach((opt) => {
-        const current = appearance[opt.key] || opt.values[0][0];
-        wrap.append(settingRow(opt.labelKey, opt.helpKey, segmented(opt.values, current, async (value) => {
-          // iPad/iPhone chiedono il permesso per i sensori di movimento: va chiesto subito, dentro il tocco
-          if (opt.key === 'shakeHome' && value === 'on' && window.DeviceMotionEvent
-            && typeof DeviceMotionEvent.requestPermission === 'function') {
-            try {
-              if ((await DeviceMotionEvent.requestPermission()) !== 'granted') return;
-            } catch (error) {
-              return;
-            }
+    APPEARANCE_GROUPS.filter((group) => !group.category).forEach(renderAppearanceGroup);
+  }
+
+  // Una sezione di opzioni dell'aspetto (usata anche da Tocco e frase per la sezione «Gesti»)
+  function renderAppearanceGroup(group) {
+    const wrap = section(group.titleKey, group.helpKey);
+    if (group.titleKey === 'grpCells') wrap.append(tileZoomRow());
+    group.options.forEach((opt) => {
+      const current = appearance[opt.key] || opt.values[0][0];
+      wrap.append(settingRow(opt.labelKey, opt.helpKey, segmented(opt.values, current, async (value) => {
+        // iPad/iPhone chiedono il permesso per i sensori di movimento: va chiesto subito, dentro il tocco
+        if (opt.key === 'shakeHome' && value === 'on' && window.DeviceMotionEvent
+          && typeof DeviceMotionEvent.requestPermission === 'function') {
+          try {
+            if ((await DeviceMotionEvent.requestPermission()) !== 'granted') return;
+          } catch (error) {
+            return;
           }
-          appearance = { ...appearance, [opt.key]: value };
-          applyAppearance();
-          await storage.set('appearance', appearance);
-          renderSettings();
-        })));
-      });
+        }
+        appearance = { ...appearance, [opt.key]: value };
+        applyAppearance();
+        await storage.set('appearance', appearance);
+        renderSettings();
+      })));
     });
   }
 
@@ -1858,6 +1866,11 @@
       if (app.mode === 'adult') openSettings('security');
     },
     render: () => { if (!el.settings.hidden) renderSettings(); },
+    // Sezione di opzioni dell'aspetto che appartiene a un'altra pagina (per ora: «Gesti» in Tocco e frase)
+    renderAppearanceGroup(titleKey) {
+      const group = APPEARANCE_GROUPS.find((g) => g.titleKey === titleKey);
+      if (group) renderAppearanceGroup(group);
+    },
     closeSettings,
     openSettings,
     reopenAfterReload,
