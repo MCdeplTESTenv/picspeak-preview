@@ -353,14 +353,6 @@
   // store: archivio del PIN (quello delle impostazioni, oppure security.privatePin per la previsione);
   // texts: titolo e spiegazione propri della creazione
 
-  // Il PIN privacy non può essere uguale a quello delle impostazioni: chi conosce l'uno non deve aprire l'altro
-  // (vale nei due versi: anche il PIN delle impostazioni non può essere uguale al PIN privacy)
-  async function samePinAsSettings(store, pin) {
-    const other = store === security ? security.privatePin : security;
-    if (!(await other.hasPin())) return false;
-    return (await other.verifyPin(pin)).ok;
-  }
-
   const SETTINGS_PIN_TEXTS = { title: 'pinCreateTitle', help: 'pinCreateHelp' };
   const PRIVATE_PIN_TEXTS = { title: 'privatePinCreateTitle', help: 'privatePinCreateHelp', recoveryHelp: 'privateRecoveryHelp', codeHelp: 'privateCodeHelp' };
 
@@ -374,7 +366,6 @@
       onSubmit: async (values) => {
         if (!security.isValidPin(values.pin)) return t('pinInvalid');
         if (values.pin !== values.pin2) return t('pinMismatch');
-        if (await samePinAsSettings(store, values.pin)) return t('privatePinSame');
         const code = await store.setPin(values.pin, { newRecovery: true });
         return { code };
       },
@@ -424,7 +415,6 @@
         if (values.pin !== values.pin2) return t('pinMismatch');
         const res = await store.verifyPin(values.current);
         if (!res.ok) return t('pinWrong');
-        if (await samePinAsSettings(store, values.pin)) return t('privatePinSame');
         // Il codice di recupero esistente resta valido
         await store.setPin(values.pin, { newRecovery: false });
         return true;
