@@ -461,8 +461,8 @@
   // «12 tessere e 2 cartelle»: quello che sparisce insieme a una cartella
   function contentsText({ tiles, folders }) {
     const parts = [];
-    if (tiles) parts.push(tiles === 1 ? t('deleteTilesOne') : t('deleteTilesN').replace('{n}', tiles));
-    if (folders) parts.push(folders === 1 ? t('deleteFoldersOne') : t('deleteFoldersN').replace('{n}', folders));
+    if (tiles) parts.push(tiles === 1 ? t('deleteTilesOne') : t('deleteTilesN').replace('{n}', () => String(tiles)));
+    if (folders) parts.push(folders === 1 ? t('deleteFoldersOne') : t('deleteFoldersN').replace('{n}', () => String(folders)));
     return parts.join(` ${t('deleteAnd')} `);
   }
 
@@ -476,14 +476,14 @@
     if (!cell) return false;
     const isFolder = cell.kind === 'folder';
     const name = cell.label || (isFolder && data.page(cell.targetPageId) ? data.page(cell.targetPageId).title : '') || '';
-    let title = name ? t('deleteTileTitle').replace('{name}', name) : t('editorDeleteConfirm');
+    let title = name ? t('deleteTileTitle').replace('{name}', () => name) : t('editorDeleteConfirm');
     let help = t('deleteTileHelp');
     if (isFolder) {
       const contents = data.folderContents(pageId, cellId);
       const what = contentsText(contents);
-      title = t('deleteFolderTitle').replace('{name}', name);
+      title = t('deleteFolderTitle').replace('{name}', () => name);
       const lines = [];
-      if (what) lines.push(t('deleteFolderHelp').replace('{what}', what));
+      if (what) lines.push(t('deleteFolderHelp').replace('{what}', () => what));
       else if (!contents.shared) lines.push(t('deleteFolderEmpty'));
       if (contents.shared) lines.push(t('deleteFolderShared'));
       help = lines.join(' ');
@@ -496,7 +496,7 @@
     if (!ok || app.mode !== 'adult') return false;
     await data.deleteCell(pageId, cellId);
     app.renderGrid();
-    if (name) app.notice(t('deletedNotice').replace('{name}', name));
+    if (name) app.notice(t('deletedNotice').replace('{name}', () => name));
     return true;
   }
 

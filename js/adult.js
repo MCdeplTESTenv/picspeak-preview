@@ -354,9 +354,11 @@
   // texts: titolo e spiegazione propri della creazione
 
   // Il PIN privacy non può essere uguale a quello delle impostazioni: chi conosce l'uno non deve aprire l'altro
+  // (vale nei due versi: anche il PIN delle impostazioni non può essere uguale al PIN privacy)
   async function samePinAsSettings(store, pin) {
-    if (store === security || !(await security.hasPin())) return false;
-    return (await security.verifyPin(pin)).ok;
+    const other = store === security ? security.privatePin : security;
+    if (!(await other.hasPin())) return false;
+    return (await other.verifyPin(pin)).ok;
   }
 
   const SETTINGS_PIN_TEXTS = { title: 'pinCreateTitle', help: 'pinCreateHelp' };
@@ -535,6 +537,8 @@
       }
       ok = recovered === true;
     }
+    // Nel frattempo la modalità adulto può essersi chiusa da sola (5 minuti senza tocchi): allora non si apre nulla
+    ok = ok && app.mode === 'adult';
     if (ok) privateUnlocked = true;
     refreshPrivate();
     return ok;
@@ -557,25 +561,33 @@
         // Nessun salvataggio in sospeso (qui e nelle altre schede aperte) deve riscrivere le abitudini cancellate
         if (predict && typeof predict.freeze === 'function') predict.freeze();
         if (resetChannel) resetChannel.postMessage('restoring');
-        // Abitudini arrivate dagli altri dispositivi dello stesso profilo (backup online), di tutti i profili
-        const profiles = await storage.getAllRecords('profiles');
-        await Promise.all(profiles.map((p) => storage.remove(`syncLayers:${p.id}`)));
-        if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
-        // Backup online scollegato: le copie su Dropbox contengono le abitudini, e per riaverle serve l'account
-        if (cloud && typeof cloud.disconnectAll === 'function') await cloud.disconnectAll();
-        const usage = await storage.getAllRecords('usage');
-        await storage.deleteRecords('usage', usage.map((r) => r.id));
-        const contexts = await storage.getAllRecords('contexts');
-        await storage.deleteRecords('contexts', contexts.filter((c) => c && c.kind === 'prediction').map((c) => c.id));
-        await security.privatePin.clearPin();
-        await security.setPrivateLock('none');
+        try {
+          // Abitudini arrivate dagli altri dispositivi dello stesso profilo (backup online), di tutti i profili
+          const profiles = await storage.getAllRecords('profiles');
+          await Promise.all(profiles.map((p) => storage.remove(`syncLayers:${p.id}`)));
+          if (predict && typeof predict.clearRemoteLayers === 'function') predict.clearRemoteLayers();
+          // Backup online scollegato: le copie su Dropbox contengono le abitudini, e per riaverle serve l'account
+          if (cloud && typeof cloud.disconnectAll === 'function') await cloud.disconnectAll();
+          const usage = await storage.getAllRecords('usage');
+          await storage.deleteRecords('usage', usage.map((r) => r.id));
+          const contexts = await storage.getAllRecords('contexts');
+          await storage.deleteRecords('contexts', contexts.filter((c) => c && c.kind === 'prediction').map((c) => c.id));
+          await security.privatePin.clearPin();
+          await security.setPrivateLock('none');
+        } catch (error) {
+          // Scrittura non riuscita (es. memoria piena): le altre schede ripartono, qui si può riprovare
+          if (resetChannel) resetChannel.postMessage('erased');
+          return t('privateEraseFailed');
+        }
         if (resetChannel) resetChannel.postMessage('erased');
         return true;
       },
     });
     if (done === true) {
       await runDialog({ title: t('privateErasedTitle'), help: t('privateErasedHelp'), primary: t('close') });
-      reopenAfterReload('security');
+      // Si riapre in Sicurezza solo se l'adulto è ancora lì (non dopo l'uscita automatica: davanti c'è il bambino)
+      if (app.mode === 'adult') reopenAfterReload('security');
+      else window.location.reload();
     }
   }
 
@@ -612,24 +624,31 @@
     if (choice === 'pin') {
       if (!(await createPinFlow(security.privatePin, PRIVATE_PIN_TEXTS))) return false;
       await security.setPrivateLock('pin');
-      privateUnlocked = true;
+      if (app.mode === 'adult') privateUnlocked = true;
     }
     refreshPrivate();
-    return true;
+    // Finestra chiusa dall'uscita automatica: le impostazioni non si aprono davanti al bambino
+    return app.mode === 'adult';
   }
 
   // Si può aprire questa categoria delle impostazioni?
   async function canOpenCategory(id) {
     if (!PRIVATE_CATEGORIES.has(id)) return true;
+    let ok;
     if (id === 'prediction' && security.supported && !(await security.getPrivateLock()).chosen) {
-      return askPrivateLock();
+      ok = await askPrivateLock();
+    } else {
+      ok = await requestPrivateAccess();
     }
-    return requestPrivateAccess();
+    // Mai impostazioni aperte se intanto si è tornati alla modalità bambino
+    return ok && app.mode === 'adult';
   }
 
   // ---------- Ingresso e uscita ----------
 
   function enterAdult() {
+    // Ogni ingresso parte con Previsione e Backup chiusi dal PIN privacy (se scelto)
+    privateUnlocked = false;
     app.setMode('adult');
     if (window.PicSpeak.profiles) window.PicSpeak.profiles.showProfileInBar();
     // Archiviazione persistente: sempre chiesta (al massimo una volta a settimana se il browser non la concede)
@@ -645,6 +664,12 @@
 
   function exitAdult() {
     if (closeCurrentDialog) closeCurrentDialog();
+    // Anche le finestre dell'adulto aperte sopra la scheda (modifica tessera, cerca simbolo, più tessere…) si chiudono:
+    // dopo i minuti senza tocchi davanti c'è il bambino. Ognuna si chiude come con Esc (le sue regole: un salvataggio
+    // in corso finisce da solo); quelle senza regole si chiudono e basta
+    document.querySelectorAll('dialog[open]').forEach((dialog) => {
+      if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    });
     closeSettings();
     clearTimeout(inactivityTimer);
     // Uscendo, la previsione (se ha il PIN) si richiude e le impostazioni non si riaprono su di lei
@@ -1037,7 +1062,7 @@
     if (mode === 'pin') {
       if (current.mode !== 'pin') {
         if (!(await createPinFlow(security.privatePin, PRIVATE_PIN_TEXTS))) return;
-        privateUnlocked = true;
+        if (app.mode === 'adult') privateUnlocked = true;
       }
     } else if (current.mode === 'pin') {
       if (!(await requestPrivateAccess())) return;

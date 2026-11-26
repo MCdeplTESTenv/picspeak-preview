@@ -17,6 +17,7 @@
   const MAX_LABEL = 40;       // come nella modifica della tessera
   const MAX_RESULTS = 24;     // simboli mostrati per parola
   const PARALLEL = 3;         // ricerche contemporanee
+  const MAX_CELLS = 400;      // tessere per pagina: oltre, backup e modelli non si salverebbero (templates.js)
 
   // ---------- Logica (provata dai test) ----------
 
@@ -63,16 +64,19 @@
    * rows = [{ word, result }] con result = simbolo scelto oppure null (tessera con la sola parola).
    * Il tipo di parola si propone come nella tessera singola: dal lessico, poi da ARASAAC, altrimenti «cosa».
    * Se un'immagine non arriva la tessera si crea lo stesso, solo con la parola.
-   * Restituisce { created, withoutImage } (withoutImage = parole il cui simbolo non è arrivato).
+   * Restituisce { created, withoutImage, skipped } (withoutImage = parole il cui simbolo non è arrivato;
+   * skipped = parole non create perché la pagina ha già 400 tessere).
    */
   async function createTiles(pageId, rows, onProgress) {
     if (!data.page(pageId)) throw new Error('page-missing');
     const created = [];
     const withoutImage = [];
+    let skipped = 0;
     for (let i = 0; i < rows.length; i += 1) {
       const { word, result } = rows[i];
       const label = String(word || '').trim().slice(0, MAX_LABEL);
       if (!label) continue;
+      if (data.page(pageId).cells.length >= MAX_CELLS) { skipped += 1; continue; }
       if (onProgress) onProgress(i + 1, rows.length);
       let imageId = null;
       if (result) {
@@ -88,7 +92,7 @@
       const wordType = [guessed, result && result.wordType].find((w) => w && data.WORD_TYPES.includes(w)) || 'noun';
       created.push(await data.addCell(pageId, { label, wordType, imageId }));
     }
-    return { created, withoutImage };
+    return { created, withoutImage, skipped };
   }
 
   // ---------- Interfaccia ----------
@@ -326,16 +330,21 @@
         go.disabled = true;
         cancel.disabled = true;
         try {
-          const { created, withoutImage } = await createTiles(pageId, chosen.map((r) => ({ word: r.word, result: r.chosen })),
+          const { created, withoutImage, skipped } = await createTiles(pageId, chosen.map((r) => ({ word: r.word, result: r.chosen })),
             (n, total) => { create.textContent = t('bulkCreating').replace('{n}', () => String(n)).replace('{total}', () => String(total)); });
           const message = t('bulkDone').replace('{n}', () => String(created.length));
           finish(created.length);
           const app = window.PicSpeak.app;
           if (app) {
             app.renderGrid();
-            app.notice(withoutImage.length ? `${message} ${t('bulkSomeWithoutImage').replace('{n}', () => String(withoutImage.length))}` : message);
+            const extra = [];
+            if (withoutImage.length) extra.push(t('bulkSomeWithoutImage').replace('{n}', () => String(withoutImage.length)));
+            if (skipped) extra.push(t('bulkPageFull').replace('{n}', () => String(skipped)).replace('{max}', () => String(MAX_CELLS)));
+            app.notice([message, ...extra].join(' '));
           }
         } catch (error) {
+          // Finestra già chiusa (Esc o uscita automatica durante la creazione): si chiude e basta
+          if (!dialog.open) { finish(0); return; }
           busy = false;
           go.disabled = false;
           cancel.disabled = false;
@@ -344,7 +353,13 @@
         }
       });
 
-      dialog.oncancel = (event) => { event.preventDefault(); if (!busy) finish(0); };
+      // Esc (o le impostazioni che si richiudono da sole): se la creazione è in corso la finestra si chiude subito
+      // e le tessere finiscono di crearsi senza finestra davanti
+      dialog.oncancel = (event) => {
+        event.preventDefault();
+        if (busy) dialog.close();
+        else finish(0);
+      };
       dialog.replaceChildren(form);
       dialog.showModal();
       input.focus();

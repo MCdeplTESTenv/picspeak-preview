@@ -158,18 +158,18 @@
   // addizione o sottrazione tra un numero di due cifre e uno di una cifra (es. 34 + 7, 52 − 6),
   // oppure moltiplicazione tra due numeri di una cifra (es. 7 × 8). Mai divisioni.
   function makeChallenge() {
+    // Niente casi banali che un bambino indovina (10 + 1, 2 × 2): fattori da 3 a 9, secondo numero da 2 a 9,
+    // primo numero di due cifre che non è una decina tonda
     const kind = randomInt(0, 2);
     if (kind === 2) {
-      const a = randomInt(2, 9);
-      const b = randomInt(2, 9);
+      const a = randomInt(3, 9);
+      const b = randomInt(3, 9);
       return { text: `${a} × ${b}`, answer: a * b };
     }
-    const b = randomInt(1, 9);
-    if (kind === 1) {
-      const a = randomInt(11, 99);
-      return { text: `${a} − ${b}`, answer: a - b };
-    }
-    const a = randomInt(10, 90);
+    const b = randomInt(2, 9);
+    let a = randomInt(11, 89);
+    if (a % 10 === 0) a += 1;
+    if (kind === 1) return { text: `${a} − ${b}`, answer: a - b };
     return { text: `${a} + ${b}`, answer: a + b };
   }
 
