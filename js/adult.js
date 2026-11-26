@@ -1420,7 +1420,7 @@
         values: [['normal', 'valNormal'], ['l', 'valLarge'], ['xl', 'valXLarge']] },
       { key: 'controlsSide', labelKey: 'optControlsSide', helpKey: 'optControlsSideHelp',
         values: [['right', 'valRight'], ['left', 'valLeft']] },
-      { key: 'pageTitle', labelKey: 'optPageTitle',
+      { key: 'pageTitle', labelKey: 'optPageTitle', helpKey: 'optPageTitleHelp',
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
     ] },
     // Gesti: si salvano con l'aspetto (stessa chiave «appearance», nessun cambio di formato),
