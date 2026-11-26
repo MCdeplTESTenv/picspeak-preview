@@ -1411,13 +1411,18 @@
     return version ? version.label : 'PicSpeak';
   }
 
-  // Accanto ai crediti: la versione in uso e le novità di ogni versione (pagina della guida)
+  // Novità delle versioni: una pagina per lingua, quella della lingua del tool (come la privacy), dal sito stesso
+  // e quindi anche senza internet
+  const NEWS_PAGES = { it: 'novita.html', en: 'novita-en.html' };
+
+  // Accanto ai crediti: la versione in uso e le novità di ogni versione
   function renderVersionSection() {
-    const wrap = section('secVersionTitle', 'secVersionHelp', { collapsible: false });
+    const wrap = section('secVersionTitle', 'secVersionHelp');
     const label = document.createElement('p');
     label.className = 'settings-version';
     label.textContent = appVersionLabel();
-    wrap.append(label, button(t('versionNews'), () => window.location.assign('guida.html#novita')));
+    const page = NEWS_PAGES[i18n.language] || NEWS_PAGES.it;
+    wrap.append(label, button(t('versionNews'), () => window.location.assign(page)));
   }
 
   function renderGuideSection() {
@@ -1940,11 +1945,6 @@
       li.append(btn);
       nav.append(li);
     });
-    // In fondo all'elenco delle categorie: la versione di PicSpeak (sola lettura)
-    const versionItem = document.createElement('li');
-    versionItem.className = 'settings-nav-version';
-    versionItem.textContent = appVersionLabel();
-    nav.append(versionItem);
 
     // Contenuto della categoria scelta
     const category = CATEGORIES.find((cat) => cat.id === currentCategory) || CATEGORIES[0];

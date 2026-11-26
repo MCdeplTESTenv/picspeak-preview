@@ -152,7 +152,7 @@
       tutorialInstallLater: 'Le istruzioni restano in Impostazioni › Generale › Installa PicSpeak come app.',
       tutorialAgain: 'Potete rivedere questi passi dal menu dei tre puntini › Come iniziare.',
       secVersionTitle: 'Versione',
-      secVersionHelp: 'La versione di PicSpeak in uso su questo dispositivo. Indicatela se chiedete aiuto; nelle novità c’è cosa cambia da una versione all’altra.',
+      secVersionHelp: 'La versione di PicSpeak in uso su questo dispositivo. Indicatela se chiedete aiuto. Nelle novità c’è cosa cambia da una versione all’altra.',
       versionNews: 'Novità delle versioni',
       secGuideTitle: 'Guida all’uso',
       secGuideHelp: 'Spiegazioni per genitori, insegnanti e terapisti. Si apre anche dal menu dei tre puntini, senza PIN.',
