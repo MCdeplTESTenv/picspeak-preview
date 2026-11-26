@@ -1,7 +1,8 @@
 /*
  * Finestra "Cerca simbolo" (aperta dalla modifica tessera, solo con le impostazioni sbloccate).
  * Mostra subito i simboli sul dispositivo e nei pacchetti scaricati, poi quelli di ARASAAC se
- * l'interruttore "Ricerca online" lo consente (Attiva: sì; Solo Wi-Fi: sì sul Wi-Fi, altrimenti
+ * l'interruttore "Ricerca online" lo consente. Se si apre con la parola già scritta nella tessera,
+ * quel tocco vale come «Cerca» e si va subito anche online (Attiva: sì; Solo Wi-Fi: sì sul Wi-Fi, altrimenti
  * chiede conferma dove il browser non sa il tipo di rete; Disattivata: mai).
  * Sicurezza: testi solo con textContent; le miniature online arrivano solo da static.arasaac.org e, se l'adulto
  * l'ha attivata, da Twemoji (cdn.jsdelivr.net), come previsto dalla CSP.
@@ -128,8 +129,9 @@
         }
       }
 
-      // explicit = ricerca chiesta con «Cerca»: solo allora la parola va su internet
-      // (aprendo la finestra o mentre si scrive si cerca solo sul dispositivo: protegge nomi propri e parole a metà)
+      // explicit = ricerca chiesta con «Cerca» (o aprendo la finestra con la parola già scritta nella tessera, che
+      // vale come «Cerca»): solo allora la parola va su internet. Mentre si scrive si cerca solo sul dispositivo
+      // (protegge le parole a metà)
       function renderGroups(groups, term, explicit) {
         results.replaceChildren();
         if (!explicit && networkState() === 'allowed') {
@@ -218,11 +220,21 @@
       dialog.showModal();
       symbols.activeSources().then((sources) => {
         onlineOn = ['arasaac', ...symbols.ONLINE_IDS].filter((id) => sources[id]);
-        runSearch(false);
+        // Aperta da «Cerca simbolo» con la parola già scritta: quel tocco vale come «Cerca»,
+        // quindi si cerca subito anche su internet (se le impostazioni lo consentono)
+        runSearch(Boolean(input.value.trim()));
       });
       if (!input.value) input.focus();
     });
   }
 
-  window.PicSpeak.symbolSearch = { open };
+  // Usate anche dalla finestra «Più tessere insieme»
+  window.PicSpeak.symbolSearch = {
+    open,
+    networkState,
+    allowOnlineOnce() { askConsent = true; },
+    groupTitle,
+    groupLicense,
+    GROUP_ORDER,
+  };
 })();

@@ -165,8 +165,16 @@
           draft.kind = value;
           symbolOnly.forEach((n) => { n.hidden = value === 'folder'; });
           rowSilent.hidden = value !== 'folder';
+          bulkRow.hidden = value === 'folder';
         },
       ));
+      // Più tessere insieme: si scrivono più parole e per ognuna si sceglie solo l'immagine
+      const bulkRow = el('div', 'editor-actions-row editor-bulk-row');
+      bulkRow.append(actionButton(t('editorBulk'), () => {
+        close();
+        window.PicSpeak.bulkAdd.open(pageId);
+      }, 'editor-bulk-btn'));
+      form.append(bulkRow);
     }
 
     const labelInput = textInput(draft.label, MAX_LABEL);
