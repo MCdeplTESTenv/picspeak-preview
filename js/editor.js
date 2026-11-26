@@ -99,11 +99,13 @@
     return blob;
   }
 
-  function pickFile() {
+  // capture: true = si apre direttamente la fotocamera (tablet e telefono; sul computer si sceglie un file)
+  function pickFile(capture = false) {
     return new Promise((resolve) => {
       const input = el('input');
       input.type = 'file';
       input.accept = 'image/*';
+      if (capture) input.setAttribute('capture', 'environment');
       input.addEventListener('change', () => resolve(input.files && input.files[0]), { once: true });
       input.click();
     });
@@ -282,10 +284,11 @@
       setWordType((lexicon && lexicon.guess(labelInput.value)) || picked.wordType);
       renderPreview();
     }, 'editor-search-btn');
-    const photoButton = actionButton(t('editorPickImage'), async () => {
+    // Foto dal dispositivo o dalla fotocamera: stessa riduzione e stesso salvataggio
+    const usePhoto = async (capture) => {
       imageError.textContent = '';
       try {
-        const file = await pickFile();
+        const file = await pickFile(capture);
         if (!file) return;
         draft.newImageBlob = await processPhoto(file);
         draft.pending = null;
@@ -293,12 +296,22 @@
       } catch (error) {
         imageError.textContent = error.message;
       }
+    };
+    const photoButton = actionButton(t('editorPickImage'), () => usePhoto(false));
+    const cameraButton = actionButton(t('editorTakePhoto'), () => usePhoto(true));
+    photoButton.hidden = true;
+    cameraButton.hidden = true;
+    // Immagini dal dispositivo e fotocamera si accendono e spengono in Impostazioni → Simboli;
+    // la fotocamera solo su tablet e telefono (sul computer il pulsante aprirebbe la scelta di un file)
+    const hasCamera = Boolean(window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches);
+    symbols.activeSources().then((sources) => {
+      photoButton.hidden = !sources.photo;
+      cameraButton.hidden = !(sources.camera && hasCamera);
     });
-    // Le foto personali si possono spegnere in Impostazioni → Simboli
-    symbols.activeSources().then((sources) => { photoButton.hidden = !sources.photo; });
     imageActions.append(
       searchButton,
       photoButton,
+      cameraButton,
       actionButton(t('editorRemoveImage'), () => {
         draft.imageId = null;
         draft.newImageBlob = null;

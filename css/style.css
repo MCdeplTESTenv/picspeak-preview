@@ -1006,6 +1006,9 @@ body > .adult-bar { order: 0; }
 .setting-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .setting-text strong { font-size: 15px; font-weight: 600; }
 .setting-text small { font-size: 13px; color: #6b717b; line-height: 1.35; }
+/* Sito e licenza di una fonte dei simboli: link piccolo ma comodo da toccare */
+.setting-text .source-links { margin-top: 2px; }
+.source-links a { display: inline-block; padding: 6px 0; color: #1f5fae; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Controllo a segmenti */
 .segmented { display: inline-flex; flex: none; padding: 2px; background: #eceef1; border-radius: 8px; }

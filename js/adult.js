@@ -1126,18 +1126,45 @@
   }
 
   // Fonti dei simboli: ognuna con stile e "quando sceglierla"; attivazione salvata in 'symbolSources'.
-  // Mulberry e OpenMoji sono pacchetti: si scaricano una sola volta quando vengono attivati.
-  // Twemoji è una fonte online leggera (piccolo indice delle parole + un'immagine alla volta).
-  const SYMBOL_SOURCES = [
-    { id: 'arasaac', nameKey: 'srcArasaac', descKey: 'srcArasaacDesc' },
-    { id: 'mulberry', nameKey: 'srcMulberry', descKey: 'srcMulberryDesc', pack: true, approxMb: '3,8' },
-    { id: 'openmoji', nameKey: 'srcOpenmoji', descKey: 'srcOpenmojiDesc', pack: true, approxMb: '3,1' },
-    // Fonte online leggera: nessun pacchetto, si scarica solo il simbolo scelto
-    { id: 'twemoji', nameKey: 'srcTwemoji', descKey: 'srcTwemojiDesc', online: true },
-    { id: 'photo', nameKey: 'srcPhoto', descKey: 'srcPhotoDesc' },
-    // Promemoria: fonte pronta ma non attivabile finché il repository di Mada non dichiara una licenza
-    { id: 'tawasol', nameKey: 'srcTawasol', descKey: 'srcTawasolPending', pending: true },
+  // Divise in tre sezioni: online (ARASAAC e Twemoji, si cerca su internet ogni volta), pacchetti scaricabili
+  // (Mulberry e OpenMoji, scaricati una sola volta quando vengono attivati) e foto/fotocamera.
+  // site/license: link al sito di chi pubblica la raccolta e alla licenza (solo nelle impostazioni, dietro PIN).
+  const CC_BY_NC_SA = { label: 'CC BY-NC-SA 4.0', path: 'by-nc-sa/4.0' };
+  const CC_BY_SA = { label: 'CC BY-SA 4.0', path: 'by-sa/4.0' };
+  const CC_BY = { label: 'CC BY 4.0', path: 'by/4.0' };
+  const SYMBOL_SOURCE_GROUPS = [
+    { key: 'secSourcesOnline', titleKey: 'secSourcesOnlineTitle', helpKey: 'secSourcesOnlineHelp', sources: [
+      { id: 'arasaac', nameKey: 'srcArasaac', descKey: 'srcArasaacDesc', site: 'https://arasaac.org', license: CC_BY_NC_SA },
+      // Fonte online leggera: nessun pacchetto, si scarica solo il simbolo scelto
+      { id: 'twemoji', nameKey: 'srcTwemoji', descKey: 'srcTwemojiDesc', online: true,
+        site: 'https://github.com/jdecked/twemoji', license: CC_BY },
+    ] },
+    { key: 'secSourcesPacks', titleKey: 'secSourcesPacksTitle', helpKey: 'secSourcesPacksHelp', sources: [
+      { id: 'mulberry', nameKey: 'srcMulberry', descKey: 'srcMulberryDesc', pack: true, approxMb: '3,8',
+        site: 'https://mulberrysymbols.org', license: CC_BY_SA },
+      { id: 'openmoji', nameKey: 'srcOpenmoji', descKey: 'srcOpenmojiDesc', pack: true, approxMb: '3,1',
+        site: 'https://openmoji.org', license: CC_BY_SA },
+      // Promemoria: fonte pronta ma non attivabile finché il repository di Mada non dichiara una licenza
+      { id: 'tawasol', nameKey: 'srcTawasol', descKey: 'srcTawasolPending', pending: true },
+    ] },
+    { key: 'secSourcesPhoto', titleKey: 'secSourcesPhotoTitle', helpKey: 'secSourcesPhotoHelp', sources: [
+      { id: 'photo', nameKey: 'srcPhoto', descKey: 'srcPhotoDesc' },
+      { id: 'camera', nameKey: 'srcCamera', descKey: 'srcCameraDesc' },
+    ] },
   ];
+
+  // Riga piccola sotto la fonte: «Sito di …» e la licenza, aperti in una finestra separata
+  function sourceLinks(src) {
+    const line = document.createElement('small');
+    line.className = 'source-links';
+    const deed = i18n.language === 'it' ? 'deed.it' : 'deed.en';
+    line.append(
+      creditAnchor(src.site, t('srcSiteLink').replace('{name}', t(src.nameKey))),
+      ` · ${t('srcLicenseLabel')} `,
+      creditAnchor(`https://creativecommons.org/licenses/${src.license.path}/${deed}`, src.license.label),
+    );
+    return line;
+  }
 
   // Scaricamenti in corso: id → { done, total }; errori dell'ultimo tentativo: id → messaggio
   const packJobs = new Map();
@@ -1228,52 +1255,58 @@
   }
 
   async function renderSourcesSection() {
-    const wrap = section('secSourcesTitle', 'secSourcesHelp');
     const [saved, status] = await Promise.all([symbols.activeSources(), symbols.packStatus()]);
-    SYMBOL_SOURCES.forEach((src) => {
-      if (src.pending) {
-        const badge = document.createElement('span');
-        badge.className = 'setting-pending';
-        badge.textContent = t('srcPendingBadge');
-        const row = settingRow(src.nameKey, src.descKey, badge);
-        row.classList.add('is-pending');
-        wrap.append(row);
-        return;
-      }
-      const active = saved[src.id];
-      const helpKey = src.pack && !status[src.id] ? null : src.descKey;
-      const row = settingRow(src.nameKey, helpKey, segmented([['on', 'valOn2'], ['off', 'valOff2']], active ? 'on' : 'off',
-        async (value) => {
-          const next = { ...((await storage.get('symbolSources')) || {}), [src.id]: value === 'on' };
-          await storage.set('symbolSources', next);
-          if (src.pack && value === 'on' && !(await symbols.packStatus())[src.id]) {
-            startPackDownload(src.id);
-            return;
-          }
-          if (src.pack && value === 'off') {
-            packErrors.delete(src.id);
-            await symbols.removePack(src.id);
-          }
-          if (src.online && value === 'off') await symbols.removeSource(src.id);
-          // Indice delle parole (pochi KB) preparato subito se la rete lo consente, altrimenti alla prima ricerca
-          if (src.online && value === 'on' && !packNetworkProblem() && onlineSearchStatus() === 'allowed') {
-            symbols.loadSourceIndex(src.id, true).catch(() => {});
-          }
-          renderSettings();
-        }));
-      if (src.online) {
-        const help = row.querySelector('.setting-text small');
-        if (help) help.textContent = `${t(src.descKey)} ${t('srcOnlineLight')}`;
-      }
-      if (src.pack && !status[src.id]) {
-        // Descrizione con il peso del pacchetto, finché non è scaricato
-        const help = document.createElement('small');
-        help.textContent = `${t(src.descKey)} ${t('packSize').replace('{mb}', src.approxMb)}`;
-        row.querySelector('.setting-text').append(help);
-      }
-      wrap.append(row);
-      if (src.pack && active) wrap.append(packStatusLine(src, status));
+    SYMBOL_SOURCE_GROUPS.forEach((group) => {
+      const wrap = section(group.titleKey, group.helpKey, { key: group.key });
+      group.sources.forEach((src) => renderSourceRow(wrap, src, saved, status));
     });
+  }
+
+  function renderSourceRow(wrap, src, saved, status) {
+    if (src.pending) {
+      const badge = document.createElement('span');
+      badge.className = 'setting-pending';
+      badge.textContent = t('srcPendingBadge');
+      const row = settingRow(src.nameKey, src.descKey, badge);
+      row.classList.add('is-pending');
+      wrap.append(row);
+      return;
+    }
+    const active = saved[src.id];
+    const helpKey = src.pack && !status[src.id] ? null : src.descKey;
+    const row = settingRow(src.nameKey, helpKey, segmented([['on', 'valOn2'], ['off', 'valOff2']], active ? 'on' : 'off',
+      async (value) => {
+        const next = { ...((await storage.get('symbolSources')) || {}), [src.id]: value === 'on' };
+        await storage.set('symbolSources', next);
+        if (src.pack && value === 'on' && !(await symbols.packStatus())[src.id]) {
+          startPackDownload(src.id);
+          return;
+        }
+        if (src.pack && value === 'off') {
+          packErrors.delete(src.id);
+          await symbols.removePack(src.id);
+        }
+        if (src.online && value === 'off') await symbols.removeSource(src.id);
+        // Indice delle parole (pochi KB) preparato subito se la rete lo consente, altrimenti alla prima ricerca
+        if (src.online && value === 'on' && !packNetworkProblem() && onlineSearchStatus() === 'allowed') {
+          symbols.loadSourceIndex(src.id, true).catch(() => {});
+        }
+        renderSettings();
+      }));
+    const text = row.querySelector('.setting-text');
+    if (src.online) {
+      const help = text.querySelector('small');
+      if (help) help.textContent = `${t(src.descKey)} ${t('srcOnlineLight')}`;
+    }
+    if (src.pack && !status[src.id]) {
+      // Descrizione con il peso del pacchetto, finché non è scaricato
+      const help = document.createElement('small');
+      help.textContent = `${t(src.descKey)} ${t('packSize').replace('{mb}', src.approxMb)}`;
+      text.append(help);
+    }
+    if (src.site) text.append(sourceLinks(src));
+    wrap.append(row);
+    if (src.pack && active) wrap.append(packStatusLine(src, status));
   }
 
   // Crediti automatici: si elencano le fonti presenti sul dispositivo (ARASAAC c'è sempre: set incluso)

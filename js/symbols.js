@@ -184,7 +184,9 @@
 
   // ---------- Fonti attive ----------
 
-  const SOURCE_DEFAULTS = { arasaac: true, mulberry: false, openmoji: false, twemoji: false, photo: true };
+  const SOURCE_DEFAULTS = { arasaac: true, mulberry: false, openmoji: false, twemoji: false, photo: true, camera: true };
+  // camera: pulsante «Scatta una foto» nella modifica della tessera (aggiunto il 26/11/2026: chi non l'aveva
+  // salvato lo trova attivo, come prima, quando la fotocamera si apriva solo dal pulsante delle immagini)
 
   async function activeSources() {
     const saved = (await storage.get('symbolSources')) || {};
