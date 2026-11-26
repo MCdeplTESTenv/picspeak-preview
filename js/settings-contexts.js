@@ -1,5 +1,5 @@
 /*
- * Impostazioni › Previsione › Contesti (dietro il PIN, come tutte le impostazioni).
+ * Impostazioni › Previsione › Contesti (dietro la protezione delle impostazioni e, se scelto, il PIN privacy).
  * Elenco dei contesti (Scuola, Logopedia, Mare…) e scheda di modifica:
  *   quando vale (giorni della settimana e fasce di un'ora, oppure un periodo dell'anno),
  *   accensione (automatica, sempre accesa, spenta), da quali dati (come la regola o un periodo preciso
@@ -149,9 +149,10 @@
     if (!chip) {
       chip = el('button', 'adult-btn ctx-chip');
       chip.type = 'button';
-      chip.addEventListener('click', () => {
+      chip.addEventListener('click', async () => {
         draft = null;
-        ui.openSettings('prediction');
+        // La previsione può chiedere il suo PIN: si scorre ai contesti solo se si è entrati
+        if ((await ui.openSettings('prediction')) === false) return;
         setTimeout(() => {
           const target = document.getElementById('ctx-section');
           if (!target) return;
@@ -162,8 +163,14 @@
       });
       bar.insertBefore(chip, settingsBtn);
     }
-    const active = predict.activeContexts();
     chip.hidden = false;
+    // Con il PIN privacy non ancora inserito il nome del contesto attivo (dato privato) non si mostra
+    if (ui.privateHidden && ui.privateHidden()) {
+      chip.replaceChildren(el('span', 'ctx-chip-label', t('ctxChip')));
+      chip.setAttribute('aria-label', t('ctxChip'));
+      return;
+    }
+    const active = predict.activeContexts();
     const name = el('span', 'ctx-chip-name');
     if (active.length) name.append(...predict.contextNameNodes(active)); else name.textContent = t('ctxChipNone');
     chip.replaceChildren(el('span', 'ctx-chip-label', t('ctxChip')), name);
@@ -174,6 +181,7 @@
     // Si aggiorna ogni volta che la barra compare (ingresso in modalità adulto) e allo scoccare dei minuti
     new MutationObserver(() => { if (bar.hidden) draft = null; else updateChip(); }).observe(bar, { attributes: true, attributeFilter: ['hidden'] });
     setInterval(() => { if (!bar.hidden) updateChip(); }, 60000);
+    document.addEventListener('picspeak:private-change', () => { if (!bar.hidden) updateChip(); });
   }
 
   // ---------- File ----------

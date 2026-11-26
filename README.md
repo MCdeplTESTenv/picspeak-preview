@@ -8,6 +8,13 @@ utile anche da adulti. Non richiede installazione e funziona anche offline.
 
 Per provarlo in locale basta aprire `index.html` con doppio clic.
 
+## Privacy
+PicSpeak non raccoglie dati: niente account, niente server, niente statistiche. Schede, foto e abitudini d'uso
+restano sul dispositivo. Le abitudini del bambino (le parole che usa insieme, i contesti) si vedono solo nelle
+impostazioni della previsione: il genitore può proteggerle, insieme al backup, con un secondo PIN, il PIN privacy,
+così chi apre le impostazioni (per esempio un terapista) non le vede e non può portarle via con un backup. Il PIN è
+facoltativo. Dettagli in `privacy.html` (in inglese `privacy-en.html`).
+
 ## Licenza
 PicSpeak è gratuito e resterà sempre gratuito: niente funzioni a pagamento, niente pubblicità, niente account.
 

@@ -116,6 +116,8 @@
    * Usata anche prima di «Ripristina tutto» e di «Cancella tutto».
    */
   async function saveBackup(where = 'local') {
+    // Il backup contiene le abitudini del bambino: con il PIN privacy serve anche qui (es. dal promemoria)
+    if (ui.requestPrivateAccess && !(await ui.requestPrivateAccess())) return false;
     const values = await ui.runDialog({
       title: t('backupSaveTitle'),
       help: t('backupSaveHelp'),

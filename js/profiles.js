@@ -349,7 +349,8 @@
       });
       if (!first) return;
       if (first.link) {
-        await quickBackup();
+        // Il backup contiene le abitudini: PIN privacy, se scelto
+        if (!ui.requestPrivateAccess || (await ui.requestPrivateAccess())) await quickBackup();
         continue;
       }
       break;
