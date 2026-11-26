@@ -274,14 +274,65 @@
     return { cell, page: folderPage };
   }
 
+  /*
+   * Schede che sparirebbero insieme a una cartella: quelle dentro la cartella (anche più in fondo) che non si
+   * raggiungono più dalla Home per un'altra strada. Una scheda raggiungibile anche da un'altra cartella resta.
+   */
+  function pagesRemovedWith(pageId, cellId) {
+    const p = page(pageId);
+    const cell = p && p.cells.find((c) => c.id === cellId);
+    if (!cell || cell.kind !== 'folder' || !cell.targetPageId || !page(cell.targetPageId)) return new Set();
+    const home = model.profile && model.profile.homePageId;
+    if (!home || !page(home)) return new Set(); // senza Home non si sa cosa resta raggiungibile: non si tocca nulla
+    const inside = pagesUnder(cell.targetPageId);
+    // Schede raggiungibili dalla Home senza passare da questa cartella
+    const kept = new Set();
+    const queue = [home];
+    while (queue.length) {
+      const id = queue.shift();
+      const current = page(id);
+      if (!current || kept.has(id)) continue;
+      kept.add(id);
+      current.cells.forEach((c) => {
+        if (c.kind === 'folder' && c.targetPageId && !(id === pageId && c.id === cellId)) queue.push(c.targetPageId);
+      });
+    }
+    if (!kept.has(pageId)) return new Set(); // scheda di partenza fuori dalla Home: non si tocca nulla
+    return new Set([...inside].filter((id) => !kept.has(id)));
+  }
+
+  // Cosa si cancella con una cartella: tessere e sottocartelle delle schede che spariscono con lei
+  // (shared: true se qualche scheda interna resta perché raggiungibile da un'altra cartella)
+  function folderContents(pageId, cellId) {
+    const result = { tiles: 0, folders: 0, shared: false };
+    const removed = pagesRemovedWith(pageId, cellId);
+    const p = page(pageId);
+    const cell = p && p.cells.find((c) => c.id === cellId);
+    // Qualche scheda dentro la cartella si apre anche da un'altra cartella: quella resta
+    if (cell && cell.kind === 'folder' && page(cell.targetPageId)) {
+      result.shared = pagesUnder(cell.targetPageId).size > removed.size;
+    }
+    removed.forEach((id) => {
+      page(id).cells.forEach((c) => {
+        if (c.kind === 'folder') result.folders += 1;
+        else if (c.kind !== 'empty') result.tiles += 1;
+      });
+    });
+    return result;
+  }
+
+  // Cancella una tessera; per una cartella si cancellano anche le schede che contiene (vedi pagesRemovedWith)
   async function deleteCell(pageId, cellId) {
     const p = page(pageId);
     if (!p) return;
+    const removedPages = pagesRemovedWith(pageId, cellId);
     p.cells = p.cells.filter((c) => c.id !== cellId);
     // Griglia fissa: la casella resta vuota, le altre tessere non si spostano
     if (isFixed(p)) updateRows(p);
     else renumber(p);
     await savePage(p);
+    removedPages.forEach((id) => model.pages.delete(id));
+    await Promise.all([...removedPages].map((id) => storage.deleteRecord('pages', id)));
   }
 
   // Sposta una cella di una posizione (in ordine di lettura): -1 prima, +1 dopo
@@ -527,6 +578,7 @@
     addCell,
     addFolder,
     deleteCell,
+    folderContents,
     moveCell,
     reorderCells,
     setPageLayout,

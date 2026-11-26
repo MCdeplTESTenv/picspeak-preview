@@ -48,6 +48,8 @@
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const cell = event.target.closest('.symbol-cell[data-id]');
     if (!cell || !grid.contains(cell)) return;
+    // La ✕ per eliminare non avvia lo spostamento: il tocco va solo alla conferma
+    if (event.target.closest('.cell-delete')) return;
     // Posizioni bloccate (per tutte le tessere o per questa tessera): niente spostamento, ma tenendo
     // premuto si spiega perché e si può togliere il blocco
     const locked = allLocked() || cell.classList.contains('is-locked-cell');

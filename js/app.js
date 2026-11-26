@@ -152,6 +152,15 @@
         pencil.setAttribute('aria-hidden', 'true');
         button.append(pencil);
       }
+      // In modifica una ✕ nell'angolo opposto alla matita elimina la tessera o la cartella (con conferma).
+      // Non c'è sulle tessere bloccate, né quando sono bloccate tutte (css/style.css): lì l'angolo ha il lucchetto
+      if (editing && !item.locked) {
+        const remove = document.createElement('span');
+        remove.className = 'cell-delete';
+        remove.dataset.action = 'delete-cell';
+        remove.setAttribute('aria-hidden', 'true');
+        button.append(remove);
+      }
       return button;
     });
     if (editing) {
@@ -588,6 +597,12 @@
       flash(cell);
       if (cell.dataset.action === 'add') {
         window.PicSpeak.editor.add(state.pageId);
+        return;
+      }
+      // ✕ nell'angolo: elimina dopo la conferma
+      if (event.target.closest('.cell-delete') && !state.preview && !cell.classList.contains('is-locked-cell')
+        && document.documentElement.dataset.lockPositions !== 'on') {
+        window.PicSpeak.editor.confirmDelete(state.pageId, cell.dataset.id);
         return;
       }
       const page = data.page(state.pageId);

@@ -1987,6 +1987,33 @@ body > .adult-bar { order: 0; }
 }
 .is-zoom-preview .folder-edit { display: none; }
 
+/* ✕ per eliminare una tessera o una cartella (solo in modifica): angolo opposto alla matita, stessa misura.
+   L'area da toccare (56 px) è più grande del disegno; il tocco chiede sempre conferma */
+.cell-delete {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Su tessere piccole (telefono) l'area resta nella metà sinistra e non copre la matita */
+  width: min(56px, 50%);
+  height: min(56px, 50%);
+  z-index: 2;
+  cursor: pointer;
+}
+.cell-delete::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(179, 38, 30, 0.92) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.8' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E") center / 13px no-repeat;
+}
+/* Tessera bloccata o tutte bloccate: niente ✕, l'angolo è del lucchetto */
+.is-locked-cell .cell-delete,
+[data-lock-positions="on"] .cell-delete,
+.is-zoom-preview .cell-delete { display: none; }
+
 /* Destinazione mentre si trascina una tessera: cartella o voce del percorso */
 .is-drop-target {
   outline: 4px solid #1f6feb !important;

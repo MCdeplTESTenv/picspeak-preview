@@ -363,11 +363,7 @@
       }
       manage.append(
         actionButton(t('editorDelete'), async () => {
-          // eslint-disable-next-line no-alert
-          if (!window.confirm(t('editorDeleteConfirm'))) return;
-          await data.deleteCell(pageId, cell.id);
-          close();
-          app.renderGrid();
+          if (await confirmDelete(pageId, cell.id)) close();
         }, 'dlg-btn-danger'),
       );
       form.append(manage, el('small', 'editor-hint', canMove ? t('editorMoveHint') : t('editorMoveLocked')));
@@ -452,7 +448,52 @@
     labelInput.focus();
   }
 
+  // ---------- Eliminazione (dal pulsante «Elimina» della modifica o dalla ✕ nell'angolo della tessera) ----------
+
+  // «12 tessere e 2 cartelle»: quello che sparisce insieme a una cartella
+  function contentsText({ tiles, folders }) {
+    const parts = [];
+    if (tiles) parts.push(tiles === 1 ? t('deleteTilesOne') : t('deleteTilesN').replace('{n}', tiles));
+    if (folders) parts.push(folders === 1 ? t('deleteFoldersOne') : t('deleteFoldersN').replace('{n}', folders));
+    return parts.join(` ${t('deleteAnd')} `);
+  }
+
+  /*
+   * Chiede sempre conferma prima di eliminare; per una cartella dice quante tessere e sottocartelle si cancellano
+   * con lei. Risolve true se la tessera è stata eliminata (la ✕ non compare sulle tessere bloccate, vedi app.js).
+   */
+  async function confirmDelete(pageId, cellId) {
+    const page = data.page(pageId);
+    const cell = page && page.cells.find((c) => c.id === cellId);
+    if (!cell) return false;
+    const isFolder = cell.kind === 'folder';
+    const name = cell.label || (isFolder && data.page(cell.targetPageId) ? data.page(cell.targetPageId).title : '') || '';
+    let title = name ? t('deleteTileTitle').replace('{name}', name) : t('editorDeleteConfirm');
+    let help = t('deleteTileHelp');
+    if (isFolder) {
+      const contents = data.folderContents(pageId, cellId);
+      const what = contentsText(contents);
+      title = t('deleteFolderTitle').replace('{name}', name);
+      const lines = [];
+      if (what) lines.push(t('deleteFolderHelp').replace('{what}', what));
+      else if (!contents.shared) lines.push(t('deleteFolderEmpty'));
+      if (contents.shared) lines.push(t('deleteFolderShared'));
+      help = lines.join(' ');
+    }
+    const ui = window.PicSpeak.settingsUi;
+    const ok = ui
+      ? await ui.runDialog({ title, help, primary: t('editorDelete'), secondary: t('cancel'), destructive: true })
+      : window.confirm(`${title}\n${help}`); // eslint-disable-line no-alert
+    // Nel frattempo le impostazioni potrebbero essersi richiuse: in modalità bambino non si cancella nulla
+    if (!ok || app.mode !== 'adult') return false;
+    await data.deleteCell(pageId, cellId);
+    app.renderGrid();
+    if (name) app.notice(t('deletedNotice').replace('{name}', name));
+    return true;
+  }
+
   window.PicSpeak.editor = {
+    confirmDelete,
     edit(pageId, cellId) {
       const page = data.page(pageId);
       const cell = page && page.cells.find((c) => c.id === cellId);
