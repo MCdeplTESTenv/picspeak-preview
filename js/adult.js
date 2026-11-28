@@ -1958,6 +1958,39 @@
     return box;
   });
 
+  /*
+   * Ricarica automatica chiesta dall'archivio (archivio di nuovo disponibile ma memoria non affidabile, oppure Safari
+   * che riapre l'archivio solo ricaricando): mai davanti all'adulto né mentre il bambino tocca lo schermo, al massimo
+   * una volta ogni 10 minuti (niente ricariche a catena).
+   */
+  const AUTO_RELOAD_KEY = `${storage.name}-autoreload`;
+  const AUTO_RELOAD_GAP_MS = 10 * 60 * 1000;
+  const CHILD_IDLE_MS = 20000;
+  let lastTouchAt = Date.now();
+  let reloadWanted = false;
+  document.addEventListener('pointerdown', () => { lastTouchAt = Date.now(); }, true);
+
+  function reloadWhenIdle() {
+    if (!reloadWanted || !storage.saveProblem()) { reloadWanted = false; return; }
+    const idle = app.mode !== 'adult' && Date.now() - lastTouchAt > CHILD_IDLE_MS && !document.querySelector('dialog[open]');
+    if (!idle) { setTimeout(reloadWhenIdle, 5000); return; }
+    try {
+      const last = Number(sessionStorage.getItem(AUTO_RELOAD_KEY));
+      if (last && Date.now() - last >= 0 && Date.now() - last < AUTO_RELOAD_GAP_MS) { reloadWanted = false; return; }
+      sessionStorage.setItem(AUTO_RELOAD_KEY, String(Date.now()));
+    } catch (error) {
+      reloadWanted = false; // senza sessionStorage non si può evitare una ricarica a catena: meglio non ricaricare
+      return;
+    }
+    location.reload();
+  }
+
+  storage.onReloadSuggested(() => {
+    if (reloadWanted) return;
+    reloadWanted = true;
+    reloadWhenIdle();
+  });
+
   storage.onSaveProblem(() => {
     showStorageWarning();
     refreshPrivate();
@@ -1991,6 +2024,12 @@
       chevron.setAttribute('aria-hidden', 'true');
       chevron.textContent = '›';
       btn.append(icon, label, chevron);
+      // Pallino: in questa categoria c'è qualcosa che chiede l'adulto (es. backup fermo); il testo per chi non vede
+      const alertText = typeof cat.alert === 'function' ? cat.alert() : '';
+      if (alertText) {
+        btn.classList.add('has-alert');
+        btn.setAttribute('aria-description', alertText);
+      }
       btn.addEventListener('click', async () => {
         // Previsione e Backup: PIN privacy, se scelto (alla prima apertura della previsione, la domanda)
         if (!(await canOpenCategory(cat.id))) return;

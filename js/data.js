@@ -115,6 +115,8 @@
 
   async function load() {
     // Si carica solo il profilo in uso; alla prima apertura si crea con l'id già preparato dall'archivio
+    // Timbro dell'archivio prima di leggere (vedi storage.markLoaded)
+    const startStamp = await storage.currentStamp();
     const profileId = await storage.activeProfileId();
     let profile = await storage.getRecord('profiles', profileId);
     if (!profile) profile = await seedDefaultProfile(profileId);
@@ -125,6 +127,8 @@
     model.profile = profile;
     model.pages = new Map(pages.filter((p) => p.profileId === profileId).map((p) => [p.id, p]));
     model.images = new Map(images.map((img) => [img.id, img]));
+    // Schede lette davvero dall'archivio: se poi si guasta, le modifiche in attesa si potranno salvare al ritorno
+    await storage.markLoaded(startStamp);
     return model;
   }
 

@@ -2437,6 +2437,15 @@ body > .storage-warning { order: 0; }
   width: 10px; height: 10px; border-radius: 50%;
   background: #e8710a; box-shadow: 0 0 0 2px var(--adult-bg, #1d1d1f);
 }
+/* Copie automatiche ferme: pallino sulla categoria «Backup e ripristino» e sul titolo della sezione da sistemare */
+.settings-nav-btn.has-alert .nav-icon { position: relative; }
+.settings-nav-btn.has-alert .nav-icon::after,
+.settings-section.has-alert .section-toggle > span:last-child::after {
+  content: "";
+  width: 10px; height: 10px; border-radius: 50%; background: #e8710a;
+}
+.settings-nav-btn.has-alert .nav-icon::after { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px #fff; }
+.settings-section.has-alert .section-toggle > span:last-child::after { display: inline-block; vertical-align: middle; margin-left: 8px; }
 .settings-banner {
   grid-column: 1 / -1;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;

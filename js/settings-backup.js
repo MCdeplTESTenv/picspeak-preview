@@ -237,6 +237,7 @@
 
   function renderFolderSection() {
     const wrap = ui.section('secFolderTitle', 'secFolderHelp');
+    markProblem(wrap, 'folder');
     renderNotice(wrap, 'folder');
     if (!folderBackup || !folderBackup.isSupported()) {
       wrap.append(el('p', 'settings-help backup-last', t('folderUnsupported')));
@@ -245,6 +246,7 @@
     const info = folderBackup.info();
     if (!info) {
       wrap.append(ui.settingRow('folderChoose', 'folderChooseHelp', ui.button(t('folderChooseBtn'), chooseFolder, true)));
+      wrap.append(ui.settingRow('folderCloud', 'folderCloudHelp', el('span')));
       wrap.append(ui.settingRow('folderKeep', 'folderAllowHelp', el('span')));
       return;
     }
@@ -690,6 +692,7 @@
 
   function renderOnlineSection() {
     const wrap = ui.section('secBackupOnlineTitle', 'secBackupOnlineHelp');
+    markProblem(wrap, 'online');
     renderNotice(wrap, 'online');
     if (!cloud || !cloud.isConfigured()) {
       wrap.append(comingRow('cloudDropbox', 'cloudDropboxHelp', 'cloudConnectBtn'));
@@ -1377,17 +1380,61 @@
       || Boolean(folderBackup && folderBackup.isActive());
   }
 
+  /*
+   * Copie automatiche ferme che hanno bisogno dell'adulto: 'folder' (cartella senza permesso o non scrivibile da più
+   * di un giorno), 'online' (Dropbox da ricollegare o pieno, oppure in errore da più di un giorno), altrimenti null.
+   * Gli errori brevi (rete, server) si risolvono da soli e non disturbano.
+   */
+  const STUCK_MS = 24 * 60 * 60 * 1000;
+  function stuckSince(date) {
+    return !date || Date.now() - date.getTime() > STUCK_MS;
+  }
+
+  function backupProblem() {
+    const folder = folderBackup && folderBackup.info();
+    if (folder && folder.status !== 'ok' && stuckSince(folder.lastAt)) return 'folder';
+    if (onlineActive() && cloud.isEnabledHere()) {
+      const st = cloud.status();
+      if (st === 'reconnect' || st === 'full') return 'online';
+      if (st === 'error' && stuckSince(cloud.lastCopy())) return 'online';
+    }
+    return null;
+  }
+
+  let problem = null;
+
+  // Percorso dei pallini: ingranaggio → «Backup e ripristino» → sezione da sistemare, che si apre da sola (senza
+  // ricordarlo: chiusa dall'adulto resta chiusa quando il problema è risolto)
+  function markProblem(wrap, where) {
+    if (problem !== where) return;
+    wrap.classList.add('has-alert');
+    wrap.classList.remove('is-collapsed');
+    const toggle = wrap.querySelector('.section-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.setAttribute('aria-description', t(`backupProblem_${where}`));
+    }
+  }
+
   async function refreshReminder() {
     try {
       reminder = await backup.reminderState(onlineActive());
     } catch (error) {
       reminder = { due: false, days: null };
     }
+    try {
+      problem = backupProblem();
+    } catch (error) {
+      problem = null;
+    }
     const btn = document.getElementById('btn-open-settings');
     if (btn) {
-      btn.classList.toggle('has-reminder', reminder.due);
+      btn.classList.toggle('has-reminder', reminder.due || Boolean(problem));
       // Chi usa un lettore di schermo sente il motivo del pallino
-      if (reminder.due) {
+      if (problem) {
+        btn.title = t(`backupProblem_${problem}`);
+        btn.setAttribute('aria-description', t(`backupProblem_${problem}`));
+      } else if (reminder.due) {
         btn.title = reminderText();
         btn.setAttribute('aria-description', reminderText());
       } else {
@@ -1442,6 +1489,7 @@
     icon: '<path d="M4 7.5v9c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5v-9"/><ellipse cx="12" cy="7.5" rx="8" ry="3.5"/><path d="M4 12c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5"/>',
     titleKey: 'catBackup',
     introKey: 'catBackupIntro',
+    alert: () => (problem ? t(`backupProblem_${problem}`) : ''),
     render: [renderLocalSection, renderFolderSection, renderOnlineSection, renderRestoreSection, renderResetSection],
   }, 'security');
 })();

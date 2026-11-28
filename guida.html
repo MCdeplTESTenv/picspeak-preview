@@ -1530,18 +1530,19 @@
         del browser per questo sito cancella anche le tessere personalizzate. Salvate ogni tanto un backup completo (vedi
         <a href="#backup">Fare un backup e ripristinarlo</a>) e conservatelo in un posto sicuro.</p>
       <h4 id="non-salva">Se compare «PicSpeak non riesce a salvare su questo dispositivo»</h4>
-      <p>A volte il browser non riesce a leggere o scrivere i dati di PicSpeak: per esempio subito dopo aver acceso il
-        computer, con il disco quasi pieno o nella navigazione privata. PicSpeak riprova da solo. Se non ci riesce, non
-        tocca più il lavoro già salvato e lo dice con un avviso rosso, visibile solo con le impostazioni sbloccate (il
-        bambino non lo vede). Le modifiche fatte mentre c’è l’avviso andranno perse alla chiusura, e intanto backup,
-        ripristino e backup online restano fermi, per non salvare copie incomplete. Se il problema c’è già all’apertura,
-        PicSpeak non sa se è stato scelto un PIN: per sicurezza le impostazioni non si aprono e compare lo stesso
-        avviso.</p>
+      <p>Succede di rado: per esempio quando il computer si risveglia dopo molte ore, con il disco quasi pieno o nella
+        navigazione privata. Di solito non serve fare nulla: PicSpeak riprova da solo e, appena il browser torna a
+        rispondere, salva le modifiche fatte nel frattempo e l’avviso sparisce. Le salva solo se è sicuro che siano
+        allineate al lavoro più recente; altrimenti tiene il lavoro già salvato, senza mescolare versioni diverse.</p>
+      <p>Mentre c’è l’avviso, visibile solo con le impostazioni sbloccate (il bambino non lo vede), backup, ripristino,
+        backup online e backup nella cartella restano fermi, così l’ultima copia buona non viene toccata. Se serve,
+        PicSpeak si ricarica da solo in un momento in cui il bambino non lo sta usando. Se il problema c’è già
+        all’apertura, PicSpeak non sa se è stato scelto un PIN: per sicurezza le impostazioni non si aprono finché non
+        torna tutto a posto.</p>
+      <p>Solo se l’avviso resta a lungo:</p>
       <ol class="steps">
-        <li>Chiudete PicSpeak del tutto e riapritelo: di solito il lavoro salvato torna come prima.</li>
-        <li>Se l’avviso resta, controllate di non essere in navigazione privata e che sul dispositivo ci sia spazio
-          libero.</li>
-        <li>Appena l’avviso sparisce, salvate un backup completo.</li>
+        <li>chiudete PicSpeak del tutto e riapritelo (le ultime modifiche potrebbero perdersi, il lavoro salvato no);</li>
+        <li>controllate di non essere in navigazione privata e che sul dispositivo ci sia spazio libero.</li>
       </ol>
       <p>Se un giorno le schede sembrano sparite:</p>
       <ul>
@@ -1590,6 +1591,14 @@
         mese. Il promemoria lo vede solo l’adulto, mai il bambino: un pallino arancione sul pulsante
         <strong>Impostazioni</strong> e un riquadro in cima alle impostazioni con <strong>Salva un backup</strong> e
         <strong>Più tardi</strong>. «Più tardi» lo rimanda di una settimana; dopo un backup sparisce da solo.</p>
+      <h4 id="backup-fermo">Quando un backup automatico si ferma</h4>
+      <p>Se il <a href="#backup-cartella">backup nella cartella</a> è fermo da più di un giorno (il browser chiede di
+        nuovo il permesso, o la cartella non si trova più), oppure il <a href="#backup-online">backup su Dropbox</a> va
+        ricollegato, è pieno o non riesce da più di un giorno, compare un <strong>pallino arancione</strong>
+        sull’ingranaggio delle impostazioni. Entrando, il pallino è anche accanto a <strong>Backup e ripristino</strong>
+        e poi sul titolo della sezione da sistemare, che si apre da sola: basta seguire i pallini. Risolto il problema,
+        spariscono da soli. Il bambino non li vede mai. I problemi brevi, come la rete che manca per qualche ora, si
+        risolvono da soli e non fanno comparire nulla.</p>
       <p class="warn">Il file contiene foto e abitudini del bambino: conservatelo con cura. Se mettete una password e la
         dimenticate, il backup non si può più aprire: nessuno può recuperarla.</p>
       <h4>Ripristinare un backup</h4>
@@ -1646,6 +1655,13 @@
       <p class="warn">Si può fare <strong>solo su PC e Mac, con Chrome o Edge</strong>. Non si può su telefoni e tablet,
         né Android né iPad o iPhone, e nemmeno con Safari o Firefox: lì la sezione lo dice e rimanda al backup online su
         Dropbox.</p>
+      <h4>Una copia anche online, lavorando sempre in locale</h4>
+      <p>Se sul computer avete già installato il programma di <strong>OneDrive</strong>, <strong>Google Drive</strong>,
+        <strong>iCloud Drive</strong> o <strong>Dropbox</strong>, scegliete come cartella del backup una cartella che quel
+        programma sincronizza (per esempio dentro «OneDrive» o «Google Drive»). PicSpeak scrive solo sul computer; è poi
+        il programma del servizio a portare la copia online da solo, come fa con gli altri vostri file. Così avete una
+        copia al sicuro anche se il computer si rompe, senza collegare nessun account a PicSpeak. Il file contiene dati
+        personali del bambino: in una cartella sincronizzata è ancora più consigliata la password.</p>
       <h4>Attivarlo</h4>
       <ol class="steps">
         <li><a href="#pin">Sbloccate le impostazioni</a> e aprite
@@ -1689,7 +1705,8 @@
         <strong>Ripristina…</strong> e si sceglie il file dalla cartella, come per <a href="#backup">un backup su file</a>,
         scrivendo la password se c’è.</p>
       <p>Per non rallentare l’uso, quando cambiano solo i tocchi del bambino (le abitudini) il file si rifà al massimo
-        ogni 15 minuti; dopo le modifiche dell’adulto, ogni pochi minuti.</p>
+        una volta all’ora, in una pausa del bambino, e comunque subito quando si chiude o si nasconde l’app; dopo le
+        modifiche dell’adulto, ogni pochi minuti e subito all’uscita dalle impostazioni.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 

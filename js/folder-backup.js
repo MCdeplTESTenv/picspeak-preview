@@ -11,7 +11,7 @@
  * Il tool non tocca nessun altro file della cartella.
  *
  * Quando si scrive: dopo 1 minuto senza modifiche (o dopo 5 minuti di modifiche continue), al massimo ogni 2 minuti
- * (ogni 15 se sono cambiate solo le abitudini, cioè i tocchi del bambino: il file si rifà intero e non deve pesare), e subito all'uscita dalla modalità adulto o quando l'app va in secondo piano. Le modifiche si riconoscono come per
+ * (ogni 60 se sono cambiate solo le abitudini, cioè i tocchi del bambino: il file si rifà intero e non deve pesare), e subito all'uscita dalla modalità adulto o quando l'app va in secondo piano. Le modifiche si riconoscono come per
  * il backup online (cloud.changeKind). Funziona insieme a Dropbox: i due backup non dipendono l'uno dall'altro.
  * Riaprendo il browser può servire di nuovo il permesso: si chiede all'ingresso nella modalità adulto (mai davanti al
  * bambino) o con il pulsante nelle impostazioni. Scegliendo «Consenti a ogni visita» Chrome ed Edge non lo chiedono più.
@@ -26,8 +26,8 @@
   const CALM_MS = 60 * 1000;
   const MAX_WAIT_MS = 5 * 60 * 1000;
   const MIN_GAP_MS = 2 * 60 * 1000;
-  // Solo abitudini (i tocchi del bambino): il file completo si rifà al massimo ogni 15 minuti, per non pesare sull'uso
-  const HABITS_GAP_MS = 15 * 60 * 1000;
+  // Solo abitudini (i tocchi del bambino): il file completo si rifà al massimo ogni ora, per non pesare sull'uso
+  const HABITS_GAP_MS = 60 * 60 * 1000;
   const TICK_MS = 20 * 1000;
   const KEEP_DAILY = 7;
   const PROFILE_ID = /^p_[A-Za-z0-9]{1,40}$/;
