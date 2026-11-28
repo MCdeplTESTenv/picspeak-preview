@@ -2,6 +2,8 @@
  * Impostazioni: «Backup e ripristino», in quattro sezioni.
  * - Backup locale: nome del profilo, «Salva un backup adesso» (file .picspeak, password facoltativa), data dell'ultimo
  *   backup salvato da questo dispositivo. La logica del file è in backup.js.
+ * - Backup automatico in una cartella (logica in folder-backup.js): scelta della cartella, stato, «Salva adesso»,
+ *   «Consenti di nuovo» se il browser ha dimenticato il permesso, «Smetti». Dove il browser non lo permette, una nota.
  * - Backup online su Dropbox (logica in cloud.js): «Collega Dropbox» (si incolla il codice mostrato da Dropbox), stato
  *   dell'ultima copia, aggiornamento manuale o automatico, «Aggiorna adesso», «Salva una copia» (con nome),
  *   «Apri un profilo», dispositivi, «Scollega». Il link alla pagina sulla
@@ -17,7 +19,7 @@
 (function () {
   'use strict';
 
-  const { i18n, storage, security, symbols, predict, data, backup, cloud, settingsUi: ui } = window.PicSpeak;
+  const { i18n, storage, security, symbols, predict, data, backup, cloud, folderBackup, settingsUi: ui } = window.PicSpeak;
   const t = i18n.t;
 
   // Chiavi dell'archivio "settings" che contengono solo scelte delle impostazioni.
@@ -116,6 +118,8 @@
    * Usata anche prima di «Ripristina tutto» e di «Cancella tutto».
    */
   async function saveBackup(where = 'local') {
+    // Archivio guasto: in memoria potrebbero esserci solo le schede di prova, mai un backup fatto con quelle
+    if (storage.saveProblem()) { await ui.showStorageProblem(); return false; }
     // Il backup contiene le abitudini del bambino: con il PIN privacy serve anche qui (es. dal promemoria)
     if (ui.requestPrivateAccess && !(await ui.requestPrivateAccess())) return false;
     const values = await ui.runDialog({
@@ -174,6 +178,90 @@
         ? format('backupLast', { date: dateText(info.at), time: timeText(info.at), name: info.name || '—' })
         : t('backupLastNone');
     }).catch(() => { last.textContent = t('backupLastNone'); });
+  }
+
+  // ---------- Backup automatico in una cartella ----------
+
+  async function chooseFolder() {
+    // Il file contiene le abitudini del bambino: con il PIN privacy serve anche qui
+    if (ui.requestPrivateAccess && !(await ui.requestPrivateAccess())) return;
+    // Prima di scegliere: cosa c'è nel file (privacy) e password facoltativa, come per il backup su file
+    const values = await ui.runDialog({
+      title: t('folderPrivacyTitle'),
+      help: t('folderPrivacyHelp'),
+      fields: [
+        { id: 'pass', label: t('backupPassLabel'), secret: true },
+        { id: 'pass2', label: t('backupPass2Label'), secret: true },
+      ],
+      primary: t('folderChooseBtn'),
+      secondary: t('cancel'),
+      onSubmit: (v) => {
+        if (v.pass || v.pass2) {
+          if ([...v.pass].length < 4) return t('backupPassShort');
+          if (v.pass !== v.pass2) return t('backupPassMismatch');
+        }
+        return v;
+      },
+    });
+    if (!values) return;
+    try {
+      const ok = await folderBackup.choose(values.pass || '');
+      if (ok) await refreshReminder();
+      ui.render();
+    } catch (error) {
+      showNotice(t('folderErr'), true, 'folder');
+    }
+  }
+
+  async function folderAction(fn) {
+    const ok = await fn().catch(() => false);
+    if (!ok) showNotice(t(folderBackup.info() && folderBackup.info().status === 'permission' ? 'folderNeedPermission' : 'folderErr'), true, 'folder');
+    else ui.render();
+    refreshReminder();
+  }
+
+  async function stopFolder() {
+    const ok = await ui.runDialog({ title: t('folderStopTitle'), help: t('folderStopHelp'), primary: t('folderStopBtn'), secondary: t('cancel') });
+    if (!ok) return;
+    await folderBackup.stop();
+    await refreshReminder();
+    ui.render();
+  }
+
+  function folderStatusText(info) {
+    if (info.status === 'permission') return t('folderNeedPermission');
+    if (info.status === 'error') return t('folderErr');
+    if (!info.lastAt) return format('folderChosen', { folder: info.folder || '—' });
+    return `${format('folderLast', { folder: info.folder || '—', date: dateText(info.lastAt), time: timeText(info.lastAt), file: info.file })} ${t(info.locked ? 'folderLocked' : 'folderOpen')}`;
+  }
+
+  function renderFolderSection() {
+    const wrap = ui.section('secFolderTitle', 'secFolderHelp');
+    renderNotice(wrap, 'folder');
+    if (!folderBackup || !folderBackup.isSupported()) {
+      wrap.append(el('p', 'settings-help backup-last', t('folderUnsupported')));
+      return;
+    }
+    const info = folderBackup.info();
+    if (!info) {
+      wrap.append(ui.settingRow('folderChoose', 'folderChooseHelp', ui.button(t('folderChooseBtn'), chooseFolder, true)));
+      wrap.append(ui.settingRow('folderKeep', 'folderAllowHelp', el('span')));
+      return;
+    }
+    const status = el('p', `settings-help backup-last${info.status === 'ok' ? '' : ' is-error'}`, folderStatusText(info));
+    status.setAttribute('role', 'status');
+    wrap.append(status);
+    if (info.status === 'permission') {
+      wrap.append(ui.settingRow('folderAllow', 'folderAllowHelp', ui.button(t('folderAllowBtn'), () => folderAction(folderBackup.allow), true)));
+    } else {
+      wrap.append(ui.settingRow('folderNow', 'folderNowHelp', ui.button(t('folderNowBtn'), () => folderAction(() => folderBackup.writeNow(true)), false)));
+      // Cosa fare nel browser perché il permesso non si debba ridare a ogni apertura
+      wrap.append(ui.settingRow('folderKeep', 'folderAllowHelp', el('span')));
+    }
+    wrap.append(ui.settingRow('folderChange', 'folderChangeHelp', ui.button(t('folderChangeBtn'), chooseFolder, false)));
+    const off = ui.button(t('folderStopBtn'), stopFolder, false);
+    off.classList.add('dlg-btn-danger');
+    wrap.append(ui.settingRow('folderStop', 'folderStopRowHelp', off));
   }
 
   // ---------- Backup online (Dropbox) ----------
@@ -706,6 +794,7 @@
   }
 
   async function restoreFromDropbox() {
+    if (storage.saveProblem()) { await ui.showStorageProblem(); return; }
     const account = await pickAccount();
     if (account === null) return;
     showBusy(t('cloudListing'), 'restore');
@@ -1037,6 +1126,7 @@
    * altrimenti si apre subito la scelta del file.
    */
   async function restoreBackup() {
+    if (storage.saveProblem()) { await ui.showStorageProblem(); return; }
     let filePicked = null;
     if (cloud && cloud.isConfigured() && cloud.listAccounts().length) {
       const from = await ui.runPanelDialog({
@@ -1281,8 +1371,10 @@
   // con «Salva un backup» e «Più tardi» (una settimana). Le regole sono in backup.reminderDue.
   let reminder = { due: false, days: null };
 
+  // Copie automatiche attive (Dropbox o cartella): il promemoria non serve
   function onlineActive() {
-    return Boolean(cloud && cloud.isConfigured() && cloud.isConnected() && cloud.isEnabledHere());
+    return Boolean(cloud && cloud.isConfigured() && cloud.isConnected() && cloud.isEnabledHere())
+      || Boolean(folderBackup && folderBackup.isActive());
   }
 
   async function refreshReminder() {
@@ -1339,6 +1431,7 @@
   ui.addBanner(reminderBanner);
   // Dropbox collegato o scollegato: il promemoria compare o sparisce
   if (cloud && cloud.onStatus) cloud.onStatus(() => { refreshReminder(); });
+  if (folderBackup) folderBackup.onStatus(() => { refreshReminder(); });
   document.addEventListener('picspeak:adult-enter', () => { refreshReminder().then(() => ui.render()); });
 
   // Entrando in modalità adulto: se ci sono due versioni delle schede, si chiede subito quale tenere
@@ -1349,6 +1442,6 @@
     icon: '<path d="M4 7.5v9c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5v-9"/><ellipse cx="12" cy="7.5" rx="8" ry="3.5"/><path d="M4 12c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5"/>',
     titleKey: 'catBackup',
     introKey: 'catBackupIntro',
-    render: [renderLocalSection, renderOnlineSection, renderRestoreSection, renderResetSection],
+    render: [renderLocalSection, renderFolderSection, renderOnlineSection, renderRestoreSection, renderResetSection],
   }, 'security');
 })();

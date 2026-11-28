@@ -124,6 +124,7 @@
               <li><a href="#accesso-guidato">Tenere PicSpeak sempre aperto e a schermo intero</a></li>
               <li><a href="#dati">Sapere dove restano i dati</a></li>
               <li><a href="#backup">Fare un backup e ripristinarlo</a></li>
+              <li><a href="#backup-cartella">Backup automatico in una cartella (solo computer)</a></li>
               <li><a href="#backup-online">Backup online su Dropbox</a></li>
               <li><a href="#ripristino">Azzerare l’app</a></li>
               <li><a href="#crediti">Trovare crediti e licenze</a></li>
@@ -1264,7 +1265,11 @@
         <li><strong>Celle</strong>: spazio, bordi, angoli, trasparenza, evidenziazione al tocco.</li>
         <li><strong>Striscia frase e percorso</strong>: striscia frase in alto o in basso, altezza della striscia frase,
           pulsanti a destra o a sinistra; <strong>Percorso in alto</strong> visibile o nascosto (nascondendolo spariscono
-          anche il pulsante HOME e la freccia per tornare indietro).</li>
+          anche il pulsante HOME e la freccia per tornare indietro); <strong>Spazio intorno al percorso</strong>
+          (Stretto, Normale o Ampio: lo spazio bianco sopra e sotto la riga del percorso, uguale dai due lati; con
+          «Stretto» resta più posto alle tessere); <strong>Grandezza del percorso</strong> (con «Grande» la freccia per
+          tornare indietro e il pulsante HOME sono più alti e più facili da toccare). Queste due scelte restano anche
+          cambiando stile pronto.</li>
       </ul>
       <p>I gesti «Scuoti per ricominciare» e «Spingi via la frase» si trovano in
         <span class="where"><span>Impostazioni</span><span>Tocco</span><span>Gesti</span></span>.</p>
@@ -1281,7 +1286,7 @@
       <ol class="steps">
         <li>Scegliete la <strong>Voce</strong> dall’elenco («Automatica» prende la migliore del dispositivo; solo se il dispositivo non ne ha per
           quella lingua usa una voce online).</li>
-        <li>Regolate <strong>Velocità</strong> e <strong>Tono</strong>.</li>
+        <li>Regolate <strong>Velocità</strong> e <strong>Tono</strong> (il tono rende la voce più acuta o più grave).</li>
         <li>Toccate <strong>▶ Prova la voce</strong>.</li>
       </ol>
       <p>PicSpeak usa le voci già presenti sul dispositivo. Se la voce sembra metallica, nella stessa pagina trovate i passi
@@ -1291,6 +1296,9 @@
         meglio, ma mandano il testo da leggere al produttore del browser. PicSpeak le usa solo se le scegliete voi
         dall’elenco, oppure se il dispositivo non ha nessuna voce per quella lingua: in quel caso la pagina della voce
         lo dice, e conviene installare una voce del dispositivo con i passi indicati lì.</p>
+      <p>La velocità cambia con tutte le voci, il tono no: molte voci, spesso proprio quelle più naturali o «solo con
+        internet», lo ignorano. Se spostando il cursore del tono e toccando <strong>▶ Prova la voce</strong> non sentite differenza, non è un guasto: quella voce non lo
+        permette. Lasciate il tono a 1,00× oppure scegliete un’altra voce.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -1521,6 +1529,31 @@
       <p class="warn">La conservazione non protegge da una cancellazione fatta a mano: cancellare i dati di navigazione
         del browser per questo sito cancella anche le tessere personalizzate. Salvate ogni tanto un backup completo (vedi
         <a href="#backup">Fare un backup e ripristinarlo</a>) e conservatelo in un posto sicuro.</p>
+      <h4 id="non-salva">Se compare «PicSpeak non riesce a salvare su questo dispositivo»</h4>
+      <p>A volte il browser non riesce a leggere o scrivere i dati di PicSpeak: per esempio subito dopo aver acceso il
+        computer, con il disco quasi pieno o nella navigazione privata. PicSpeak riprova da solo. Se non ci riesce, non
+        tocca più il lavoro già salvato e lo dice con un avviso rosso, visibile solo con le impostazioni sbloccate (il
+        bambino non lo vede). Le modifiche fatte mentre c’è l’avviso andranno perse alla chiusura, e intanto backup,
+        ripristino e backup online restano fermi, per non salvare copie incomplete. Se il problema c’è già all’apertura,
+        PicSpeak non sa se è stato scelto un PIN: per sicurezza le impostazioni non si aprono e compare lo stesso
+        avviso.</p>
+      <ol class="steps">
+        <li>Chiudete PicSpeak del tutto e riapritelo: di solito il lavoro salvato torna come prima.</li>
+        <li>Se l’avviso resta, controllate di non essere in navigazione privata e che sul dispositivo ci sia spazio
+          libero.</li>
+        <li>Appena l’avviso sparisce, salvate un backup completo.</li>
+      </ol>
+      <p>Se un giorno le schede sembrano sparite:</p>
+      <ul>
+        <li>aprite PicSpeak dallo <strong>stesso indirizzo</strong> e con lo <strong>stesso browser</strong> di sempre:
+          ogni browser, e ogni indirizzo diverso, ha dati suoi;</li>
+        <li>guardate in <span class="where"><span>Impostazioni</span><span>Profili</span></span> se c’è un altro profilo
+          con il vostro lavoro;</li>
+        <li>controllate che il browser non sia impostato per cancellare i dati dei siti alla chiusura, e che non ci sia
+          un programma di pulizia che lo fa;</li>
+        <li>non usate «Cancella tutto»: ripristinate l’ultimo backup (vedi
+          <a href="#backup">Fare un backup e ripristinarlo</a>).</li>
+      </ul>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -1552,7 +1585,8 @@
         cambiare anche con <strong>Cambia…</strong>, accanto a «Nome del profilo».</p>
       <h4 id="promemoria-backup">Promemoria del backup</h4>
       <p>Se il profilo non ha il <a href="#backup-online">backup online</a> collegato su questo dispositivo, PicSpeak
-        ricorda di salvare un backup: la prima volta dopo una settimana d’uso, poi quando l’ultimo backup ha più di un
+        ricorda di salvare un backup (anche il <a href="#backup-cartella">backup automatico in una cartella</a>, quando
+        funziona, lo rende inutile): la prima volta dopo una settimana d’uso, poi quando l’ultimo backup ha più di un
         mese. Il promemoria lo vede solo l’adulto, mai il bambino: un pallino arancione sul pulsante
         <strong>Impostazioni</strong> e un riquadro in cima alle impostazioni con <strong>Salva un backup</strong> e
         <strong>Più tardi</strong>. «Più tardi» lo rimanda di una settimana; dopo un backup sparisce da solo.</p>
@@ -1599,6 +1633,63 @@
         Twemoji, che si cercano su internet, restano accese o spente come erano su questo dispositivo: se nel backup
         erano accese, un avviso lo ricorda e si possono attivare dalla stessa pagina.</p>
       <p>Per una copia su Dropbox, che può anche salvarsi da sola, vedete <a href="#backup-online">Backup online su Dropbox</a>.</p>
+      <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
+    </section>
+
+    <section id="backup-cartella" data-search>
+      <h3>Backup automatico in una cartella (solo computer)</h3>
+      <p>Sul computer PicSpeak può salvare da solo il backup in una cartella scelta da voi: una cartella del computer, una
+        chiavetta, un disco esterno o una cartella già sincronizzata con un servizio che usate (per esempio OneDrive o
+        Google Drive). È lo stesso file <strong>.picspeak</strong> del backup su file, con la password facoltativa, e si aggiorna
+        pochi minuti dopo ogni modifica, subito quando si esce dalle impostazioni e quando si chiude o si nasconde
+        l’app. Funziona anche insieme al <a href="#backup-online">backup online su Dropbox</a>.</p>
+      <p class="warn">Si può fare <strong>solo su PC e Mac, con Chrome o Edge</strong>. Non si può su telefoni e tablet,
+        né Android né iPad o iPhone, e nemmeno con Safari o Firefox: lì la sezione lo dice e rimanda al backup online su
+        Dropbox.</p>
+      <h4>Attivarlo</h4>
+      <ol class="steps">
+        <li><a href="#pin">Sbloccate le impostazioni</a> e aprite
+          <span class="where"><span>Impostazioni</span><span>Backup e ripristino</span><span>Backup automatico in una cartella</span></span>.</li>
+        <li>Toccate <strong>Scegli la cartella…</strong>. Una finestra ricorda cosa c’è nel file e chiede una
+          <strong>password</strong> facoltativa (almeno 4 caratteri, ripetuta due volte), come per il backup su file.</li>
+        <li>Scegliete la cartella e confermate che PicSpeak può modificarne i file.</li>
+        <li>La prima copia si salva subito. Sotto compaiono la cartella, il nome del file, l’ora dell’ultima copia e se
+          il file è protetto da password.</li>
+      </ol>
+      <p class="warn">Il file contiene <strong>dati personali del bambino</strong>: schede con le foto, abitudini d’uso
+        (quali parole usa, quando e dove) e contesti. Chiunque apra la cartella lo può leggere, anche su un servizio di
+        sincronizzazione come OneDrive o Google Drive, se non ha la password. Scegliete una cartella solo vostra e, meglio,
+        una password: serve per ripristinare il file e, se la dimenticate, nessuno la può recuperare. La password non
+        resta scritta da nessuna parte: sul computer rimane solo una chiave che PicSpeak usa per le copie. La password
+        protegge i file nella cartella (chiavetta, OneDrive, Google Drive…), non il computer: chi usa PicSpeak su questo
+        computer vede comunque le schede, come sempre. Con il
+        <a href="#pin-privacy">PIN privacy</a> la scelta della cartella si apre solo dopo averlo inserito. Per cambiare
+        la password toccate <strong>Cambia…</strong> e scegliete di nuovo la cartella.</p>
+      <p>Nella cartella PicSpeak scrive solo i suoi file, uno per profilo, con il nome del profilo:
+        <code>PicSpeak-Luca-automatico-3fa2.picspeak</code>, sempre l’ultima versione, e una copia per giorno
+        (<code>PicSpeak-Luca-automatico-3fa2-2026-11-28.picspeak</code>), di cui tiene le ultime 7. Le quattro lettere
+        o cifre finali distinguono due profili con lo stesso nome. Gli altri file della
+        cartella, compresi i backup salvati a mano, non vengono mai toccati. Ogni profilo sceglie la sua cartella.</p>
+      <h4>Non dover ridare il permesso ogni volta</h4>
+      <p>Per proteggere i vostri file, dopo che il browser è stato chiuso e riaperto Chrome ed Edge possono chiedere di
+        nuovo il permesso di scrivere nella cartella. PicSpeak non lo chiede mai davanti al bambino: lo chiede quando
+        l’adulto entra nelle impostazioni, oppure si ridà con <strong>Consenti</strong> nella sezione. Intanto le
+        modifiche restano da salvare e non si perdono.</p>
+      <ul>
+        <li>Quando il browser chiede il permesso, scegliete <strong>Consenti a ogni visita</strong>: da quel momento non
+          lo chiederà più.</li>
+        <li>Se quella scelta non compare, installate PicSpeak come app (l’icona di installazione a destra nella barra
+          dell’indirizzo, vedi <a href="#installare">installare PicSpeak</a>), apritelo dall’app e scegliete di nuovo la
+          cartella: le app installate tengono il permesso.</li>
+        <li>Se avete tolto il permesso nelle impostazioni del browser, o avete spostato o cancellato la cartella, la
+          sezione lo dice: toccate <strong>Consenti</strong> o <strong>Cambia…</strong> per sceglierne un’altra.</li>
+      </ul>
+      <p><strong>Salva adesso</strong> salva subito, per esempio prima di togliere la chiavetta. <strong>Smetti</strong>
+        ferma le copie di questo profilo; i file già salvati restano nella cartella. Per tornare a una copia si usa
+        <strong>Ripristina…</strong> e si sceglie il file dalla cartella, come per <a href="#backup">un backup su file</a>,
+        scrivendo la password se c’è.</p>
+      <p>Per non rallentare l’uso, quando cambiano solo i tocchi del bambino (le abitudini) il file si rifà al massimo
+        ogni 15 minuti; dopo le modifiche dell’adulto, ogni pochi minuti.</p>
       <p class="to-index"><a href="#indice">↑ Torna all’indice</a></p>
     </section>
 
@@ -1950,6 +2041,7 @@
         <li><a href="#contesti">Contesti</a></li>
         <li><a href="#conservazione">Conservazione dei dati</a></li>
         <li><a href="#crediti">Crediti</a></li>
+        <li><a href="#non-salva">Dati che non si salvano</a></li>
         <li><a href="#dati">Dati e privacy</a></li>
         <li><a href="#eliminare">Eliminare tessere e cartelle</a></li>
         <li><a href="#modelli">Esporta</a></li>

@@ -140,6 +140,21 @@
     );
   }
 
+  /*
+   * Chiave pronta per le copie automatiche con password (backup in una cartella): la password si trasforma una volta
+   * sola (il calcolo è lento apposta) e la chiave, non leggibile dal codice, si riusa per ogni copia. Stesso formato
+   * dei file con password: si aprono con la password come gli altri.
+   */
+  async function makeSeal(password) {
+    if (!cryptoAvailable()) throw new BackupError('unsupported');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    return { key: await deriveKey(password, salt, ITERATIONS), salt, iterations: ITERATIONS };
+  }
+
+  function isSeal(value) {
+    return Boolean(value && typeof value === 'object' && value.key && value.salt instanceof Uint8Array);
+  }
+
   // ---------- Impostazioni come dati semplici ----------
 
   // Copia pulita di un valore JSON: solo testo, numeri, sì/no, elenchi e oggetti, con profondità limitata
@@ -336,12 +351,15 @@
     let archiveFiles;
     if (password) {
       const inner = new Uint8Array(await (await zip.create(files)).arrayBuffer());
-      const salt = crypto.getRandomValues(new Uint8Array(16));
+      // password: testo, oppure una chiave pronta (makeSeal) per le copie automatiche
+      const seal = isSeal(password) ? password : null;
+      const salt = seal ? seal.salt : crypto.getRandomValues(new Uint8Array(16));
+      const iterations = seal ? seal.iterations : ITERATIONS;
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const key = await deriveKey(password, salt, ITERATIONS);
+      const key = seal ? seal.key : await deriveKey(password, salt, iterations);
       const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, inner));
       manifest.encryption = {
-        cipher: 'AES-GCM', kdf: 'PBKDF2-SHA-256', iterations: ITERATIONS, salt: bytesToBase64(salt), iv: bytesToBase64(iv),
+        cipher: 'AES-GCM', kdf: 'PBKDF2-SHA-256', iterations, salt: bytesToBase64(salt), iv: bytesToBase64(iv),
       };
       archiveFiles = [{ name: 'data.bin', data: sealed, compress: false }];
     } else {
@@ -523,7 +541,10 @@
     }
     let plain;
     try {
-      const key = await deriveKey(String(password || ''), info.encryption.salt, info.encryption.iterations);
+      // Chiave pronta (prova delle copie automatiche): vale solo per i file creati con lei
+      const seal = isSeal(password) && password.salt.length === info.encryption.salt.length
+        && password.salt.every((b, i) => b === info.encryption.salt[i]) ? password : null;
+      const key = seal ? seal.key : await deriveKey(isSeal(password) ? '' : String(password || ''), info.encryption.salt, info.encryption.iterations);
       plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: info.encryption.iv }, key, sealed);
     } catch (error) {
       // AES-GCM controlla anche l'integrità: password sbagliata o file modificato
@@ -784,6 +805,7 @@
 
   window.PicSpeak.backup = {
     combineLatest,
+    makeSeal,
     fileName,
     deviceLabel,
     BackupError,

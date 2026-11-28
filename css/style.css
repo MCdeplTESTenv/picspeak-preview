@@ -910,6 +910,7 @@ body > .sentence-bar { order: 1; }
 body > .page-nav { order: 2; }
 body > .symbol-grid { order: 3; }
 body > .adult-bar { order: 0; }
+body > .storage-warning { order: 0; }
 [data-sentence-position="bottom"] body > .sentence-bar { order: 4; border-bottom: 0; border-top: 2px solid var(--border); }
 
 /* Pulsanti della frase a sinistra (utile per chi usa la mano sinistra) */
@@ -2449,6 +2450,14 @@ body > .adult-bar { order: 0; }
 @media (max-width: 720px) {
   .settings-banner { margin-bottom: 12px; }
 }
+/* Archivio del dispositivo che non risponde: avviso sotto la barra dell'adulto e in cima alle impostazioni */
+.storage-warning {
+  margin: 0; padding: 10px 16px;
+  background: #fde8e8; color: #5c0b0b;
+  border-bottom: 2px solid #e5a3a3;
+  font-size: 16px; line-height: 1.4;
+}
+.settings-banner.is-alert { background: #fde8e8; color: #5c0b0b; border-color: #e5a3a3; }
 /* Conservazione dei dati (Sicurezza): scelta fissa, mostrata come etichetta e non come interruttore */
 .setting-status.keep-data-on {
   align-self: flex-start; padding: 6px 12px; border-radius: 999px;
@@ -2466,3 +2475,21 @@ body > .adult-bar { order: 0; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* Riga di navigazione (freccia, percorso, «…»): lo stesso spazio bianco sopra (sotto la frase) e sotto (sopra le
+   tessere), scelto in Aspetto › «Spazio intorno al percorso». Sotto, la griglia ha già il suo margine (circa
+   --gap + 6 px): il margine della riga lo compensa, anche in negativo. */
+:root { --nav-space: 18px; }
+[data-nav-space="tight"] { --nav-space: 10px; }
+[data-nav-space="wide"] { --nav-space: 26px; }
+.page-nav { padding-top: var(--nav-space); padding-bottom: 0; margin-bottom: calc(var(--nav-space) - var(--gap) - 6px); min-height: 0; }
+/* Grandezza normale: i pulsanti da 64 px (es. «…») contano come 48, l'altezza di freccia e percorso; i pulsanti
+   rapidi no: quando ci sono, la riga è alta come loro e lo spazio si misura da loro */
+.page-nav > :not(.quick-bar) { margin-top: -8px; margin-bottom: -8px; }
+/* Grandezza «Grande»: freccia e HOME alti 64 px */
+[data-nav-size="l"] .page-nav > :not(.quick-bar) { margin-top: 0; margin-bottom: 0; }
+[data-nav-size="l"] .nav-up { min-height: 64px; min-width: 64px; }
+[data-nav-size="l"] .crumbs { padding-top: 0; padding-bottom: 0; }
+[data-nav-size="l"] .crumbs button { min-height: 64px; min-width: 64px; justify-content: center; }
+/* Casetta del percorso leggermente più marcata */
+.crumb-home svg { stroke-width: 2.4; }

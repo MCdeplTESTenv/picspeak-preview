@@ -727,16 +727,20 @@
     saveState().catch(() => {});
   }
 
-  function onStorageChange(storeName, key, owners) {
-    if (suppress > 0 || !ready) return;
+  // Tipo di modifica per il profilo id ('full', 'habits' o null). Lo usa anche il backup in una cartella
+  function changeKind(storeName, key, owners, id) {
     // Scritture che riguardano solo altri profili (per esempio un profilo nuovo creato qui) non sono modifiche di questo
     // Immagini: sono in comune tra i profili; una foto nuova del profilo in uso arriva sempre con la sua tessera (pagina)
-    if (storeName === 'images') return;
-    const id = currentProfileId();
-    if (Array.isArray(owners) && owners.length && owners.every((o) => typeof o === 'string' && o !== id)) return;
+    if (storeName === 'images') return null;
+    if (Array.isArray(owners) && owners.length && owners.every((o) => typeof o === 'string' && o !== id)) return null;
     const prefixed = /^p:([^:]+):/.exec(String(key));
-    if (storeName === 'settings' && prefixed && prefixed[1] !== id) return;
-    const kind = classify(storeName, key);
+    if (storeName === 'settings' && prefixed && prefixed[1] !== id) return null;
+    return classify(storeName, key);
+  }
+
+  function onStorageChange(storeName, key, owners) {
+    if (suppress > 0 || !ready) return;
+    const kind = changeKind(storeName, key, owners, currentProfileId());
     if (kind) markDirty(kind);
   }
 
@@ -791,6 +795,8 @@
   }
 
   async function syncNow() {
+    // Archivio guasto: in memoria potrebbero esserci solo le schede di prova, che non devono andare su Dropbox
+    if (storage.saveProblem()) return;
     const profileId = currentProfileId();
     if (!profileId || !enabledHere() || profileId === holding) return;
     const folder = folderOf(profileId);
@@ -1320,6 +1326,8 @@
     if (!profileId || !enabledHere()) throw new CloudError('auth');
     // In attesa della scelta «continuare con un profilo già su Dropbox?»: nessuna cartella prima della risposta
     if (profileId === holding) throw new CloudError('held');
+    // Archivio guasto: nessuna copia di quello che c'è in memoria (potrebbero essere solo le schede di prova)
+    if (storage.saveProblem()) throw new CloudError('storage');
     if (running) await running.catch(() => {});
     const folder = folderOf(profileId);
     if (!(await findFolder(folder, true))) {
@@ -1749,6 +1757,7 @@
 
   window.PicSpeak.cloud = {
     CloudError,
+    changeKind,
     isConfigured,
     isConnected: () => Boolean(link),
     listAccounts,

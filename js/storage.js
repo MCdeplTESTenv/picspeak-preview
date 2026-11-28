@@ -3,8 +3,8 @@
  * Versione 1: archivio "settings" (chiave-valore).
  * Versione 2: aggiunti gli archivi del modello dati (docs/FORMATO-DATI.md):
  *   profiles, pages, images, contexts, usage, audio (chiave = campo "id").
- * Se IndexedDB non è disponibile (es. alcune modalità private), si usa la memoria
- * della sessione: il tool funziona, ma i dati non restano salvati.
+ * Se IndexedDB non è disponibile (es. alcune modalità private) o non risponde, si usa la memoria
+ * della sessione: il tool funziona, ma i dati non restano salvati e la modalità adulto lo dice (saveProblem).
  *
  * Profili multipli: le scelte che riguardano il bambino (aspetto, voce, lingua, tocco e frase, previsione…,
  * elenco PROFILE_KEYS) si salvano per profilo, con la chiave «p:<id profilo>:<nome>». Chi usa get/set/remove
@@ -48,9 +48,47 @@
   const memoryStores = new Map(RECORD_STORES.map((name) => [name, new Map()]));
   let dbPromise = null;
 
+  /*
+   * Archivio che non risponde. Un errore del browser nel leggere o scrivere (archivio occupato, collegamento
+   * all'archivio perso dopo lo stop del computer, disco pieno o lento) non deve mai essere scambiato per «archivio
+   * vuoto»: altrimenti il tool ripartirebbe con le schede di prova e le salverebbe sopra il lavoro fatto.
+   * Per questo ogni operazione si riprova (riaprendo l'archivio); se non riesce ancora, per il resto della sessione
+   * non si scrive più nulla sul dispositivo (i dati salvati restano com'erano), si lavora in memoria e la modalità
+   * adulto mostra un avviso (saveProblem / onSaveProblem). Alla prossima apertura si riprova da capo.
+   */
+  const RETRY_DELAYS_MS = [150, 500];
+  const OPEN_TIMEOUT_MS = 10000;
+  // Errori che dipendono da un singolo record (dato non salvabile, chiave sbagliata), non dall'archivio: non si
+  // riprovano e non fermano gli altri salvataggi
+  const RECORD_ERRORS = new Set(['DataCloneError', 'DataError', 'ConstraintError']);
+  let broken = false;
+  // Chiavi delle impostazioni lette o scritte davvero in questa sessione (vedi isKnown)
+  const known = new Set();
+  const problemListeners = new Set();
+
+  function saveProblem() {
+    return broken;
+  }
+
+  function onSaveProblem(listener) {
+    problemListeners.add(listener);
+    return () => problemListeners.delete(listener);
+  }
+
+  function markBroken() {
+    if (broken) return;
+    broken = true;
+    dbPromise = null;
+    problemListeners.forEach((listener) => {
+      try { listener(); } catch (error) { /* un ascoltatore non blocca gli altri */ }
+    });
+  }
+
   function openDb() {
+    if (broken) return Promise.reject(new Error('archivio non disponibile'));
     if (dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject) => {
+    let timedOut = false;
+    const opening = new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) {
         reject(new Error('IndexedDB non disponibile'));
         return;
@@ -63,10 +101,40 @@
           if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
         });
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        // Aperto quando ormai si era smesso di aspettare: il collegamento non serve più
+        if (timedOut) { db.close(); return; }
+        // Collegamento chiuso dal browser (o da un'altra scheda con una versione nuova): la prossima volta si riapre
+        db.onclose = () => { if (dbPromise === opening) dbPromise = null; };
+        db.onversionchange = () => { db.close(); if (dbPromise === opening) dbPromise = null; };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
+      // Il browser non risponde: si smette di aspettare (il tentativo successivo riapre)
+      setTimeout(() => { timedOut = true; reject(new Error('archivio lento')); }, OPEN_TIMEOUT_MS);
     });
-    return dbPromise;
+    dbPromise = opening;
+    // Apertura non riuscita: il prossimo tentativo riapre invece di riusare l'errore
+    opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
+    return opening;
+  }
+
+  // Esegue un'operazione sull'archivio riprovando; se non riesce mai, l'archivio è segnato come guasto
+  async function withRetry(operation) {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (error && RECORD_ERRORS.has(error.name)) throw error;
+        if (broken || attempt >= RETRY_DELAYS_MS.length) {
+          markBroken();
+          throw error;
+        }
+        dbPromise = null; // il collegamento potrebbe essere perso: si riapre
+        await new Promise((resolve) => { setTimeout(resolve, RETRY_DELAYS_MS[attempt]); });
+      }
+    }
   }
 
   /*
@@ -129,20 +197,26 @@
   }
 
   function run(storeName, mode, action) {
-    return openDb().then((db) => new Promise((resolve, reject) => {
+    return withRetry(() => openDb().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, mode);
       const result = action(tx.objectStore(storeName));
       tx.oncomplete = () => resolve(result && 'result' in result ? result.result : undefined);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
-    }));
+    })));
   }
 
   // ---------- Impostazioni (chiave-valore) ----------
 
+  // Ogni lettura riuscita resta anche in memoria: se poi l'archivio si guasta, la sessione continua con i valori veri
+  // (per esempio il PIN) invece che con valori vuoti
   async function rawGet(key) {
     try {
-      return await run(SETTINGS, 'readonly', (store) => store.get(key));
+      const value = await run(SETTINGS, 'readonly', (store) => store.get(key));
+      known.add(key);
+      if (value === undefined) memory.delete(key);
+      else memory.set(key, value);
+      return value;
     } catch (error) {
       return memory.get(key);
     }
@@ -150,6 +224,7 @@
 
   async function rawSet(key, value) {
     memory.set(key, value);
+    known.add(key);
     try {
       await run(SETTINGS, 'readwrite', (store) => { store.put(value, key); });
     } catch (error) {
@@ -160,6 +235,7 @@
 
   async function rawRemove(key) {
     memory.delete(key);
+    known.add(key);
     try {
       await run(SETTINGS, 'readwrite', (store) => { store.delete(key); });
     } catch (error) {
@@ -224,6 +300,16 @@
     await rawRemove(await resolveKey(key));
   }
 
+  /*
+   * Con l'archivio guasto: false se il valore di questa chiave non si è mai potuto leggere in questa sessione
+   * (quello che restituisce get è vuoto per errore, non perché manca). Serve per il PIN: un PIN illeggibile non vale
+   * come «nessun PIN». Con l'archivio a posto è sempre true.
+   */
+  async function isKnown(key) {
+    if (!broken) return true;
+    return known.has(await resolveKey(key));
+  }
+
   // Scelte di un profilo qualsiasi (per duplicare o eliminare un profilo che non è in uso)
   async function getProfileSettings(profileId) {
     const out = {};
@@ -257,22 +343,23 @@
     activePromise = null;
     memory.clear();
     memoryStores.forEach((store) => store.clear());
-    const db = await openDb();
-    await new Promise((resolve, reject) => {
+    await withRetry(() => openDb().then((db) => new Promise((resolve, reject) => {
       const names = [SETTINGS, ...RECORD_STORES].filter((name) => db.objectStoreNames.contains(name));
       const tx = db.transaction(names, 'readwrite');
       names.forEach((name) => tx.objectStore(name).clear());
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
-    });
+    })));
   }
 
   // ---------- Archivi del modello dati (record con campo "id") ----------
 
   async function getRecord(storeName, id) {
     try {
-      return await run(storeName, 'readonly', (store) => store.get(id));
+      const record = await run(storeName, 'readonly', (store) => store.get(id));
+      if (record !== undefined && storeName === 'profiles') memoryStores.get(storeName).set(id, record);
+      return record;
     } catch (error) {
       return memoryStores.get(storeName).get(id);
     }
@@ -280,7 +367,13 @@
 
   async function getAllRecords(storeName) {
     try {
-      return (await run(storeName, 'readonly', (store) => store.getAll())) || [];
+      const records = (await run(storeName, 'readonly', (store) => store.getAll())) || [];
+      // In memoria si tengono solo i profili (pochi e piccoli): schede e immagini le ha già il modello in uso
+      if (storeName === 'profiles') {
+        const cache = memoryStores.get(storeName);
+        records.forEach((record) => { if (record && record.id !== undefined) cache.set(record.id, record); });
+      }
+      return records;
     } catch (error) {
       return [...memoryStores.get(storeName).values()];
     }
@@ -312,7 +405,7 @@
    */
   async function getRecordsByPrefix(storeName, prefixes) {
     try {
-      return await openDb().then((db) => new Promise((resolve, reject) => {
+      const records = await withRetry(() => openDb().then((db) => new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
         const out = [];
@@ -323,7 +416,8 @@
         tx.oncomplete = () => resolve(out);
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
-      }));
+      })));
+      return records;
     } catch (error) {
       return [...memoryStores.get(storeName).values()]
         .filter((r) => r && typeof r.id === 'string' && prefixes.some((prefix) => r.id.startsWith(prefix)));
@@ -354,7 +448,7 @@
   window.PicSpeak = window.PicSpeak || {};
   window.PicSpeak.storage = {
     name: DB_NAME, get, set, remove, clearAll, requestPersistence, persistenceStatus, keepData, getRecord, getAllRecords, putRecord, putRecords, deleteRecord,
-    getRecordsByPrefix, deleteRecords, onChange,
+    getRecordsByPrefix, deleteRecords, onChange, saveProblem, onSaveProblem, isKnown,
     PROFILE_KEYS, activeProfileId, setActiveProfileId, newProfileId,
     getProfileSettings, setProfileSettings, removeProfileSettings,
   };

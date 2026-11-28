@@ -71,6 +71,7 @@
     settingsBody: document.getElementById('settings-body'),
     settingsBack: document.getElementById('btn-settings-back'),
     settingsProfile: document.getElementById('settings-profile'),
+    storageWarning: document.getElementById('storage-warning'),
   };
 
   let inactivityTimer = null;
@@ -449,6 +450,11 @@
     // Se PicSpeak è aperto dentro un'altra pagina (iframe), le impostazioni restano chiuse:
     // evita che un sito esterno induca a digitare il PIN dentro una cornice ingannevole
     if (window.top !== window.self) return;
+    // Archivio guasto prima di aver letto il PIN: non si sa se c'è, quindi non si entra senza
+    if (!(await storage.isKnown('security')) || !(await storage.isKnown('adultLock'))) {
+      await showStorageProblem();
+      return;
+    }
     const lock = await security.getLock();
     // Solo pressione lunga: la pressione è già stata fatta per aprire il menu
     if (lock.mode === 'hold') {
@@ -495,8 +501,10 @@
   const resetChannel = 'BroadcastChannel' in window ? new BroadcastChannel(`${storage.name}-reset`) : null;
 
   function refreshPrivate() {
-    return security.getPrivateLock().then((lock) => {
-      privateMode = lock.mode;
+    return security.getPrivateLock().then(async (lock) => {
+      // Archivio guasto prima di aver letto il PIN privacy: per sicurezza vale come se ci fosse
+      const unknown = !(await storage.isKnown('predictionSecurity')) || !(await storage.isKnown('predictionLock'));
+      privateMode = unknown ? 'pin' : lock.mode;
       document.dispatchEvent(new CustomEvent('picspeak:private-change'));
     }).catch(() => {});
   }
@@ -509,6 +517,11 @@
   // true se si può entrare: nessun PIN privacy, già inserito, oppure inserito adesso
   async function requestPrivateAccess() {
     if (privateUnlocked) return true;
+    // Archivio guasto prima di aver letto il PIN privacy: non si apre senza
+    if (!(await storage.isKnown('predictionSecurity')) || !(await storage.isKnown('predictionLock'))) {
+      await showStorageProblem();
+      return false;
+    }
     const lock = await security.getPrivateLock();
     if (lock.mode !== 'pin') return true;
     if (!security.supported) {
@@ -657,6 +670,7 @@
     storage.keepData();
     setTimeout(updateZoomLabel, 0);
     el.adultBar.hidden = false;
+    showStorageWarning();
     el.lock.hidden = true;
     resetInactivity();
     app.layoutGrid();
@@ -680,6 +694,7 @@
     if (PRIVATE_CATEGORIES.has(currentCategory)) currentCategory = 'general';
     app.setMode('child');
     el.adultBar.hidden = true;
+    el.storageWarning.hidden = true;
     el.lock.hidden = false;
     app.layoutGrid();
     // Il backup online invia subito le modifiche fatte dall'adulto
@@ -1000,6 +1015,8 @@
       text.append(' ', value);
       row.append(text, range);
       wrap.append(row);
+      // Molte voci (spesso quelle «naturali», «migliorate» o solo con internet) ignorano il tono: lo si dice qui
+      if (key === 'pitch') wrap.append(list(t('pitchNote')));
     });
 
     wrap.append(button(t('voiceTest'), () => speech.speak(t('voiceSample'), i18n.speechLocale), true));
@@ -1510,6 +1527,11 @@
         values: [['right', 'valRight'], ['left', 'valLeft']] },
       { key: 'pageTitle', labelKey: 'optPageTitle', helpKey: 'optPageTitleHelp',
         values: [['shown', 'valShown'], ['hidden', 'valHidden']] },
+      // Barra del percorso: spazio bianco uguale sopra e sotto, e grandezza di freccia e HOME
+      { key: 'navSpace', labelKey: 'optNavSpace', helpKey: 'optNavSpaceHelp',
+        values: [['normal', 'valNormal'], ['tight', 'valTight'], ['wide', 'valWide']] },
+      { key: 'navSize', labelKey: 'optNavSize', helpKey: 'optNavSizeHelp',
+        values: [['normal', 'valNormal'], ['l', 'valLarge']] },
     ] },
     // Gesti: si salvano con l'aspetto (stessa chiave «appearance», nessun cambio di formato),
     // ma si mostrano in Impostazioni → Tocco → Gesti (category: 'communication').
@@ -1525,7 +1547,9 @@
 
   function applyAppearance() {
     APPEARANCE_OPTIONS.forEach((opt) => {
-      const value = appearance[opt.key] || opt.values[0][0];
+      // Solo valori ammessi (un backup può contenere altro): altrimenti la scelta normale
+      const ok = opt.values.some(([v]) => v === appearance[opt.key]);
+      const value = ok ? appearance[opt.key] : opt.values[0][0];
       document.documentElement.dataset[opt.key] = value;
     });
     applyImageZoom();
@@ -1563,7 +1587,7 @@
   }
 
   // Scelte che gli stili pronti non cambiano (dipendono dalla persona, non dallo stile)
-  const KEPT_BY_PRESETS = ['sentenceSize'];
+  const KEPT_BY_PRESETS = ['sentenceSize', 'navSpace', 'navSize'];
 
   // Uno stile è "attivo" se tutte le scelte coincidono con le sue
   function presetMatches(preset) {
@@ -1907,6 +1931,39 @@
   // Avvisi da mostrare in cima alle impostazioni: funzioni (id della categoria) → elemento oppure null
   const banners = [];
 
+  // Archivio del dispositivo che non risponde (js/storage.js): lo si dice all'adulto, mai al bambino
+  function showStorageWarning() {
+    const show = app.mode === 'adult' && storage.saveProblem();
+    if (el.storageWarning.hidden === !show) return;
+    el.storageWarning.hidden = !show;
+    app.layoutGrid();
+  }
+
+  // Finestra con lo stesso avviso, per le azioni che con l'archivio guasto non si fanno
+  async function showStorageProblem() {
+    await runDialog({ title: t('storageProblemTitle'), help: t('storageProblemText'), primary: t('close') });
+  }
+
+  banners.push(() => {
+    if (!storage.saveProblem()) return null;
+    const box = document.createElement('div');
+    box.className = 'settings-banner is-alert';
+    box.setAttribute('role', 'alert');
+    const words = document.createElement('p');
+    words.className = 'settings-banner-text';
+    const strong = document.createElement('strong');
+    strong.textContent = t('storageProblemTitle');
+    words.append(strong, document.createTextNode(` ${t('storageProblemText')}`));
+    box.append(words);
+    return box;
+  });
+
+  storage.onSaveProblem(() => {
+    showStorageWarning();
+    refreshPrivate();
+    if (app.mode === 'adult' && !el.settings.hidden) renderSettings();
+  });
+
   function renderSettings() {
     showSettingsProfile();
     const layout = document.createElement('div');
@@ -2177,6 +2234,7 @@
     openSettings,
     reopenAfterReload,
     addBanner: (make) => { banners.push(make); },
+    showStorageProblem,
     // Nuova categoria nel menu delle impostazioni, dopo quella indicata
     // Sezione in più in una categoria esistente (es. «Frase» in Voce e frase, da communication.js)
     addSection(categoryId, render) {
