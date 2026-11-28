@@ -418,41 +418,100 @@
     wrap.append(tools, el('p', 'settings-help', t('obfLicenseNote')));
   }
 
-  function renderLayoutSection() {
+  // Pagina per cui l'adulto ha scelto «Personalizzata» ma non ha ancora cambiato nulla (resta aperta la scelta)
+  let customLayoutFor = null;
+
+  function stepper(value, min, max, fewerKey, moreKey, onSet) {
+    const box = el('div', 'stepper');
+    const minus = el('button', 'stepper-btn', '−');
+    minus.type = 'button';
+    minus.setAttribute('aria-label', t(fewerKey));
+    minus.disabled = value <= min;
+    minus.addEventListener('click', () => onSet(value - 1));
+    const plus = el('button', 'stepper-btn', '+');
+    plus.type = 'button';
+    plus.setAttribute('aria-label', t(moreKey));
+    plus.disabled = value >= max;
+    plus.addEventListener('click', () => onSet(value + 1));
+    box.append(minus, el('span', 'stepper-value', String(value)), plus);
+    return box;
+  }
+
+  /*
+   * Scelte di una griglia: automatica o fissa; se fissa, colonne e righe (libere o in numero fisso).
+   * layout = { fixed, cols, rows } (rows 0 = righe libere); onChange riceve la nuova disposizione.
+   */
+  function gridControls(wrap, layout, onChange, withHelp = true) {
+    const help = (key) => (withHelp ? key : null);
+    const cols = layout.cols || data.DEFAULT_COLS;
+    wrap.append(ui.settingRow('optLayout', help('optLayoutHelp'), ui.segmented(
+      [['auto', 'valLayoutAuto'], ['fixed', 'valLayoutFixed']], layout.fixed ? 'fixed' : 'auto',
+      (value) => onChange({ fixed: value === 'fixed', cols, rows: 0 }),
+    )));
+    if (!layout.fixed) return;
+    wrap.append(ui.settingRow('optColumns', help(layout.rows ? 'optColumnsRowsHelp' : 'optColumnsHelp'),
+      stepper(cols, 1, 12, 'layoutFewer', 'layoutMore', (value) => onChange({ ...layout, cols: value }))));
+    // Righe fisse: griglia completa, le tessere restano nelle loro caselle e si possono lasciare spazi vuoti
+    const rowsBox = el('div', 'grid-rows-control');
+    rowsBox.append(ui.segmented([['free', 'valRowsFree'], ['fixed', 'valRowsFixed']], layout.rows ? 'fixed' : 'free',
+      (value) => onChange({ ...layout, rows: value === 'fixed' ? Math.max(1, Math.min(12, layout.suggestedRows || 4)) : 0 })));
+    if (layout.rows) rowsBox.append(stepper(layout.rows, 1, 12, 'layoutFewerRows', 'layoutMoreRows', (value) => onChange({ ...layout, rows: value })));
+    wrap.append(ui.settingRow('optRows', help('optRowsHelp'), rowsBox));
+  }
+
+  function pageName(p) {
+    return p.id === data.homePageId ? t('homeLabel') : p.title;
+  }
+
+  async function renderLayoutSection() {
     const page = data.page(app.pageId) || data.page(data.homePageId);
     if (!page) return;
     const wrap = ui.section('secLayoutTitle', 'secLayoutHelp');
-    wrap.append(el('p', 'tpl-page-name', format('layoutPage', { page: page.title })));
-    const fixed = data.isFixed(page);
-    wrap.append(ui.settingRow('optLayout', 'optLayoutHelp', ui.segmented(
-      [['auto', 'valLayoutAuto'], ['fixed', 'valLayoutFixed']], fixed ? 'fixed' : 'auto',
+    // La sezione è già al suo posto nella pagina; il contenuto arriva dopo aver letto la griglia generale
+    const general = await data.gridDefault();
+    const custom = await data.customLayoutPages();
+    const refresh = () => { app.renderGrid(); ui.render(); };
+
+    // Griglia generale: vale per tutte le pagine tranne quelle personalizzate (elencate sotto)
+    wrap.append(el('h4', null, t('gridGeneralTitle')));
+    const homeRows = data.page(data.homePageId) ? data.page(data.homePageId).grid.rows : 4;
+    gridControls(wrap, { ...general, suggestedRows: homeRows }, async (next) => {
+      const changed = await data.setGridDefault(next);
+      if (changed) app.notice(format('gridAppliedPages', { count: changed }));
+      refresh();
+    });
+    const list = el('p', 'settings-help grid-custom-list');
+    if (custom.length) {
+      list.append(el('strong', null, t('gridCustomPages')), document.createTextNode(` ${custom.map(pageName).join(', ')}`));
+    } else {
+      list.textContent = t('gridNoCustomPages');
+    }
+    wrap.append(list);
+
+    // Questa pagina: come la generale oppure con una griglia sua
+    wrap.append(el('h4', null, format('layoutPage', { page: pageName(page) })));
+    const own = data.layoutOf(page);
+    const isCustom = !data.sameLayout(own, general) || customLayoutFor === page.id;
+    wrap.append(ui.settingRow('optPageGrid', isCustom ? 'optPageGridCustomHelp' : 'optPageGridHelp', ui.segmented(
+      [['general', 'valGridGeneral'], ['custom', 'valGridCustom']], isCustom ? 'custom' : 'general',
       async (value) => {
-        await data.setPageLayout(page.id, { fixed: value === 'fixed', cols: page.grid.cols });
-        app.renderGrid();
-        ui.render();
+        if (value === 'general') {
+          customLayoutFor = null;
+          await data.useGridDefault(page.id);
+        } else {
+          customLayoutFor = page.id;
+        }
+        refresh();
       },
     )));
-    if (fixed) {
-      const stepper = el('div', 'stepper');
-      const set = async (cols) => {
-        await data.setPageLayout(page.id, { fixed: true, cols });
-        app.renderGrid();
-        ui.render();
-      };
-      const minus = el('button', 'stepper-btn', '−');
-      minus.type = 'button';
-      minus.setAttribute('aria-label', t('layoutFewer'));
-      minus.disabled = page.grid.cols <= 1;
-      minus.addEventListener('click', () => set(page.grid.cols - 1));
-      const value = el('span', 'stepper-value', String(page.grid.cols));
-      const plus = el('button', 'stepper-btn', '+');
-      plus.type = 'button';
-      plus.setAttribute('aria-label', t('layoutMore'));
-      plus.disabled = page.grid.cols >= 12;
-      plus.addEventListener('click', () => set(page.grid.cols + 1));
-      stepper.append(minus, value, plus);
-      wrap.append(ui.settingRow('optColumns', 'optColumnsHelp', stepper));
+    if (isCustom) {
+      gridControls(wrap, { ...own, suggestedRows: page.grid.rows }, async (next) => {
+        customLayoutFor = page.id;
+        await data.setPageLayout(page.id, next);
+        refresh();
+      }, false); // le spiegazioni sono già nella griglia generale, poco sopra
     }
+
     const locked = document.documentElement.dataset.lockPositions === 'on';
     wrap.append(ui.settingRow('optLockPositions', 'optLockPositionsHelp', ui.segmented(
       [['off', 'valNo'], ['on', 'valYes']], locked ? 'on' : 'off',

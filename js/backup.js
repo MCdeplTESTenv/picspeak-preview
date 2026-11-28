@@ -55,7 +55,7 @@
   // Chiavi dell'archivio «settings» che entrano nel backup, divise tra aspetto e altre impostazioni
   const GROUP_KEYS = {
     appearance: ['colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase', 'typeColors'],
-    settings: ['language', 'voice', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
+    settings: ['language', 'voice', 'communication', 'prediction', 'printOptions', 'lockPositions', 'gridDefault', 'symbolSources',
       'keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState'],
   };
   const PACK_NAMES = { mulberry: 'Mulberry', openmoji: 'OpenMoji' };

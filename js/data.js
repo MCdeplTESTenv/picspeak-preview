@@ -10,6 +10,7 @@
   const { storage, sampleData, i18n } = window.PicSpeak;
 
   const DEFAULT_COLS = 4;
+  const MAX_FIXED_ROWS = 12; // righe fisse scelte dall'adulto (le tessere in più allungano comunque la griglia)
   // Tipi di parola (chiave di Fitzgerald modificata): ognuno ha il suo colore automatico.
   // 'question' (domande) e 'connector' (parole di collegamento: e, con, di…) aggiunti il 17/11/2026.
   const WORD_TYPES = ['pronoun', 'verb', 'noun', 'adjective', 'social', 'negation', 'question', 'connector'];
@@ -174,10 +175,21 @@
     return Boolean(pageRecord && pageRecord.grid && pageRecord.grid.fixed === true);
   }
 
+  // Griglia con anche le righe fisse (grid.fixedRows = numero di righe scelto dall'adulto): le caselle vuote
+  // restano dove sono (spazi voluti dall'adulto). grid.rows sono le righe vere, di più se le tessere non entrano.
+  function hasFixedRows(pageRecord) {
+    const rows = pageRecord && pageRecord.grid && pageRecord.grid.fixedRows;
+    return isFixed(pageRecord) && Number.isInteger(rows) && rows > 0 && rows <= MAX_FIXED_ROWS;
+  }
+
+  function slotKey(cell) {
+    return `${cell.row}:${cell.col}`;
+  }
+
   // Prima casella libera (in ordine di lettura) di una griglia fissa
   function firstFreeSlot(pageRecord) {
     const cols = pageRecord.grid.cols || DEFAULT_COLS;
-    const used = new Set(pageRecord.cells.map((c) => `${c.row}:${c.col}`));
+    const used = new Set(pageRecord.cells.map(slotKey));
     for (let index = 0; ; index += 1) {
       const row = Math.floor(index / cols);
       const col = index % cols;
@@ -185,9 +197,11 @@
     }
   }
 
+  // Righe della griglia: quelle occupate; con le righe fisse almeno quelle scelte dall'adulto
   function updateRows(pageRecord) {
     const maxRow = pageRecord.cells.reduce((max, c) => Math.max(max, c.row), -1);
-    pageRecord.grid.rows = Math.max(1, maxRow + 1);
+    const chosen = hasFixedRows(pageRecord) ? pageRecord.grid.fixedRows : 1;
+    pageRecord.grid.rows = Math.max(chosen, maxRow + 1);
   }
 
   /*
@@ -196,7 +210,7 @@
    */
   function placeInOrder(pageRecord, ordered) {
     const cols = pageRecord.grid.cols || DEFAULT_COLS;
-    const locked = new Set(ordered.filter((c) => c.locked).map((c) => `${c.row}:${c.col}`));
+    const locked = new Set(ordered.filter((c) => c.locked).map(slotKey));
     let index = 0;
     ordered.filter((c) => !c.locked).forEach((cell) => {
       while (locked.has(`${Math.floor(index / cols)}:${index % cols}`)) index += 1;
@@ -207,15 +221,72 @@
     updateRows(pageRecord);
   }
 
-  // Ricompatta le posizioni in ordine di lettura (dopo spostamenti o cancellazioni)
+  // Ricompatta le posizioni in ordine di lettura (dopo spostamenti o cancellazioni); le bloccate restano ferme
   function renumber(pageRecord) {
+    placeInOrder(pageRecord, [...pageRecord.cells].sort((a, b) => (a.row - b.row) || (a.col - b.col)));
+  }
+
+  /*
+   * Nuove posizioni dopo lo spostamento di una tessera nella casella (row, col), senza salvarle:
+   * Map id → { row, col } per tutte le celle. Regole (uguali per l'anteprima durante il trascinamento e per
+   * il salvataggio):
+   * - le tessere bloccate non si muovono mai, e su di loro non si lascia nulla (null);
+   * - griglia con righe fisse e casella vuota: la tessera va lì, la sua casella resta vuota;
+   * - altrimenti la tessera prende il posto di quella nella casella e le tessere tra le due posizioni scalano
+   *   di un posto verso la casella lasciata libera, usando solo le caselle già occupate da tessere non bloccate
+   *   (le bloccate e gli spazi vuoti restano dove sono).
+   */
+  function planMove(pageRecord, cellId, row, col) {
+    const moving = pageRecord.cells.find((c) => c.id === cellId);
+    if (!moving || moving.locked) return null;
     const cols = pageRecord.grid.cols || DEFAULT_COLS;
-    const ordered = [...pageRecord.cells].sort((a, b) => (a.row - b.row) || (a.col - b.col));
-    ordered.forEach((cell, index) => {
-      cell.row = Math.floor(index / cols);
-      cell.col = index % cols;
-    });
-    pageRecord.grid.rows = Math.max(1, Math.ceil(ordered.length / cols));
+    const at = pageRecord.cells.find((c) => c.row === row && c.col === col);
+    if (at && at.locked) return null;
+    const plan = new Map(pageRecord.cells.map((c) => [c.id, { row: c.row, col: c.col }]));
+    if (!at && hasFixedRows(pageRecord)) {
+      plan.set(cellId, { row, col });
+      return plan;
+    }
+    const index = (r, c) => r * cols + c;
+    const free = pageRecord.cells.filter((c) => !c.locked).sort((a, b) => index(a.row, a.col) - index(b.row, b.col));
+    const slots = free.map((c) => ({ row: c.row, col: c.col }));
+    const order = free.filter((c) => c !== moving);
+    // Posto nell'elenco: quello della tessera nella casella, oppure dopo le tessere che la precedono
+    const target = index(row, col);
+    const insertAt = at ? free.indexOf(at) : order.filter((c) => index(c.row, c.col) < target).length;
+    order.splice(insertAt, 0, moving);
+    order.forEach((c, i) => plan.set(c.id, slots[i]));
+    return plan;
+  }
+
+  /*
+   * Spazio vuoto bloccato (griglia fissa): una cella «empty» bloccata nella casella. Il bambino vede solo un buco,
+   * nessun trascinamento la occupa. on = false la toglie (la casella torna libera).
+   */
+  async function setEmptySlot(pageId, row, col, on) {
+    const p = page(pageId);
+    if (!p || !isFixed(p)) return false;
+    const at = p.cells.find((c) => c.row === row && c.col === col);
+    if (on) {
+      if (at) return false;
+      await addCell(pageId, { row, col, kind: 'empty', label: '', wordType: null, locked: true });
+      return true;
+    }
+    if (!at || at.kind !== 'empty') return false;
+    p.cells = p.cells.filter((c) => c !== at);
+    updateRows(p);
+    await savePage(p);
+    return true;
+  }
+
+  async function moveToSlot(pageId, cellId, row, col) {
+    const p = page(pageId);
+    const plan = p && planMove(p, cellId, row, col);
+    if (!plan) return false;
+    p.cells.forEach((c) => Object.assign(c, plan.get(c.id)));
+    updateRows(p);
+    await savePage(p);
+    return true;
   }
 
   async function updateCell(pageId, cellId, changes) {
@@ -232,8 +303,14 @@
     if (!p) return null;
     const cols = p.grid.cols || DEFAULT_COLS;
     const index = p.cells.length;
-    // Griglia fissa: la nuova tessera va nella prima casella libera, senza spostare le altre
-    const slot = isFixed(p) ? firstFreeSlot(p) : { row: Math.floor(index / cols), col: index % cols };
+    // Griglia fissa: la nuova tessera va nella casella chiesta (se libera) oppure nella prima casella libera,
+    // senza spostare le altre
+    const { row: wantRow, col: wantCol, ...rest } = fields || {};
+    const wanted = isFixed(p) && Number.isInteger(wantRow) && Number.isInteger(wantCol) && wantRow >= 0
+      && wantRow < Math.max(p.grid.rows || 1, MAX_FIXED_ROWS) && wantCol >= 0 && wantCol < cols
+      && !p.cells.some((c) => c.row === wantRow && c.col === wantCol);
+    let slot = isFixed(p) ? firstFreeSlot(p) : { row: Math.floor(index / cols), col: index % cols };
+    if (wanted) slot = { row: wantRow, col: wantCol };
     const cell = {
       id: newId('c'),
       row: slot.row,
@@ -248,7 +325,7 @@
       hidden: false,
       locked: false,
       audioId: null,
-      ...fields,
+      ...rest,
     };
     p.cells.push(cell);
     if (isFixed(p)) updateRows(p);
@@ -257,7 +334,7 @@
     return cell;
   }
 
-  async function addFolder(pageId, title) {
+  async function addFolder(pageId, title, place) {
     const folderPage = {
       id: newId('pg'),
       profileId: model.profile.id,
@@ -268,8 +345,11 @@
       updatedAt: now(),
     };
     await savePage(folderPage);
+    // La cartella nuova segue la griglia generale
+    const general = await gridDefault();
+    if (general.fixed) await setPageLayout(folderPage.id, general);
     const cell = await addCell(pageId, {
-      kind: 'folder', label: title, wordType: null, targetPageId: folderPage.id,
+      kind: 'folder', label: title, wordType: null, targetPageId: folderPage.id, ...(place || {}),
     });
     return { cell, page: folderPage };
   }
@@ -352,19 +432,22 @@
     await savePage(p);
   }
 
-  // Nuovo ordine completo delle celle (dal trascinamento): le posizioni seguono l'elenco di id.
-  // Eventuali celle non presenti nell'elenco restano in fondo, nel loro ordine.
+  // Nuovo ordine completo delle celle (dal trascinamento con la disposizione automatica): le tessere non bloccate
+  // prendono, nell'ordine dato, le caselle che occupavano le tessere non bloccate. Le bloccate e gli spazi vuoti
+  // restano dove sono. Eventuali celle non presenti nell'elenco restano in fondo, nel loro ordine.
   async function reorderCells(pageId, cellIds) {
     const p = page(pageId);
     if (!p || !Array.isArray(cellIds)) return;
-    const byId = new Map(p.cells.map((c) => [c.id, c]));
+    const byId = new Map(p.cells.filter((c) => !c.locked).map((c) => [c.id, c]));
+    const slots = [...byId.values()].sort((a, b) => (a.row - b.row) || (a.col - b.col)).map((c) => ({ row: c.row, col: c.col }));
     const ordered = [];
     cellIds.forEach((id) => {
       const cell = byId.get(id);
       if (cell) { ordered.push(cell); byId.delete(id); }
     });
     const rest = [...byId.values()].sort((a, b) => (a.row - b.row) || (a.col - b.col));
-    placeInOrder(p, [...ordered, ...rest]);
+    [...ordered, ...rest].forEach((cell, i) => Object.assign(cell, slots[i]));
+    updateRows(p);
     await savePage(p);
   }
 
@@ -460,21 +543,105 @@
     return true;
   }
 
-  // Disposizione della pagina: automatica (si adatta allo schermo) o fissa con un numero di colonne
-  async function setPageLayout(pageId, { fixed, cols }) {
+  // ---------- Disposizione delle pagine ----------
+
+  const MAX_COLS = 12;
+  const MAX_ROWS = MAX_FIXED_ROWS;
+  const GRID_KEY = 'gridDefault'; // griglia generale del profilo (storage, scelta del profilo)
+
+  // Disposizione di una pagina in forma confrontabile: { fixed, cols, rows } (rows 0 = righe libere)
+  function layoutOf(pageRecord) {
+    if (!isFixed(pageRecord)) return { fixed: false, cols: 0, rows: 0 };
+    return { fixed: true, cols: pageRecord.grid.cols || DEFAULT_COLS, rows: hasFixedRows(pageRecord) ? pageRecord.grid.fixedRows : 0 };
+  }
+
+  // Disposizione valida da un valore qualsiasi (anche da un backup): null se non è una disposizione
+  function cleanLayout(value) {
+    if (!value || typeof value !== 'object') return null;
+    if (value.fixed !== true) return { fixed: false, cols: 0, rows: 0 };
+    const int = (v, max) => (Number.isInteger(v) ? Math.min(max, Math.max(0, v)) : 0);
+    return { fixed: true, cols: int(value.cols, MAX_COLS) || DEFAULT_COLS, rows: int(value.rows, MAX_ROWS) };
+  }
+
+  function sameLayout(a, b) {
+    return a.fixed === b.fixed && a.cols === b.cols && a.rows === b.rows;
+  }
+
+  /*
+   * Disposizione della pagina: automatica (si adatta allo schermo) o fissa con un numero di colonne e, se scelto,
+   * anche di righe (rows > 0: griglia fissa completa, con spazi vuoti possibili).
+   */
+  async function setPageLayout(pageId, { fixed, cols, rows = 0 }) {
     const p = page(pageId);
     if (!p) return;
     const ordered = [...p.cells].sort((a, b) => (a.row - b.row) || (a.col - b.col));
-    const newCols = Math.min(12, Math.max(1, Math.round(cols || p.grid.cols || DEFAULT_COLS)));
+    const newCols = Math.min(MAX_COLS, Math.max(1, Math.round(cols || p.grid.cols || DEFAULT_COLS)));
+    const newRows = fixed ? Math.min(MAX_ROWS, Math.max(0, Math.round(rows || 0))) : 0;
     const changedCols = newCols !== p.grid.cols;
     p.grid = { ...p.grid, cols: newCols, fixed: Boolean(fixed) };
-    // Cambiando il numero di colonne le tessere si ridispongono in ordine di lettura
-    // (le bloccate restano nella loro casella se ancora dentro la griglia)
-    if (changedCols) {
-      ordered.forEach((c) => { if (c.locked && c.col >= newCols) c.locked = false; });
-      placeInOrder(p, ordered);
+    if (newRows) {
+      p.grid.fixedRows = newRows;
+      p.grid.rows = newRows;
+      // Righe fisse: ogni tessera resta nella sua casella se è ancora dentro la griglia;
+      // le altre (anche se bloccate, che si sbloccano) vanno nelle prime caselle libere
+      const outside = ordered.filter((c) => c.col >= newCols || c.row >= newRows);
+      p.cells = p.cells.filter((c) => !outside.includes(c));
+      outside.forEach((c) => {
+        Object.assign(c, firstFreeSlot(p), { locked: false });
+        p.cells.push(c);
+      });
+      updateRows(p);
+    } else {
+      delete p.grid.fixedRows;
+      // Cambiando il numero di colonne le tessere si ridispongono in ordine di lettura
+      // (le bloccate restano nella loro casella se ancora dentro la griglia)
+      if (changedCols) {
+        ordered.forEach((c) => { if (c.locked && c.col >= newCols) c.locked = false; });
+        placeInOrder(p, ordered);
+      } else {
+        updateRows(p);
+      }
     }
     await savePage(p);
+  }
+
+  /*
+   * Griglia generale del profilo: vale per le pagine che non ne hanno una propria («personalizzata»).
+   * Una pagina è personalizzata quando la sua disposizione è diversa da quella generale: non serve altro dato.
+   * Se l'adulto non l'ha mai scelta, vale la disposizione della Home.
+   */
+  async function gridDefault() {
+    const saved = cleanLayout(await storage.get(GRID_KEY));
+    if (saved) return saved;
+    const home = page(model.profile && model.profile.homePageId);
+    return home ? layoutOf(home) : { fixed: false, cols: 0, rows: 0 };
+  }
+
+  // Pagine del profilo con una disposizione diversa da quella generale
+  async function customLayoutPages() {
+    const general = await gridDefault();
+    return [...model.pages.values()].filter((p) => !sameLayout(layoutOf(p), general));
+  }
+
+  // Nuova griglia generale: si applica alle pagine che seguivano quella di prima. Restituisce quante pagine cambiano.
+  async function setGridDefault(value) {
+    const next = cleanLayout(value);
+    if (!next) return 0;
+    const before = await gridDefault();
+    await storage.set(GRID_KEY, next);
+    let changed = 0;
+    for (const p of model.pages.values()) {
+      const current = layoutOf(p);
+      if (!sameLayout(current, before) || sameLayout(current, next)) continue;
+      await setPageLayout(p.id, next); // eslint-disable-line no-await-in-loop
+      changed += 1;
+    }
+    return changed;
+  }
+
+  // La pagina torna a seguire la griglia generale
+  async function useGridDefault(pageId) {
+    await setPageLayout(pageId, await gridDefault());
   }
 
   // ---------- Nome delle cartelle letto all'apertura ----------
@@ -596,6 +763,7 @@
   window.PicSpeak.data = {
     WORD_TYPES,
     DEFAULT_COLS,
+    MAX_FIXED_ROWS,
     newId,
     load,
     isFixed,
@@ -613,7 +781,17 @@
     folderContents,
     moveCell,
     reorderCells,
+    planMove,
+    moveToSlot,
+    setEmptySlot,
+    hasFixedRows,
+    layoutOf,
+    sameLayout,
     setPageLayout,
+    gridDefault,
+    setGridDefault,
+    customLayoutPages,
+    useGridDefault,
     pagesUnder,
     pathTo,
     pageTree,

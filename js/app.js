@@ -180,7 +180,30 @@
       cells.push(add);
     }
 
-    el.grid.replaceChildren(...cells);
+    // Griglia con righe fisse, in modifica: le caselle vuote si vedono con un contorno tratteggiato, così si capisce
+    // dove si può lasciare una tessera (la prima casella libera è già della tessera "+"). Stanno sotto le tessere.
+    // Uno spazio vuoto bloccato invece è una cella «empty» bloccata: si disegna come le tessere (is-empty-cell).
+    const slots = [];
+    if (editing && data.hasFixedRows(page)) {
+      const used = new Set(page.cells.map((c) => `${c.row}:${c.col}`));
+      let first = true;
+      for (let row = 0; row < page.grid.rows; row += 1) {
+        for (let col = 0; col < page.grid.cols; col += 1) {
+          if (used.has(`${row}:${col}`)) continue;
+          if (first) { first = false; continue; }
+          // Toccandola: aggiungere una tessera proprio lì o bloccare lo spazio vuoto (emptySlotChoice)
+          const slot = document.createElement('button');
+          slot.type = 'button';
+          slot.className = 'grid-slot';
+          slot.setAttribute('aria-label', t('slotEmptyLabel'));
+          slot.dataset.row = String(row);
+          slot.dataset.col = String(col);
+          slots.push(slot);
+        }
+      }
+    }
+
+    el.grid.replaceChildren(...slots, ...cells);
     el.grid.dataset.count = String(cells.length);
     layoutGrid();
     applySuggestions();
@@ -440,13 +463,31 @@
     return { cols, rows, cellW, cellH };
   }
 
+  /*
+   * Casella della griglia fissa sotto un punto dello schermo (per il trascinamento, reorder.js):
+   * { row, col } dentro le righe della pagina, oppure null se la griglia non è fissa su questo schermo.
+   */
+  function slotAt(x, y) {
+    const fixed = state.fixedLayout;
+    if (!fixed) return null;
+    const rect = el.grid.getBoundingClientRect();
+    const style = getComputedStyle(el.grid);
+    const left = rect.left + el.grid.clientLeft + parseFloat(style.paddingLeft);
+    const top = rect.top + el.grid.clientTop + parseFloat(style.paddingTop) - el.grid.scrollTop;
+    const clamp = (v, max) => Math.min(max, Math.max(0, v));
+    const col = clamp(Math.floor((x - left + fixed.gap / 2) / (fixed.cellW + fixed.gap)), fixed.cols - 1);
+    const row = clamp(Math.floor((y - top + fixed.gap / 2) / (fixed.cellH + fixed.gap)), fixed.rows - 1);
+    return { row, col };
+  }
+
   function layoutGrid() {
     const metrics = gridMetrics();
     if (!el.grid.childElementCount) return;
     const fixed = fixedLayout(metrics);
     state.fixed = Boolean(fixed);
+    state.fixedLayout = fixed ? { ...fixed, gap: metrics.gap } : null;
     el.grid.classList.toggle('is-fixed-grid', state.fixed);
-    el.grid.querySelectorAll('.symbol-cell:not(.reorder-ghost)').forEach((node) => {
+    el.grid.querySelectorAll('.symbol-cell:not(.reorder-ghost), .grid-slot').forEach((node) => {
       if (fixed && node.dataset.row !== undefined) {
         node.style.gridRow = String(Number(node.dataset.row) + 1);
         node.style.gridColumn = String(Number(node.dataset.col) + 1);
@@ -588,7 +629,60 @@
     return state.mode === 'child' && (options.activation === 'press' || options.holdMs > 0);
   }
 
+  // Scelta tra più azioni in una finestra delle impostazioni: [{ value, label, help }] → valore o null
+  function chooseAction(title, help, options) {
+    const ui = window.PicSpeak.settingsUi;
+    if (!ui) return Promise.resolve(null);
+    return ui.runPanelDialog({
+      title,
+      help,
+      className: 'choice-dialog',
+      build(close) {
+        const box = document.createElement('div');
+        box.className = 'choice-options';
+        options.forEach((opt, index) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `choice-option${index === 0 ? ' is-primary' : ''}`;
+          const strong = document.createElement('strong');
+          strong.textContent = opt.label;
+          const small = document.createElement('small');
+          small.textContent = opt.help;
+          btn.append(strong, small);
+          btn.addEventListener('click', () => close(opt.value));
+          box.append(btn);
+        });
+        return box;
+      },
+    });
+  }
+
+  /*
+   * Griglia fissa, in modifica: tocco su una casella vuota (tratteggiata) o su uno spazio vuoto bloccato.
+   * Casella vuota: «Aggiungi una tessera qui» o «Blocca questo spazio vuoto».
+   * Spazio bloccato: «Sblocca lo spazio» o «Aggiungi una tessera qui» (lo spazio si sblocca e la tessera va lì).
+   */
+  async function emptySlotChoice(row, col, lockedEmpty) {
+    const pageId = state.pageId;
+    const add = { value: 'add', label: t('slotAddHere'), help: t('slotAddHereHelp') };
+    const options = lockedEmpty
+      ? [{ value: 'unlock', label: t('slotUnlock'), help: t('slotUnlockHelp') }, add]
+      : [add, { value: 'lock', label: t('slotLock'), help: t('slotLockHelp') }];
+    const choice = await chooseAction(t(lockedEmpty ? 'slotLockedTitle' : 'slotEmptyTitle'),
+      t(lockedEmpty ? 'slotLockedHelp' : 'slotEmptyHelp'), options);
+    if (!choice || state.mode !== 'adult' || state.pageId !== pageId) return;
+    if (choice === 'lock') await data.setEmptySlot(pageId, row, col, true);
+    else if (lockedEmpty) await data.setEmptySlot(pageId, row, col, false);
+    renderGrid();
+    if (choice === 'add' && window.PicSpeak.editor) window.PicSpeak.editor.add(pageId, { row, col });
+  }
+
   function onCellTap(event) {
+    const slot = event.target.closest('.grid-slot');
+    if (slot && state.mode === 'adult' && !state.preview) {
+      emptySlotChoice(Number(slot.dataset.row), Number(slot.dataset.col), false);
+      return;
+    }
     const cell = event.target.closest('.symbol-cell');
     if (!cell) return;
     // Impostazioni sbloccate: il tocco apre la modifica della tessera (o ne aggiunge una);
@@ -607,6 +701,10 @@
       }
       const page = data.page(state.pageId);
       const item = page && page.cells.find((c) => c.id === cell.dataset.id);
+      if (item && item.kind === 'empty' && !state.preview) {
+        emptySlotChoice(item.row, item.col, true);
+        return;
+      }
       if (item && item.kind === 'folder' && !event.target.closest('.folder-edit') && !state.preview) {
         openFolder(item.targetPageId);
         return;
@@ -928,6 +1026,7 @@
     refreshTexts,
     layoutGrid,
     renderGrid,
+    slotAt,
     goToPage,
     openFolder,
     goUp,

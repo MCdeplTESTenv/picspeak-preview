@@ -4,6 +4,10 @@
  * per mezzo secondo, la tessera "si stacca" e segue il dito (o il mouse); le altre si
  * spostano per farle posto. Al rilascio il nuovo ordine viene salvato sul dispositivo.
  * Un tocco breve continua ad aprire la modifica della tessera (editor.js).
+ * Le tessere con la posizione bloccata non si muovono mai, nemmeno durante lo spostamento delle altre:
+ * - griglia fissa: la tessera segue le caselle sotto il dito e le altre scalano usando solo le caselle libere
+ *   dalle bloccate (data.planMove); con le righe fisse si può lasciare anche in una casella vuota;
+ * - disposizione automatica: le tessere scorrono in ordine di lettura, le bloccate restano al loro posto.
  * Lasciando la tessera al centro di una cartella la si mette dentro; lasciandola sulla freccia «su»
  * o su una voce del percorso in alto (HOME › cartella) la si porta fuori, in quella pagina.
  * Tenendo premuta una tessera con la posizione bloccata (es. nelle schede pronte) si apre una finestra che
@@ -50,6 +54,8 @@
     if (!cell || !grid.contains(cell)) return;
     // La ✕ per eliminare non avvia lo spostamento: il tocco va solo alla conferma
     if (event.target.closest('.cell-delete')) return;
+    // Spazio vuoto bloccato: niente spostamento né spiegazione, il tocco apre le sue scelte (app.js)
+    if (cell.classList.contains('is-empty-cell')) return;
     // Posizioni bloccate (per tutte le tessere o per questa tessera): niente spostamento, ma tenendo
     // premuto si spiega perché e si può togliere il blocco
     const locked = allLocked() || cell.classList.contains('is-locked-cell');
@@ -148,16 +154,19 @@
     ghost.style.left = `${rect.left}px`;
     ghost.style.top = `${rect.top}px`;
     grid.append(ghost);
-    // Griglia fissa: durante lo spostamento le tessere scorrono in ordine di lettura, così il segnaposto
-    // si vede muovere; al rilascio le posizioni si salvano e la griglia fissa torna com'era
-    grid.querySelectorAll('.symbol-cell').forEach((node) => {
-      node.style.gridRow = '';
-      node.style.gridColumn = '';
-    });
+    const page = data.page(app.pageId);
+    const record = page && page.cells.find((c) => c.id === cell.dataset.id);
+    // Griglia fissa sullo schermo: si lavora per caselle; altrimenti per ordine di lettura
+    const slotMode = Boolean(record && app.slotAt(x, y));
     cell.classList.add('is-drag-placeholder');
     document.body.classList.add('is-reordering');
     drag = {
-      pointerId, cell, ghost, x, y, offsetX: x - rect.left, offsetY: y - rect.top, frame: 0,
+      pointerId, cell, ghost, x, y, offsetX: x - rect.left, offsetY: y - rect.top, frame: 0, slotMode,
+      // Casella di partenza e casella attuale (griglia fissa)
+      from: record ? { row: record.row, col: record.col } : null,
+      slot: record ? { row: record.row, col: record.col } : null,
+      // Posti delle tessere bloccate in ordine di lettura (disposizione automatica)
+      pinned: slotMode ? [] : movableCells().map((node, index) => [node, index]).filter(([node]) => node.classList.contains('is-locked-cell')),
     };
     suppressClick = true;
     // Breve vibrazione dove disponibile (Android): conferma che la tessera si è staccata
@@ -212,14 +221,10 @@
       else clearDropTarget();
       return;
     }
-    const target = under && under.closest('.symbol-cell');
-    if (!target || !grid.contains(target) || target === drag.cell || target.classList.contains('reorder-ghost')) {
-      clearDropTarget();
-      clearEdgeTimer();
-      return;
-    }
+    let target = under && under.closest('.symbol-cell');
+    if (!target || !grid.contains(target) || target === drag.cell || target.classList.contains('reorder-ghost')) target = null;
     // Sopra una cartella: al centro la tessera va dentro; sul bordo, dopo una breve attesa, si scambiano i posti
-    if (target.dataset.folder && canDropOn(target.dataset.folder)) {
+    if (target && target.dataset.folder && canDropOn(target.dataset.folder)) {
       const r = target.getBoundingClientRect();
       const fx = (drag.x - r.left) / r.width;
       const fy = (drag.y - r.top) / r.height;
@@ -237,7 +242,8 @@
           timer: setTimeout(() => {
             if (!drag) return;
             drag.edge = null;
-            placeBeside(target);
+            if (drag.slotMode) placeAtSlot(app.slotAt(drag.x, drag.y));
+            else placeBeside(target);
           }, FOLDER_EDGE_MS),
         };
       }
@@ -245,7 +251,41 @@
     }
     clearDropTarget();
     clearEdgeTimer();
-    placeBeside(target);
+    // Griglia fissa: conta la casella sotto il dito (anche vuota), purché il dito sia sulla griglia
+    if (drag.slotMode) {
+      if (under && grid.contains(under)) placeAtSlot(app.slotAt(drag.x, drag.y));
+      return;
+    }
+    if (target) placeBeside(target);
+  }
+
+  // Griglia fissa: la tessera va nella casella indicata, le altre si dispongono come al salvataggio (data.planMove).
+  // Su una tessera bloccata non succede nulla: resta l'ultima anteprima valida.
+  function placeAtSlot(slot) {
+    if (!drag || !slot || (drag.slot.row === slot.row && drag.slot.col === slot.col)) return;
+    const page = data.page(app.pageId);
+    const plan = page && data.planMove(page, drag.cell.dataset.id, slot.row, slot.col);
+    if (!plan) return;
+    movableCells().forEach((node) => {
+      const pos = plan.get(node.dataset.id);
+      if (!pos) return;
+      node.style.gridRow = String(pos.row + 1);
+      node.style.gridColumn = String(pos.col + 1);
+    });
+    drag.slot = slot;
+  }
+
+  // Disposizione automatica: dopo ogni spostamento le tessere bloccate tornano al loro posto in ordine di lettura
+  function keepPinned() {
+    if (!drag.pinned.length) return;
+    const pinnedNodes = new Set(drag.pinned.map(([node]) => node));
+    const others = movableCells().filter((node) => !pinnedNodes.has(node));
+    const at = new Map(drag.pinned.map(([node, index]) => [index, node]));
+    const total = others.length + drag.pinned.length;
+    const order = [];
+    for (let i = 0; i < total; i += 1) order.push(at.get(i) || others.shift());
+    const add = grid.querySelector('.add-cell');
+    order.forEach((node) => { if (node) grid.insertBefore(node, add); });
   }
 
   function placeBeside(target) {
@@ -253,14 +293,18 @@
     if (target.dataset.action === 'add') {
       // Sopra il "+": la tessera va in fondo
       if (target.previousElementSibling !== drag.cell) grid.insertBefore(drag.cell, target);
+      keepPinned();
       return;
     }
+    // Su una tessera bloccata non si lascia nulla: il suo posto non cambia
+    if (target.classList.contains('is-locked-cell')) return;
     const cells = movableCells();
     const from = cells.indexOf(drag.cell);
     const to = cells.indexOf(target);
     if (from < 0 || to < 0) return;
     if (from < to) target.after(drag.cell);
     else target.before(drag.cell);
+    keepPinned();
   }
 
   // Vicino al bordo alto o basso la griglia scorre da sola, per portare la tessera più lontano
@@ -294,7 +338,7 @@
 
   async function finishDrag(save) {
     if (!drag) return;
-    const { cell, ghost, frame } = drag;
+    const { cell, ghost, frame, slotMode, from, slot } = drag;
     const drop = drag.drop;
     clearDropTarget();
     clearEdgeTimer();
@@ -317,6 +361,8 @@
           app.notice(i18n.t('dropMoved').replace('{name}', () => name));
         }
       }
+    } else if (save && pageId && isEditing() && slotMode) {
+      if (from && (from.row !== slot.row || from.col !== slot.col)) await data.moveToSlot(pageId, cell.dataset.id, slot.row, slot.col);
     } else if (save && pageId && isEditing()) {
       await data.reorderCells(pageId, movableCells().map((node) => node.dataset.id));
     }

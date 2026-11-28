@@ -198,7 +198,13 @@
       return {
         key: p.key,
         title: cleanLocalized(p.title, 60),
-        grid: { cols, rows: Math.max(1, maxRow + 1, isInt(grid.rows, 1, MAX_ROWS) ? grid.rows : 1), fixed },
+        grid: {
+          cols,
+          rows: Math.max(1, maxRow + 1, isInt(grid.rows, 1, MAX_ROWS) ? grid.rows : 1),
+          fixed,
+          // Righe fisse scelte dall'adulto (griglia fissa completa, facoltativo): solo con la griglia fissa
+          ...(fixed && isInt(grid.fixedRows, 1, data.MAX_FIXED_ROWS) ? { fixedRows: grid.fixedRows } : {}),
+        },
         cells,
       };
     });
@@ -582,7 +588,7 @@
         key: pageKey(p.id),
         // La cartella salvata prende il nome del modello (la sua scheda può avere ancora un titolo vecchio)
         title: rootPageId && p.id === homeId ? name : p.title,
-        grid: { cols: p.grid.cols, rows: p.grid.rows, fixed: data.isFixed(p) },
+        grid: { cols: p.grid.cols, rows: p.grid.rows, fixed: data.isFixed(p), ...(data.hasFixedRows(p) ? { fixedRows: p.grid.fixedRows } : {}) },
         cells: data.orderedCells(p, { includeHidden: true }).map((c) => ({
           row: c.row,
           col: c.col,

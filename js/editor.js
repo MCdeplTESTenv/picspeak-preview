@@ -128,7 +128,7 @@
     dialog.replaceChildren();
   }
 
-  function openEditor({ pageId, cell, isNew }) {
+  function openEditor({ pageId, cell, isNew, slot }) {
     const draft = {
       kind: cell ? cell.kind : 'symbol',
       label: cell ? cell.label : '',
@@ -346,6 +346,16 @@
     rowHidden.append(el('span', null, t('editorHidden')), hiddenChoice);
     const rowLocked = el('div', 'editor-option');
     rowLocked.append(el('span', null, t('editorLocked')), lockedChoice);
+    // «Blocca la posizione di tutte le tessere» attivo: decide l'impostazione generale. La voce si vede bloccata,
+    // grigia e non si tocca; la nota dice da dove viene e cosa succede togliendola (la scelta della tessera resta)
+    if (document.documentElement.dataset.lockPositions === 'on') {
+      rowLocked.classList.add('is-overridden');
+      lockedChoice.querySelectorAll('button').forEach((b) => {
+        b.disabled = true;
+        b.setAttribute('aria-pressed', String(b.dataset.value === 'yes'));
+      });
+      rowLocked.append(el('small', 'editor-hint', t(draft.locked ? 'editorLockedByAllOwn' : 'editorLockedByAll')));
+    }
     optionsField.append(rowHidden, rowLocked);
     // Solo per le cartelle: leggere o no il nome quando si apre
     const silentChoice = segmentedChoice([['yes', t('valYes')], ['no', t('valNo')]], draft.silent ? 'no' : 'yes',
@@ -445,14 +455,14 @@
       }
       const speak = speakInput.value.trim().slice(0, 80) || null;
       if (isNew && draft.kind === 'folder') {
-        const { cell: folderCell } = await data.addFolder(pageId, label);
+        const { cell: folderCell } = await data.addFolder(pageId, label, slot);
         await data.updateCell(pageId, folderCell.id, {
           color: draft.color, imageId, hidden: draft.hidden, locked: draft.locked, silent: draft.silent,
         });
       } else if (isNew) {
         await data.addCell(pageId, {
           label, speak, wordType: draft.wordType, color: draft.color, imageId,
-          hidden: draft.hidden, locked: draft.locked,
+          hidden: draft.hidden, locked: draft.locked, ...(slot || {}),
         });
       } else {
         const changes = { label, color: draft.color, imageId, hidden: draft.hidden, locked: draft.locked };
@@ -534,8 +544,9 @@
       const cell = page && page.cells.find((c) => c.id === cellId);
       if (cell) openEditor({ pageId, cell, isNew: false });
     },
-    add(pageId) {
-      openEditor({ pageId, cell: null, isNew: true });
+    // slot (facoltativo): casella della griglia fissa in cui mettere la tessera nuova
+    add(pageId, slot) {
+      openEditor({ pageId, cell: null, isNew: true, slot });
     },
     close,
   };

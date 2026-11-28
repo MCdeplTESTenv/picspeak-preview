@@ -80,7 +80,7 @@
   // Scelte che restano di ogni dispositivo anche quando un profilo è sincronizzato
   const DEVICE_ONLY_KEYS = ['keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState'];
   const FULL_KEYS = new Set(['colorMode', 'pageBackground', 'appearance', 'preset', 'labelCase', 'typeColors',
-    'language', 'voice', 'communication', 'prediction', 'printOptions', 'lockPositions', 'symbolSources',
+    'language', 'voice', 'communication', 'prediction', 'printOptions', 'lockPositions', 'gridDefault', 'symbolSources',
     'keepScreenOn', 'autoFullscreen', 'openSections', 'sectionState', 'userTemplates']);
 
   class CloudError extends Error {}

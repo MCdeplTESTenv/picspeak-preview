@@ -506,7 +506,9 @@
           <dt>Immagine</dt><dd><em>Cerca simbolo</em>, <em>Immagine dal dispositivo</em>, <em>Scatta una foto</em> (su tablet e telefono), oppure <em>Togli
             immagine</em> per lasciare solo la parola.</dd>
           <dt>Nascosta</dt><dd>toglie la tessera dalla vista senza cancellarla.</dd>
-          <dt>Posizione bloccata</dt><dd>la tessera non si può spostare.</dd>
+          <dt>Posizione bloccata</dt><dd>la tessera non si può spostare, e non si sposta nemmeno quando trascinate le
+            altre. Se è attivo <strong>Blocca la posizione di tutte le tessere</strong> la voce è grigia e non si tocca:
+            sotto c’è scritto da quale impostazione dipende; per cambiarla qui, prima togliete quel blocco.</dd>
           <dt>Si trova in</dt><dd>la cartella in cui sta la tessera: sceglietene un’altra per spostarla lì.</dd>
           <dt>← Prima / Dopo →</dt><dd>sposta la tessera di un posto (non compaiono se la posizione è bloccata).</dd>
           <dt>Elimina</dt><dd>cancella la tessera (chiede conferma). Si può anche toccare la <strong>✕</strong> nell’angolo
@@ -550,7 +552,9 @@
       <ol class="steps">
         <li><a href="#pin">Sbloccate le impostazioni</a>.</li>
         <li>Tenete premuta una tessera per mezzo secondo: si «stacca» e segue il dito (o il mouse).</li>
-        <li>Trascinatela dove volete: le altre si spostano per farle posto.</li>
+        <li>Trascinatela dove volete: le altre si spostano per farle posto. Le tessere bloccate restano sempre ferme: le
+          altre scalano intorno a loro. Con le <a href="#posizioni">righe fisse</a> potete lasciarla anche in una
+          casella vuota.</li>
         <li>Lasciatela: il nuovo ordine si salva da solo.</li>
       </ol>
       <p>Un tocco breve, invece, apre la modifica. In alternativa usate <strong>← Prima</strong> e <strong>Dopo →</strong>
@@ -742,21 +746,52 @@
       <p class="where-line"><span class="where"><span>Impostazioni</span><span>Schede</span><span>Disposizione e posizioni</span></span></p>
       <p>Quando una parola sta sempre nello stesso punto, con il tempo la mano ci va da sola, come sulla tastiera.</p>
       <figure class="shot shot-narrow">
-        <img src="guida/disposizione.webp" width="764" height="980" alt="La sezione Disposizione e posizioni con la scelta Automatica o Griglia fissa per la pagina aperta e l’interruttore Blocca la posizione di tutte le tessere." loading="lazy">
+        <img src="guida/disposizione.webp" width="704" height="2832" alt="La sezione Disposizione e posizioni: la griglia generale fissa con 6 colonne e 4 righe fisse, l’elenco delle pagine con una griglia personalizzata (Cibo), la griglia della pagina Cibo personalizzata con 6 colonne e 2 righe e l’interruttore Blocca la posizione di tutte le tessere." loading="lazy">
       </figure>
+      <p>La sezione ha due parti: la <strong>griglia generale</strong>, che vale per tutte le pagine, e la griglia della
+        <strong>pagina aperta</strong>, che può seguire quella generale oppure essere diversa.</p>
+      <h4>Griglia generale (tutte le pagine)</h4>
       <ol class="steps">
-        <li>Aprite la pagina da sistemare (per esempio una cartella), poi le impostazioni.</li>
-        <li>In <strong>Disposizione di questa pagina</strong> scegliete:
+        <li>In <strong>Disposizione</strong> scegliete:
           <ul>
             <li><strong>Automatica</strong>: le tessere si adattano allo schermo (poche tessere = tessere grandi);</li>
-            <li><strong>Griglia fissa</strong>: ogni tessera resta nella sua riga e colonna e scegliete quante colonne.
-              Se nascondete o eliminate una tessera il suo posto resta vuoto e le altre non si spostano.</li>
+            <li><strong>Griglia fissa</strong>: ogni tessera resta nella sua riga e colonna e scegliete quante
+              <strong>Colonne</strong>. Se nascondete o eliminate una tessera il suo posto resta vuoto e le altre non si
+              spostano.</li>
           </ul>
         </li>
-        <li>Se volete, attivate <strong>Blocca la posizione di tutte le tessere</strong>: nessuno potrà spostarle per
-          errore. Una sola tessera si blocca dalla sua modifica («Posizione bloccata»). Con le impostazioni sbloccate le
-          tessere bloccate mostrano un lucchetto.</li>
+        <li>Con la griglia fissa, in <strong>Righe</strong>:
+          <ul>
+            <li><strong>Libere</strong>: le righe crescono con le tessere;</li>
+            <li><strong>Fisse</strong>: scegliete anche quante righe. La pagina diventa una griglia completa (per esempio
+              6 × 4): ogni tessera sta nella sua casella e potete lasciare caselle vuote anche in mezzo.</li>
+          </ul>
+        </li>
       </ol>
+      <p>La griglia generale si applica a tutte le pagine che la seguono e alle cartelle nuove. Sotto c’è l’elenco delle
+        <strong>pagine con una griglia personalizzata</strong>, con i loro nomi: quelle non cambiano.</p>
+      <h4>Griglia di questa pagina</h4>
+      <ol class="steps">
+        <li>Aprite la pagina da sistemare (per esempio una cartella), poi le impostazioni.</li>
+        <li>In <strong>Griglia di questa pagina</strong> scegliete <strong>Come la generale</strong>, oppure
+          <strong>Personalizzata</strong> e poi disposizione, colonne e righe solo per questa pagina (per esempio la Home
+          6 × 4 e una cartella 6 × 2).</li>
+        <li>Per riportarla alla griglia generale scegliete di nuovo <strong>Come la generale</strong>.</li>
+      </ol>
+      <h4>Caselle vuote e spazi bloccati (righe fisse)</h4>
+      <p>Con le righe fisse e le impostazioni sbloccate, le caselle vuote si vedono tratteggiate. Toccandone una potete
+        scegliere:</p>
+      <ul>
+        <li><strong>Aggiungi una tessera qui</strong>: la tessera (o cartella) nuova va proprio in quella casella;</li>
+        <li><strong>Blocca questo spazio vuoto</strong>: la casella resta vuota per sempre, anche quando spostate o
+          aggiungete altre tessere. Si vede a righe con il lucchetto; il bambino vede solo uno spazio. Toccandola potete
+          sbloccarla o mettere lì una tessera.</li>
+      </ul>
+      <h4>Bloccare le posizioni</h4>
+      <p>Una sola tessera si blocca dalla sua modifica («Posizione bloccata»): non si sposta mai, nemmeno quando
+        trascinate le altre. <strong>Blocca la posizione di tutte le tessere</strong> blocca invece tutto, in ogni pagina:
+        nessuno potrà spostare le tessere per errore. Con le impostazioni sbloccate le tessere bloccate mostrano un
+        lucchetto.</p>
       <p class="tip">Su uno schermo troppo stretto (per esempio un telefono in verticale con una griglia di 6 o 10 colonne)
         le tessere restano nello stesso ordine ma si adattano allo schermo: per una griglia grande usate sempre lo stesso
         tablet, nello stesso verso. Con la griglia fissa i pulsanti − e + non cambiano la misura. Nelle schede pronte le
